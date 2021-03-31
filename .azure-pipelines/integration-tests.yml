@@ -309,6 +309,8 @@ jobs:
     inputs:
       restoreSolution: Datadog.Trace.sln
       verbosityRestore: Normal
+      feedsToUse: config
+      nugetConfigPath: ./nuget.config
 
   # this triggers a dependency chain that builds all the managed and native dlls
   - task: MSBuild@1
@@ -422,6 +424,8 @@ jobs:
     inputs:
       restoreSolution: Datadog.Trace.sln
       verbosityRestore: Normal
+      feedsToUse: config
+      nugetConfigPath: ./NuGet.config
 
   # this triggers a dependency chain that builds all the managed and native dlls
   - task: MSBuild@1
