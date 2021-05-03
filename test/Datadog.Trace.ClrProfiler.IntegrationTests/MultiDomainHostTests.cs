@@ -48,7 +48,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         [Trait("LoadFromGAC", "False")]
         public void WorksOutsideTheGAC(string targetFramework)
         {
-            Assert.False(typeof(Instrumentation).Assembly.GlobalAssemblyCache, "Datadog.Trace.ClrProfiler.Managed was loaded from the GAC. Ensure that the assembly and its dependencies are not installed in the GAC when running this test.");
+            Assert.False(typeof(Instrumentation).Assembly.GlobalAssemblyCache, "Datadog.Trace was loaded from the GAC. Ensure that the assembly and its dependencies are not installed in the GAC when running this test.");
 
             var expectedMap = new Dictionary<string, int>()
             {
@@ -71,7 +71,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         [Trait("LoadFromGAC", "True")]
         public void WorksInsideTheGAC(string targetFramework)
         {
-            Assert.True(typeof(Instrumentation).Assembly.GlobalAssemblyCache, "Datadog.Trace.ClrProfiler.Managed was not loaded from the GAC. Ensure that the assembly and its dependencies are installed in the GAC when running this test.");
+            Assert.True(typeof(Instrumentation).Assembly.GlobalAssemblyCache, "Datadog.Trace was not loaded from the GAC. Ensure that the assembly and its dependencies are installed in the GAC when running this test.");
 
             var expectedMap = new Dictionary<string, int>()
             {
