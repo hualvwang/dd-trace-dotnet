@@ -54,10 +54,7 @@ RUN cp ./integrations.json ${PUBLISH_FOLDER}/
 RUN dotnet build -c ${BUILD_CONFIGURATION} src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
 
 RUN mkdir -p "${PUBLISH_FOLDER}/netstandard2.0"
-RUN dotnet publish -f netstandard2.0 -c ${BUILD_CONFIGURATION} src/Datadog.Trace/Datadog.Trace.csproj && \
-    dotnet publish -f netstandard2.0 -c ${BUILD_CONFIGURATION} src/Datadog.Trace.OpenTracing/Datadog.Trace.OpenTracing.csproj && \
-    dotnet publish -f netstandard2.0 -c ${BUILD_CONFIGURATION} src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj -o "${PUBLISH_FOLDER}/netstandard2.0"
-
+RUN dotnet publish -f netstandard2.0 -c ${BUILD_CONFIGURATION} src/Datadog.Trace/Datadog.Trace.csproj -o "${PUBLISH_FOLDER}/netstandard2.0"
 
 
 FROM build-native-base as build-native

@@ -93,23 +93,23 @@ stages:
         arguments: --configuration $(buildConfiguration)
 
     - task: DotNetCoreCLI@2
-      displayName: dotnet publish Datadog.Trace.ClrProfiler.Managed netstandard 2.0
+      displayName: dotnet publish Datadog.Trace netstandard 2.0
       inputs:
         command: publish
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: src/Datadog.Trace/Datadog.Trace.csproj
         arguments: --configuration $(buildConfiguration) --framework netstandard2.0 --output $(tracerHome)/netstandard2.0
 
     - task: DotNetCoreCLI@2
-      displayName: dotnet publish Datadog.Trace.ClrProfiler.Managed netcoreapp 3.1
+      displayName: dotnet publish Datadog.Trace netcoreapp 3.1
       inputs:
         command: publish
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: src/Datadog.Trace/Datadog.Trace.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --output $(tracerHome)/netcoreapp3.1
 
     - task: DockerCompose@0
@@ -147,23 +147,23 @@ stages:
         arguments: --configuration $(buildConfiguration)
 
     - task: DotNetCoreCLI@2
-      displayName: dotnet publish Datadog.Trace.ClrProfiler.Managed 2.0
+      displayName: dotnet publish Datadog.Trace 2.0
       inputs:
         command: publish
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: src/Datadog.Trace/Datadog.Trace.csproj
         arguments: --configuration $(buildConfiguration) --framework netstandard2.0 --output $(tracerHome)/netstandard2.0
 
     - task: DotNetCoreCLI@2
-      displayName: dotnet publish Datadog.Trace.ClrProfiler.Managed 3.1
+      displayName: dotnet publish Datadog.Trace 3.1
       inputs:
         command: publish
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: src/Datadog.Trace/Datadog.Trace.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --output $(tracerHome)/netcoreapp3.1
 
     - task: DockerCompose@0
@@ -198,23 +198,23 @@ stages:
         arguments: --configuration $(buildConfiguration) /nowarn:netsdk1138
 
     - task: DotNetCoreCLI@2
-      displayName: dotnet publish Datadog.Trace.ClrProfiler.Managed netstandard 2.0
+      displayName: dotnet publish Datadog.Trace netstandard 2.0
       inputs:
         command: publish
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: src/Datadog.Trace/Datadog.Trace.csproj
         arguments: --configuration $(buildConfiguration) --framework netstandard2.0 --output $(tracerHome)/netstandard2.0
 
     - task: DotNetCoreCLI@2
-      displayName: dotnet publish Datadog.Trace.ClrProfiler.Managed netcoreapp 3.1
+      displayName: dotnet publish Datadog.Trace netcoreapp 3.1
       inputs:
         command: publish
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: src/Datadog.Trace/Datadog.Trace.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --output $(tracerHome)/netcoreapp3.1
 
     - task: DockerCompose@0

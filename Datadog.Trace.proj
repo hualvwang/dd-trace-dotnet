@@ -220,34 +220,11 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ManagedProfilerPublishProject Include="src\Datadog.Trace.ClrProfiler.Managed\Datadog.Trace.ClrProfiler.Managed.csproj" />
+      <!-- Publish Datadog.Trace.MSBuild since we want both Datadog.Trace.MSBuild and its dependency, Datadog.Trace -->
+      <ManagedProfilerPublishProject Include="src\Datadog.Trace.MSBuild\Datadog.Trace.MSBuild.csproj" />
     </ItemGroup>
 
     <MSBuild Targets="Publish" Projects="@(ManagedProfilerPublishProject)" BuildInParallel="false" Properties="Platform=AnyCPU;TargetFramework=%(TargetFramework.Identity);PublishDir=$(TracerHomeDirectory)\%(TargetFramework.Identity)">
-      <Output TaskParameter="TargetOutputs" ItemName="CollectedBuildOutput"/>
-    </MSBuild>
-  </Target>
-
-  <Target Name="PublishBuildLoggerOnDisk">
-    <ItemGroup>
-      <BuildLoggerPublishProject Include="src\Datadog.Trace.MSBuild\Datadog.Trace.MSBuild.csproj">
-        <Properties>Platform=AnyCPU;TargetFramework=net45;PublishDir=$(TracerHomeDirectory)\net45</Properties>
-      </BuildLoggerPublishProject>
-
-      <BuildLoggerPublishProject Include="src\Datadog.Trace.MSBuild\Datadog.Trace.MSBuild.csproj">
-        <Properties>Platform=AnyCPU;TargetFramework=net461;PublishDir=$(TracerHomeDirectory)\net461</Properties>
-      </BuildLoggerPublishProject>
-
-      <BuildLoggerPublishProject Include="src\Datadog.Trace.MSBuild\Datadog.Trace.MSBuild.csproj">
-        <Properties>Platform=AnyCPU;TargetFramework=netstandard2.0;PublishDir=$(TracerHomeDirectory)\netstandard2.0</Properties>
-      </BuildLoggerPublishProject>
-
-      <BuildLoggerPublishProject Include="src\Datadog.Trace.MSBuild\Datadog.Trace.MSBuild.csproj">
-        <Properties>Platform=AnyCPU;TargetFramework=netcoreapp3.1;PublishDir=$(TracerHomeDirectory)\netcoreapp3.1</Properties>
-      </BuildLoggerPublishProject>
-    </ItemGroup>
-
-    <MSBuild Targets="Publish" Projects="@(BuildLoggerPublishProject)" BuildInParallel="false">
       <Output TaskParameter="TargetOutputs" ItemName="CollectedBuildOutput"/>
     </MSBuild>
   </Target>
@@ -297,7 +274,7 @@
     </MSBuild>
   </Target>
 
-  <Target Name="CreateHomeDirectory" DependsOnTargets="PublishNativeProfilerOnDisk;PublishManagedProfilerOnDisk;PublishBuildLoggerOnDisk">
+  <Target Name="CreateHomeDirectory" DependsOnTargets="PublishNativeProfilerOnDisk;PublishManagedProfilerOnDisk">
     <Copy
       SourceFiles="$(MSBuildThisFileDirectory)integrations.json"
       DestinationFolder="$(TracerHomeDirectory)"
