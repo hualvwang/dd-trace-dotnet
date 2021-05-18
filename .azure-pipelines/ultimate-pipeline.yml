@@ -413,7 +413,7 @@ stages:
           matrixName: debian
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         debian_netcoreapp3_0:
           publishTargetFramework: netcoreapp3.0
@@ -421,7 +421,7 @@ stages:
           matrixName: debian
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         debian_netcoreapp3_1:
           publishTargetFramework: netcoreapp3.1
@@ -429,7 +429,7 @@ stages:
           matrixName: debian
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         debian_net5_0:
           publishTargetFramework: net5.0
@@ -437,7 +437,7 @@ stages:
           matrixName: debian
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         alpine_netcoreapp2_1:
           publishTargetFramework: netcoreapp2.1
@@ -445,7 +445,7 @@ stages:
           matrixName: alpine
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         alpine_netcoreapp3_0:
           publishTargetFramework: netcoreapp3.0
@@ -453,7 +453,7 @@ stages:
           matrixName: alpine
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         alpine_netcoreapp3_1:
           publishTargetFramework: netcoreapp3.1
@@ -461,7 +461,7 @@ stages:
           matrixName: alpine
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         alpine_net5_0:
           publishTargetFramework: net5.0
@@ -469,7 +469,7 @@ stages:
           matrixName: alpine
           poolName: Azure Pipelines
           vmImage: ubuntu-18.04
-          dockerComposeTask: NukeIntegrationTests
+          dockerComposeTask: IntegrationTests
           dockerComposeDependenciesTask: StartDependencies
         arm64_net5_0:
           publishTargetFramework: net5.0
@@ -477,7 +477,7 @@ stages:
           matrixName: arm64
           poolName: Arm64
           vmImage:
-          dockerComposeTask: NukeIntegrationTests.ARM64
+          dockerComposeTask: IntegrationTests.ARM64
           dockerComposeDependenciesTask: StartDependencies.ARM64
 
     variables:
@@ -509,7 +509,7 @@ stages:
         command: "BuildLinuxIntegrationTests --framework $(publishTargetFramework)"
 
     - task: DockerCompose@0
-      displayName: docker-compose build NukeIntegrationTests
+      displayName: docker-compose build IntegrationTests
       inputs:
         containerregistrytype: Container Registry
         dockerComposeCommand: build --build-arg baseImage=$(baseImage) --build-arg framework=$(publishTargetFramework) $(dockerComposeTask)
@@ -521,7 +521,7 @@ stages:
         dockerComposeCommand: run --rm $(dockerComposeDependenciesTask)
 
     - task: DockerCompose@0
-      displayName: docker-compose run NukeIntegrationTests
+      displayName: docker-compose run IntegrationTests
       inputs:
         containerregistrytype: Container Registry
         dockerComposeFileArgs: |
