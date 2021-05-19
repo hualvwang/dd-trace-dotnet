@@ -53,8 +53,8 @@ jobs:
       configuration: Release
       arguments: /nowarn:netsdk1138
       projects: |
-        src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
-        sample-libs/**/Samples.ExampleLibrary*.csproj
+        tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
+        tracer/sample-libs/**/Samples.ExampleLibrary*.csproj
 
   - task: NuGetToolInstaller@1
     displayName: install nuget
@@ -74,7 +74,7 @@ jobs:
       msbuildArguments: /t:BuildCpp
       maximumCpuCount: true
 
-  - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
+  - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
     artifact: windows-native
 
 
@@ -102,7 +102,7 @@ jobs:
       configuration: Release
       arguments: /nowarn:netsdk1138
       projects: |
-        src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
+        tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
 
   - script: |
       sudo apt-get update
@@ -113,12 +113,12 @@ jobs:
     displayName: install_dependencies
 
   - script: |
-      cd ./src/Datadog.Trace.ClrProfiler.Native
+      cd ./tracer/src/Datadog.Trace.ClrProfiler.Native
       CXX=clang++ CC=clang cmake . -DCMAKE_BUILD_TYPE=Release
       make
     displayName: build_profiler
 
-  - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin
+  - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin
     artifact: linux-native
 
 
@@ -146,10 +146,10 @@ jobs:
   - task: CopyFiles@2
     inputs:
       sourceFolder: $(Pipeline.Workspace)/windows-native
-      targetFolder: $(System.DefaultWorkingDirectory)/
+      targetFolder: $(System.DefaultWorkingDirectory)/tracer
 
   - script: |
-      cd ./build/crank
+      cd ./tracer/build/crank
       chmod +x ./run.sh
       ./run.sh
     env:
