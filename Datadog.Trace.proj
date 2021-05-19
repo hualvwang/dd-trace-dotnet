@@ -12,7 +12,7 @@
     <CppTestProject Include="tracer\test\**\*.vcxproj"/>
     <SampleProject Include="tracer\test\test-applications\**\*.csproj" Exclude="tracer\test\test-applications\integrations\dependency-libs\**\*.csproj" />
     <SampleLibProject Include="tracer\test\test-applications\integrations\dependency-libs\**\*.csproj" Exclude="tracer\test\test-applications\integrations\dependency-libs\**\Samples.MultiDomainHost.App.*.csproj" />
-    <WindowsInstallerProject Include="src\**\*.wixproj"/>
+    <WindowsInstallerProject Include="tracer\src\**\*.wixproj"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -204,7 +204,7 @@
 
   <Target Name="CreateHomeDirectory" DependsOnTargets="PublishNativeProfilerOnDisk;PublishManagedProfilerOnDisk;PublishBuildLoggerOnDisk">
     <Copy
-      SourceFiles="$(MSBuildThisFileDirectory)integrations.json"
+      SourceFiles="$(MSBuildThisFileDirectory)\tracer\integrations.json"
       DestinationFolder="$(TracerHomeDirectory)"
       SkipUnchangedFiles="true"
       Retries="3"

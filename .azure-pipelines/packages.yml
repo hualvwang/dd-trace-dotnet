@@ -8,7 +8,7 @@ pr: none
 variables:
   buildConfiguration: release
   dotnetCoreSdkVersion: 5.0.103
-  publishOutput: $(Build.SourcesDirectory)/src/bin/managed-publish
+  publishOutput: $(Build.SourcesDirectory)/tracer/bin/managed-publish
 
 stages:
 - stage: build
@@ -21,8 +21,8 @@ stages:
       vmImage: windows-2019
     variables:
       tracerHomeName: windows-tracer-home
-      tracerHome: $(System.DefaultWorkingDirectory)/src/bin/$(tracerHomeName)
-      msiHome: $(System.DefaultWorkingDirectory)/src/bin/msi
+      tracerHome: $(System.DefaultWorkingDirectory)/tracer/bin/$(tracerHomeName)
+      msiHome: $(System.DefaultWorkingDirectory)/tracer/bin/msi
       nuget_packages: $(Pipeline.Workspace)/.nuget/packages
 
     steps:
@@ -40,7 +40,7 @@ stages:
       displayName: dotnet restore
       inputs:
         command: restore
-        projects: src/**/*.csproj
+        projects: tracer/src/**/*.csproj
 
     # native projects must be restored with nuget.exe
     - task: NuGetCommand@2
@@ -68,7 +68,7 @@ stages:
       displayName: dotnet pack
       inputs:
         command: pack
-        packagesToPack: src/Datadog.Trace/Datadog.Trace.csproj;src/Datadog.Trace.OpenTracing/Datadog.Trace.OpenTracing.csproj
+        packagesToPack: tracer/src/Datadog.Trace/Datadog.Trace.csproj;tracer/src/Datadog.Trace.OpenTracing/Datadog.Trace.OpenTracing.csproj
         packDirectory: $(System.DefaultWorkingDirectory)/nuget-output
         configuration: $(buildConfiguration)
 
@@ -81,7 +81,7 @@ stages:
     pool:
       vmImage: ubuntu-18.04
     variables:
-      tracerHome: $(System.DefaultWorkingDirectory)/src/bin/managed-publish
+      tracerHome: $(System.DefaultWorkingDirectory)/tracer/bin/managed-publish
 
     steps:
     - task: UseDotNet@2
@@ -93,7 +93,7 @@ stages:
       displayName: dotnet build Datadog.Trace.ClrProfiler.Managed.Loader
       inputs:
         command: build
-        projects: src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
         arguments: --configuration $(buildConfiguration)
 
     - task: DotNetCoreCLI@2
@@ -103,7 +103,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
         arguments: --configuration $(buildConfiguration) --framework netstandard2.0 --output $(tracerHome)/netstandard2.0
 
     - task: DotNetCoreCLI@2
@@ -113,7 +113,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --output $(tracerHome)/netcoreapp3.1
 
     - task: DockerCompose@0
@@ -128,14 +128,14 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e ARCHITECTURE=x64 package
 
-    - publish: deploy/linux
+    - publish: tracer/deploy/linux
       artifact: linux-packages
 
   - job: linux_alpine_packages
     pool:
       vmImage: ubuntu-18.04
     variables:
-      tracerHome: $(System.DefaultWorkingDirectory)/src/bin/managed-publish
+      tracerHome: $(System.DefaultWorkingDirectory)/tracer/bin/managed-publish
 
     steps:
     - task: UseDotNet@2
@@ -147,7 +147,7 @@ stages:
       displayName: dotnet build Datadog.Trace.ClrProfiler.Managed.Loader
       inputs:
         command: build
-        projects: src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
         arguments: --configuration $(buildConfiguration)
 
     - task: DotNetCoreCLI@2
@@ -157,7 +157,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
         arguments: --configuration $(buildConfiguration) --framework netstandard2.0 --output $(tracerHome)/netstandard2.0
 
     - task: DotNetCoreCLI@2
@@ -167,7 +167,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --output $(tracerHome)/netcoreapp3.1
 
     - task: DockerCompose@0
@@ -182,7 +182,7 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) package.alpine
 
-    - publish: deploy/linux
+    - publish: tracer/deploy/linux
       artifact: linux-alpine-packages
 
   - job: linux_arm64_packages
@@ -190,7 +190,7 @@ stages:
     workspace:
         clean: all
     variables:
-      tracerHome: $(System.DefaultWorkingDirectory)/src/bin/managed-publish
+      tracerHome: $(System.DefaultWorkingDirectory)/tracer/bin/managed-publish
 
     steps:
 
@@ -198,7 +198,7 @@ stages:
       displayName: dotnet build Datadog.Trace.ClrProfiler.Managed.Loader
       inputs:
         command: build
-        projects: src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj
         arguments: --configuration $(buildConfiguration) /nowarn:netsdk1138
 
     - task: DotNetCoreCLI@2
@@ -208,7 +208,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
         arguments: --configuration $(buildConfiguration) --framework netstandard2.0 --output $(tracerHome)/netstandard2.0
 
     - task: DotNetCoreCLI@2
@@ -218,7 +218,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
+        projects: tracer/src/Datadog.Trace.ClrProfiler.Managed/Datadog.Trace.ClrProfiler.Managed.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --output $(tracerHome)/netcoreapp3.1
 
     - task: DockerCompose@0
@@ -233,7 +233,7 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e ARCHITECTURE=arm64 package
 
-    - publish: deploy/linux
+    - publish: tracer/deploy/linux
       artifact: linux-arm64-packages
 
   #### Upload artifacts to S3
