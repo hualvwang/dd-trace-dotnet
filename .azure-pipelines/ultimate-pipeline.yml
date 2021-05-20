@@ -17,7 +17,7 @@ pr:
 variables:
   buildConfiguration: Release
   dotnetCoreSdk5Version: 5.0.103
-  tracerHome: $(System.DefaultWorkingDirectory)/src/bin/windows-tracer-home
+  tracerHome: $(System.DefaultWorkingDirectory)/tracer/bin/windows-tracer-home
   ddApiKey: $(DD_API_KEY)
   isMainBranch: $[eq(variables['Build.SourceBranch'], 'refs/heads/master')]
   DD_DOTNET_TRACER_MSBUILD:
@@ -69,7 +69,7 @@ stages:
       inputs:
         command: pack
         nobuild: true
-        packagesToPack: src/Datadog.Trace/Datadog.Trace.csproj;src/Datadog.Trace.OpenTracing/Datadog.Trace.OpenTracing.csproj
+        packagesToPack: tracer/src/Datadog.Trace/Datadog.Trace.csproj;tracer/src/Datadog.Trace.OpenTracing/Datadog.Trace.OpenTracing.csproj
         packDirectory: $(System.DefaultWorkingDirectory)/nuget-output
 
     - publish: $(System.DefaultWorkingDirectory)/nuget-output
@@ -85,7 +85,7 @@ stages:
     pool:
       vmImage: windows-2019
     variables:
-      msiHome: $(System.DefaultWorkingDirectory)/src/WindowsInstaller/bin/$(buildConfiguration)
+      msiHome: $(System.DefaultWorkingDirectory)/tracer/src/WindowsInstaller/bin/$(buildConfiguration)
     steps:
     - checkout: none
 
@@ -105,7 +105,7 @@ stages:
       displayName: dotnet restore
       inputs:
         command: restore
-        projects: src/**/*.csproj
+        projects: tracer/src/**/*.csproj
 
     - task: NuGetToolInstaller@1
       displayName: install nuget
@@ -162,8 +162,8 @@ stages:
         path: $(System.DefaultWorkingDirectory)
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/Datadog.Trace.ClrProfiler.Native.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/Datadog.Trace.ClrProfiler.Native.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/Datadog.Trace.ClrProfiler.Native.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/Datadog.Trace.ClrProfiler.Native.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run Profiler
@@ -172,8 +172,8 @@ stages:
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e UNIFIED_PIPELINE=true Profiler
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/package.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/package.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/package.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/package.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run package
@@ -181,11 +181,11 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e UNIFIED_PIPELINE=true package
 
-    - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
+    - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
       displayName: Uploading linux tracer home artifact
       artifact: build-linux-tracer-home
 
-    - publish: $(System.DefaultWorkingDirectory)/deploy/linux
+    - publish: $(System.DefaultWorkingDirectory)/tracer/deploy/linux
       displayName: Publish Linux packages
       artifact: linux-packages
 
@@ -202,8 +202,8 @@ stages:
         path: $(System.DefaultWorkingDirectory)
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/Datadog.Trace.ClrProfiler.Native.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/Datadog.Trace.ClrProfiler.Native.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/Datadog.Trace.ClrProfiler.Native.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/Datadog.Trace.ClrProfiler.Native.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run Profiler.Alpine
@@ -212,8 +212,8 @@ stages:
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e UNIFIED_PIPELINE=true Profiler.Alpine
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/package.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/package.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/package.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/package.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run package.alpine
@@ -221,11 +221,11 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e UNIFIED_PIPELINE=true package.alpine
 
-    - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
+    - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
       displayName: Uploading alpine linux tracer home artifact
       artifact: build-alpine-linux-tracer-home
 
-    - publish: $(System.DefaultWorkingDirectory)/deploy/linux
+    - publish: $(System.DefaultWorkingDirectory)/tracer/deploy/linux
       displayName: Publish Alpine Linux package
       artifact: linux-alpine-packages
 
@@ -244,8 +244,8 @@ stages:
         path: $(System.DefaultWorkingDirectory)
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/Datadog.Trace.ClrProfiler.Native.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/Datadog.Trace.ClrProfiler.Native.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/Datadog.Trace.ClrProfiler.Native.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/Datadog.Trace.ClrProfiler.Native.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run Profiler
@@ -254,8 +254,8 @@ stages:
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e UNIFIED_PIPELINE=true Profiler
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/package.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/package.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/package.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/package.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run package
@@ -263,7 +263,7 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: run -e buildConfiguration=$(buildConfiguration) -e UNIFIED_PIPELINE=true package
 
-    - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
+    - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/Release/x64
       artifact: build-linux-tracer-home-arm64
 
   - job: build_native_macos
@@ -280,19 +280,19 @@ stages:
         path: $(System.DefaultWorkingDirectory)
 
     - script: |
-        cd ./src/Datadog.Trace.ClrProfiler.Native
+        cd ./tracer/src/Datadog.Trace.ClrProfiler.Native
         cmake .
         make
       displayName: build_profiler
 
     - script: |
-        mkdir -p src/Datadog.Trace.ClrProfiler.Native/bin/netstandard2.0
-        cp src/bin/windows-tracer-home/netstandard2.0/*.dll src/Datadog.Trace.ClrProfiler.Native/bin/netstandard2.0/
-        mkdir -p src/Datadog.Trace.ClrProfiler.Native/bin/netcoreapp3.1
-        cp src/bin/windows-tracer-home/netcoreapp3.1/*.dll src/Datadog.Trace.ClrProfiler.Native/bin/netcoreapp3.1/
+        mkdir -p tracer/src/Datadog.Trace.ClrProfiler.Native/bin/netstandard2.0
+        cp tracer/bin/windows-tracer-home/netstandard2.0/*.dll tracer/src/Datadog.Trace.ClrProfiler.Native/bin/netstandard2.0/
+        mkdir -p tracer/src/Datadog.Trace.ClrProfiler.Native/bin/netcoreapp3.1
+        cp tracer/bin/windows-tracer-home/netcoreapp3.1/*.dll tracer/src/Datadog.Trace.ClrProfiler.Native/bin/netcoreapp3.1/
       displayName: Copy files into build-macos-tracer-home
 
-    - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin
+    - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin
       displayName: Uploading macos profiler artifact
       artifact: build-macos-tracer-home
 
@@ -334,14 +334,14 @@ stages:
       displayName: dotnet restore
       inputs:
         command: restore
-        projects: test/**/*.Tests.csproj
+        projects: tracer/test/**/*.Tests.csproj
 
     - task: DotNetCoreCLI@2
       displayName: dotnet build
       inputs:
         command: build
         arguments: --configuration $(buildConfiguration) /nowarn:netsdk1138
-        projects: test/**/*.Tests.csproj
+        projects: tracer/test/**/*.Tests.csproj
       env:
         DD_SERVICE: dd-trace-dotnet
 
@@ -350,7 +350,7 @@ stages:
       inputs:
         command: test
         arguments: --configuration $(buildConfiguration) --no-build
-        projects: test/**/*.Tests.csproj
+        projects: tracer/test/**/*.Tests.csproj
       env:
         DD_SERVICE: dd-trace-dotnet
 
@@ -373,7 +373,7 @@ stages:
       inputs:
         command: test
         arguments: --configuration $(buildConfiguration)
-        projects: test/**/*.Tests.csproj
+        projects: tracer/test/**/*.Tests.csproj
       env:
         DD_SERVICE: dd-trace-dotnet
 
@@ -399,7 +399,7 @@ stages:
         command: build
         arguments: --configuration $(buildConfiguration) /nowarn:netsdk1138
         projects: |
-          test/**/Samples.ExampleLibrary*.csproj
+          tracer/test/**/Samples.ExampleLibrary*.csproj
 
     - task: MSBuild@1
       displayName: Build x86 native unit test projects
@@ -421,17 +421,17 @@ stages:
 
     - script: Datadog.Trace.ClrProfiler.Native.Tests.exe --gtest_output=xml
       displayName: run tests
-      workingDirectory: $(System.DefaultWorkingDirectory)/test/Datadog.Trace.ClrProfiler.Native.Tests/bin/$(buildConfiguration)/x86
+      workingDirectory: $(System.DefaultWorkingDirectory)/tracer/test/Datadog.Trace.ClrProfiler.Native.Tests/bin/$(buildConfiguration)/x86
 
     - script: Datadog.Trace.ClrProfiler.Native.Tests.exe --gtest_output=xml
       displayName: run tests
-      workingDirectory: $(System.DefaultWorkingDirectory)/test/Datadog.Trace.ClrProfiler.Native.Tests/bin/$(buildConfiguration)/x64
+      workingDirectory: $(System.DefaultWorkingDirectory)/tracer/test/Datadog.Trace.ClrProfiler.Native.Tests/bin/$(buildConfiguration)/x64
       condition: succeededOrFailed()
 
     - task: PublishTestResults@2
       displayName: publish test results
       inputs:
-        testResultsFiles: test/**/test*.xml
+        testResultsFiles: tracer/test/**/test*.xml
       condition: succeededOrFailed()
 
 - stage: integration_tests
@@ -483,11 +483,11 @@ stages:
       inputs:
         command: build
         projects: |
-          test/test-applications/regression/**/*.csproj
-          test/*.IntegrationTests/*.IntegrationTests.csproj
-          !test/test-applications/regression/**/ExpenseItDemo*.csproj
-          !test/test-applications/regression/**/EntityFramework6x*.csproj
-          !test/test-applications/regression/**/StackExchange.Redis.AssemblyConflict.LegacyProject.csproj
+          tracer/test/test-applications/regression/**/*.csproj
+          tracer/test/*.IntegrationTests/*.IntegrationTests.csproj
+          !tracer/test/test-applications/regression/**/ExpenseItDemo*.csproj
+          !tracer/test/test-applications/regression/**/EntityFramework6x*.csproj
+          !tracer/test/test-applications/regression/**/StackExchange.Redis.AssemblyConflict.LegacyProject.csproj
         arguments: --configuration $(buildConfiguration) -p:Platform=$(buildPlatform) -p:ManagedProfilerOutputDirectory=$(tracerHome) /nowarn:netsdk1138
 
     - task: DotNetCoreCLI@2
@@ -495,8 +495,8 @@ stages:
       inputs:
         command: build
         projects: |
-          test/test-applications/integrations/**/*.csproj
-          !test/test-applications/integrations/dependency-libs/**/*.csproj
+          tracer/test/test-applications/integrations/**/*.csproj
+          !tracer/test/test-applications/integrations/dependency-libs/**/*.csproj
         arguments: --configuration $(buildConfiguration) -p:Platform=$(buildPlatform) -p:ManagedProfilerOutputDirectory=$(tracerHome) -p:BuildInParallel=false /nowarn:netsdk1138 -p:ExcludeManagedProfiler=true -p:ExcludeNativeProfiler=true -p:LoadManagedProfilerFromProfilerDirectory=false
 
     - publish: $(System.DefaultWorkingDirectory)
@@ -508,15 +508,15 @@ stages:
       inputs:
         command: test
         projects: |
-          test/Datadog.Trace.IntegrationTests/Datadog.Trace.IntegrationTests.csproj
-          test/Datadog.Trace.OpenTracing.IntegrationTests/Datadog.Trace.OpenTracing.IntegrationTests.csproj
+          tracer/test/Datadog.Trace.IntegrationTests/Datadog.Trace.IntegrationTests.csproj
+          tracer/test/Datadog.Trace.OpenTracing.IntegrationTests/Datadog.Trace.OpenTracing.IntegrationTests.csproj
         arguments: -c $(buildConfiguration) -p:Platform=$(buildPlatform)
 
     - task: DotNetCoreCLI@2
       displayName: dotnet test
       inputs:
         command: test
-        projects: test/Datadog.Trace.ClrProfiler.IntegrationTests/Datadog.Trace.ClrProfiler.IntegrationTests.csproj
+        projects: tracer/test/Datadog.Trace.ClrProfiler.IntegrationTests/Datadog.Trace.ClrProfiler.IntegrationTests.csproj
         arguments: -c $(buildConfiguration) --filter "(RunOnWindows=True|Category=Smoke)&LoadFromGAC!=True&IIS!=True" -p:Platform=$(buildPlatform)
 
   - job: Windows_IIS
@@ -532,7 +532,7 @@ stages:
     pool:
       vmImage: windows-2019
     variables:
-      msiOutputDirectory: src/WindowsInstaller/bin/$(buildConfiguration)/$(buildPlatform)/en-us
+      msiOutputDirectory: tracer/src/WindowsInstaller/bin/$(buildConfiguration)/$(buildPlatform)/en-us
 
     steps:
 
@@ -568,11 +568,11 @@ stages:
       inputs:
         command: build
         projects: |
-          test/test-applications/regression/**/*.csproj
-          test/*.IntegrationTests/*.IntegrationTests.csproj
-          !test/test-applications/regression/**/ExpenseItDemo*.csproj
-          !test/test-applications/regression/**/EntityFramework6x*.csproj
-          !test/test-applications/regression/**/StackExchange.Redis.AssemblyConflict.LegacyProject.csproj
+          tracer/test/test-applications/regression/**/*.csproj
+          tracer/test/*.IntegrationTests/*.IntegrationTests.csproj
+          !tracer/test/test-applications/regression/**/ExpenseItDemo*.csproj
+          !tracer/test/test-applications/regression/**/EntityFramework6x*.csproj
+          !tracer/test/test-applications/regression/**/StackExchange.Redis.AssemblyConflict.LegacyProject.csproj
         arguments: --configuration $(buildConfiguration) -p:Platform=$(buildPlatform) -p:ManagedProfilerOutputDirectory=$(tracerHome) /nowarn:netsdk1138
 
     - task: DotNetCoreCLI@2
@@ -580,22 +580,22 @@ stages:
       inputs:
         command: build
         projects: |
-          test/test-applications/integrations/**/*.csproj
-          !test/test-applications/integrations/dependency-libs/**/*.csproj
+          tracer/test/test-applications/integrations/**/*.csproj
+          !tracer/test/test-applications/integrations/dependency-libs/**/*.csproj
         arguments: --configuration $(buildConfiguration) -p:Platform=$(buildPlatform) -p:ManagedProfilerOutputDirectory=$(tracerHome) -p:BuildInParallel=false /nowarn:netsdk1138 -p:ExcludeManagedProfiler=true -p:ExcludeNativeProfiler=true -p:LoadManagedProfilerFromProfilerDirectory=false
 
     - task: NuGetCommand@2
       displayName: nuget restore IIS samples
       inputs:
-        restoreSolution: test/test-applications/aspnet/samples-iis.sln
+        restoreSolution: tracer/test/test-applications/aspnet/samples-iis.sln
         verbosityRestore: Normal
 
     - task: MSBuild@1
       displayName: Publish IIS samples
       inputs:
-        solution: test/test-applications/aspnet/samples-iis.sln
+        solution: tracer/test/test-applications/aspnet/samples-iis.sln
         configuration: '$(buildConfiguration)'
-        msbuildArguments: '/p:DeployOnBuild=true /p:PublishProfile=$(System.DefaultWorkingDirectory)/test/test-applications/aspnet/PublishProfiles/FolderProfile.pubxml'
+        msbuildArguments: '/p:DeployOnBuild=true /p:PublishProfile=$(System.DefaultWorkingDirectory)/tracer/test/test-applications/aspnet/PublishProfiles/FolderProfile.pubxml'
         maximumCpuCount: true
 
     - task: DockerCompose@0
@@ -624,7 +624,7 @@ stages:
       displayName: dotnet test --filter LoadFromGAC=True
       inputs:
         command: test
-        projects: test/Datadog.Trace.ClrProfiler.IntegrationTests/Datadog.Trace.ClrProfiler.IntegrationTests.csproj
+        projects: tracer/test/Datadog.Trace.ClrProfiler.IntegrationTests/Datadog.Trace.ClrProfiler.IntegrationTests.csproj
         arguments: -c $(buildConfiguration) --filter "(RunOnWindows=True|Category=Smoke)&LoadFromGAC=True" -p:Platform=$(buildPlatform)
 
     - task: DockerCompose@0
@@ -663,11 +663,11 @@ stages:
     - task: CopyFiles@2
       inputs:
         sourceFolder: $(Pipeline.Workspace)/build-linux-tracer-home
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/$(buildConfiguration)/x64
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/$(buildConfiguration)/x64
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/build.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/build.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/build.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/build.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run build
@@ -676,8 +676,8 @@ stages:
         dockerComposeCommand: run -e TestAllPackageVersions=$(TestAllPackageVersions) -e buildConfiguration=$(buildConfiguration) -e publishTargetFramework=$(publishTargetFramework) build
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run IntegrationTests
@@ -693,7 +693,7 @@ stages:
       displayName: publish test results
       inputs:
         testResultsFormat: VSTest
-        testResultsFiles: test/**/*.trx
+        testResultsFiles: tracer/test/**/*.trx
       condition: succeededOrFailed()
 
   - job: Alpine_Linux
@@ -725,11 +725,11 @@ stages:
     - task: CopyFiles@2
       inputs:
         sourceFolder: $(Pipeline.Workspace)/build-alpine-linux-tracer-home
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/$(buildConfiguration)/x64
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/$(buildConfiguration)/x64
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/build.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/build.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/build.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/build.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run build
@@ -738,8 +738,8 @@ stages:
         dockerComposeCommand: run -e TestAllPackageVersions=$(TestAllPackageVersions) -e buildConfiguration=$(buildConfiguration) -e publishTargetFramework=$(publishTargetFramework) build
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run IntegrationTests.Alpine.Core21
@@ -777,7 +777,7 @@ stages:
       displayName: publish test results
       inputs:
         testResultsFormat: VSTest
-        testResultsFiles: test/**/*.trx
+        testResultsFiles: tracer/test/**/*.trx
       condition: succeededOrFailed()
 
   - job: Linux_arm64
@@ -802,11 +802,11 @@ stages:
     - task: CopyFiles@2
       inputs:
         sourceFolder: $(Pipeline.Workspace)/build-linux-tracer-home-arm64
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.ClrProfiler.Native/bin/$(buildConfiguration)/arm64
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.ClrProfiler.Native/bin/$(buildConfiguration)/arm64
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/build.arm64.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/build.arm64.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/build.arm64.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/build.arm64.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run build.arm64
@@ -815,8 +815,8 @@ stages:
         dockerComposeCommand: run -e TestAllPackageVersions=$(TestAllPackageVersions) -e buildConfiguration=$(buildConfiguration) -e publishTargetFramework=net5.0 build.arm64
 
     - script: |
-        chmod +x $(System.DefaultWorkingDirectory)/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.arm64.sh
-      displayName: 'Workaround: Restore wiped executable permission on build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.arm64.sh'
+        chmod +x $(System.DefaultWorkingDirectory)/tracer/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.arm64.sh
+      displayName: 'Workaround: Restore wiped executable permission on tracer/build/docker/Datadog.Trace.ClrProfiler.IntegrationTests.arm64.sh'
 
     - task: DockerCompose@0
       displayName: docker-compose run IntegrationTests.ARM64.Core50
@@ -832,7 +832,7 @@ stages:
       displayName: publish test results
       inputs:
         testResultsFormat: VSTest
-        testResultsFiles: test/**/*.trx
+        testResultsFiles: tracer/test/**/*.trx
       condition: succeededOrFailed()
 
 - stage: benchmarks
@@ -870,13 +870,13 @@ stages:
       displayName: dotnet restore
       inputs:
         command: restore
-        projects: src/**/*.csproj
+        projects: tracer/src/**/*.csproj
 
     - task: DotNetCoreCLI@2
       displayName: Benchmarks
       inputs:
         command: 'run'
-        projects: '$(System.DefaultWorkingDirectory)/test/benchmarks/Benchmarks.Trace/Benchmarks.Trace.csproj'
+        projects: '$(System.DefaultWorkingDirectory)/tracer/test/benchmarks/Benchmarks.Trace/Benchmarks.Trace.csproj'
         arguments: '-c $(buildConfiguration) -f netcoreapp3.1 -- -r net472 netcoreapp3.1 -m -f * --iterationTime 2000'
       env:
         DD_ENV: CI
@@ -919,7 +919,7 @@ stages:
           **/*
           !**/*.zip
           !**/*.json
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/home
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/home
 
     - download: current
       artifact: build-linux-tracer-home
@@ -929,7 +929,7 @@ stages:
       displayName: Copying native linux binary from previous job
       inputs:
         sourceFolder: $(Pipeline.Workspace)/build-linux-tracer-home
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/home/linux-x64
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/home/linux-x64
 
     - download: current
       artifact: build-alpine-linux-tracer-home
@@ -939,7 +939,7 @@ stages:
       displayName: Copying native alpine linux binary from previous job
       inputs:
         sourceFolder: $(Pipeline.Workspace)/build-alpine-linux-tracer-home
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/home/linux-musl-x64
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/home/linux-musl-x64
 
     - download: current
       artifact: build-macos-tracer-home
@@ -949,7 +949,7 @@ stages:
       displayName: Copying native macos binary from previous job
       inputs:
         sourceFolder: $(Pipeline.Workspace)/build-macos-tracer-home
-        targetFolder: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/home/osx-x64
+        targetFolder: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/home/osx-x64
 
     # Install the tracer latest stable release to attach the profiler to the build and test steps.
     # The script exposes the required environment variables to the following steps
@@ -969,7 +969,7 @@ stages:
       inputs:
         command: build
         arguments: --configuration $(buildConfiguration) /nowarn:netsdk1138
-        projects: src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Tool.csproj
+        projects: tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Tool.csproj
       env:
         DD_SERVICE: dd-trace-dotnet-runner-tool
 
@@ -980,7 +980,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
+        projects: tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --runtime win-x86
       env:
         DD_SERVICE: dd-trace-dotnet-runner-tool
@@ -992,7 +992,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
+        projects: tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --runtime win-x64
       env:
         DD_SERVICE: dd-trace-dotnet-runner-tool
@@ -1004,7 +1004,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
+        projects: tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --runtime linux-x64
       env:
         DD_SERVICE: dd-trace-dotnet-runner-tool
@@ -1016,7 +1016,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
+        projects: tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --runtime linux-musl-x64
       env:
         DD_SERVICE: dd-trace-dotnet-runner-tool
@@ -1028,7 +1028,7 @@ stages:
         publishWebProjects: false
         modifyOutputPath: false
         zipAfterPublish: false
-        projects: src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
+        projects: tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.Standalone.csproj
         arguments: --configuration $(buildConfiguration) --framework netcoreapp3.1 --runtime osx-x64
       env:
         DD_SERVICE: dd-trace-dotnet-runner-tool
@@ -1037,13 +1037,13 @@ stages:
       displayName: 'Remove unneeded files'
       inputs:
         Contents: |
-          $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Tool/!(*.nupkg)
-          $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/win-x64/home*
-          $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/win-x86/home*
-          $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/linux-x64/home*
-          $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/osx-x64/home*
+          $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Tool/!(*.nupkg)
+          $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/win-x64/home*
+          $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/win-x86/home*
+          $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/linux-x64/home*
+          $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Console/publish/osx-x64/home*
 
-    - publish: $(System.DefaultWorkingDirectory)/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Tool
+    - publish: $(System.DefaultWorkingDirectory)/tracer/src/Datadog.Trace.Tools.Runner/bin/$(buildConfiguration)/Tool
       displayName: Uploading runner dotnet tool artifact
       artifact: runner-dotnet-tool
 
@@ -1178,7 +1178,7 @@ stages:
         targetFolder: $(System.DefaultWorkingDirectory)/
 
     - script: |
-        cd $(System.DefaultWorkingDirectory)/build/crank
+        cd $(System.DefaultWorkingDirectory)/tracer/build/crank
         chmod +x ./run.sh
         ./run.sh
       displayName: Crank
