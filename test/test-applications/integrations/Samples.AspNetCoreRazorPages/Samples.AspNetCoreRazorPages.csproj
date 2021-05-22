@@ -17,6 +17,10 @@
   <ItemGroup Condition=" $(TargetFramework.StartsWith('netcoreapp2')) ">
     <PackageReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Karambolo.Extensions.Logging.File" Version="3.2.0" />
+  </ItemGroup>
   
   <ItemGroup>
     <Compile Include="..\..\..\Datadog.Trace.IntegrationTests\DiagnosticListeners\ErrorHandlingHelper.cs" Link="ErrorHandlingHelper.cs" />
