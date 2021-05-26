@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Formatting.Compact;
 
 namespace Samples.AspNetCoreMvc
 {
@@ -16,6 +18,14 @@ namespace Samples.AspNetCoreMvc
 
         public static void Main(string[] args)
         {
+            // First, set up Serilog
+            Log.Logger = new LoggerConfiguration()
+                              .Enrich.FromLogContext()
+                              .WriteTo.File("ILoggerInterface.To.Serilog.log")
+                              .WriteTo.File("Logs/Serilog/ILoggerInterface.To.Serilog.Raw.log", outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Properties} {Message:lj} {NewLine}{Exception}")
+                              .WriteTo.File(new CompactJsonFormatter(), "Logs/Serilog/ILoggerInterface.To.Serilog.CompactJson.log")
+                              .CreateLogger();
+
             BuildWebHost(args).Run();
         }
 
@@ -26,6 +36,7 @@ namespace Samples.AspNetCoreMvc
                        logging.ClearProviders();
                        logging.AddConsole();
                        logging.AddFile(o => o.RootPath = ctx.HostingEnvironment.ContentRootPath);
+                       logging.AddSerilog(dispose: true);
                    })
                    .UseStartup<Startup>()
                 .Build();
