@@ -1,39 +1,51 @@
 # Assembly version mismatch tests
 
-These scripts will test an application which loads different versions of the .NET Tracer from an installer package and a nuget package. Each tests uses two version of the tracer, "older" and "newer".
+These scripts will test an application which loads different versions of the .NET Tracer: one from the tracer home directory (like from an installer package) and another directly referenced by the app (like a NuGet package).
 
-"Pre-merge" refers to a tracer using the original way the solution was organized, with separate assemblies for:
+A "Pre-merge" tracer version contains separate assemblies for:
 - Datadog.Trace
 - Datadog.Trace.ClrProfiler.Managed
 - Datadog.Trace.ClrProfiler.Managed.Core
 - Datadog.Trace.AspNet
 
-"Post-merge" refers to a tracer using the single `Datadog.Trace` assembly which includes all the code from the multiple assemblies listed above.
+A "Post-merge" version refers to a tracer using the single `Datadog.Trace` assembly which includes all the code from the assemblies listed above.
 
 ## Test matrix
 
-Runtime        | MSI              | NuGet            | Test Result
----------------|------------------|------------------|-------
-.NET Framework | older pre-merge  | newer            |
-.NET Framework | older post-merge | newer            |
-.NET Framework | newer            | older pre-merge  |
-.NET Framework | newer            | older post-merge |
-.NET Framework | same             | same             |
-.NET Core      | older pre-merge  | newer            |
-.NET Core      | older post-merge | newer            |
-.NET Core      | newer            | older pre-merge  |
-.NET Core      | newer            | older post-merge |
-.NET Core      | same             | same             |
+Tracer Home  | NuGet
+-------------|-------------
+post-merge   | (same version)
+pre-merge    | post-merge
+post-merge   | pre-merge
+post-merge   | post-merge+1
+post-merge+1 | post-merge
+post-merge   | (same version)
+pre-merge    | post-merge
+post-merge   | pre-merge
+post-merge   | post-merge+1
+post-merge+1 | post-merge
 
 ## Steps to test each scenario
 
-Older pre-merge MSI with newer NuGet:
-- msi: download and install msi `{VERSION}` from github.com
-- nuget: update source code with `{VERSION+1}`, build nuget
+Determine versions:
 
-Older post-merge MSI with newer NuGet:
-- msi: update source code with `{VERSION}`, build and install msi
-- nuget: update source code with `{VERSION+1}`, build nuget
+Name         | Version
+-------------|--------
+Pre-merge    | 1.27.0
+Post-merge   | _current version_
+Post-merge+1 | _current version_ + 0.1
+
+Tracer home:
+- download zip file `1.27.0` from github.com
+-
+
+Pre-merge tracer home with newer `Datadog.Trce.dll`:
+- tracer home: download zip file `1.27.0` from github.com
+- nuget: update source code with new version, build nuget
+
+Post-merge tracer home with newer `Datadog.Trce.dll`:
+- tracer home: update source code with `{VERSION}`, build and install msi
+- nuget: update source code with new version, build nuget
 
 Newer MSI with older pre-merge Nuget:
 - msi: update source code with `{VERSION+1}`, build and install msi

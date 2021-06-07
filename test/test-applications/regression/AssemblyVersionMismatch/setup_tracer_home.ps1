@@ -52,7 +52,7 @@ else
     sudo chmod -R 777 /var/log/datadog/dotnet
 }
 
-# Set all environment variables to attach the profiler to the following pipeline steps
+# Set the environment variables to attach the tracer
 Write-Output "Setting environment variables..."
 
 $Env:DD_ENV = "regression_tests"
