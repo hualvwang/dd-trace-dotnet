@@ -15,12 +15,14 @@ COPY Directory.Build.props Directory.Build.props
 COPY src/Directory.Build.props src/Directory.Build.props
 COPY tools/Directory.Build.props tools/Directory.Build.props
 
-# GlobalSuppressions.cs
 COPY GlobalSuppressions.cs GlobalSuppressions.cs
 COPY src/GlobalSuppressions.cs src/GlobalSuppressions.cs
 COPY tools/GlobalSuppressions.cs tools/GlobalSuppressions.cs
 
-# the actually projects and dependencies we need
+COPY Datadog.Trace.snk Datadog.Trace.snk
+COPY stylecop.json stylecop.json
+
+# the projects and dependencies we need
 COPY src/Datadog.Trace src/Datadog.Trace
 COPY tools/Datadog.Core.Tools tools/Datadog.Core.Tools
 COPY build/tools/PrepareRelease build/tools/PrepareRelease
@@ -35,6 +37,6 @@ COPY src/Datadog.Trace.Ci.Shared src/Datadog.Trace.Ci.Shared
 # TODO: update tools/Datadog.Core.Tools/TracerVersion.cs
 RUN dotnet build build/tools/PrepareRelease/PrepareRelease.csproj -c release -p:PublishRepositoryUrl=false
 
-COPY test/test-applications/regression/AssemblyVersionMismatch/InstrumentedHttpRequest test/test-applications/regression/AssemblyVersionMismatch/InstrumentedHttpRequest
-# WORKDIR /source/test/test-applications/regression/AssemblyVersionMismatch/InstrumentedHttpRequest
+COPY test/test-applications/regression/AssemblyVersionMismatch/WeatherServiceDotNetCore test/test-applications/regression/AssemblyVersionMismatch/WeatherServiceDotNetCore
+# WORKDIR /source/test/test-applications/regression/AssemblyVersionMismatch/WeatherServiceDotNetCore
 # RUN dotnet publish -c release -f net5.0 -o /app

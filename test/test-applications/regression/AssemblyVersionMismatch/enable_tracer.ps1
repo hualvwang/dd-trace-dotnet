@@ -28,7 +28,7 @@ $null = New-Item -Path $logs_path -ItemType Directory -Force
 Write-Output "Setting environment variables..."
 Write-Output "DD_DOTNET_TRACER_HOME = $tracer_home"
 
-$Env:DD_ENV = "regression_tests"
+# $Env:DD_ENV = "regression_tests"
 $Env:DD_DOTNET_TRACER_HOME = $tracer_home
 $Env:DD_INTEGRATIONS = [System.IO.Path]::Combine($tracer_home, "integrations.json");
 $Env:DD_TRACE_LOG_DIRECTORY = $logs_path
