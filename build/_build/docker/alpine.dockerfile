@@ -37,6 +37,8 @@ RUN curl -sSL https://dot.net/v1/dotnet-install.sh --output dotnet-install.sh \
     && ./dotnet-install.sh --runtime aspnetcore --channel 3.1 --install-dir /usr/share/dotnet --no-path \
     && rm dotnet-install.sh
 
+RUN dotnet tool install --global dd-trace
+
 # Copy the build project in and build it
 WORKDIR /project
 COPY . /build
