@@ -11,8 +11,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using Datadog.Trace;
+using System.Globalization;
 
-namespace WebServiceDotNetCore
+namespace WeatherServiceDotNetCore
 {
     public class Startup
     {
@@ -30,8 +32,10 @@ namespace WebServiceDotNetCore
 
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "WebServiceDotNetCore", Version = "v1" });
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "WeatherServiceDotNetCore", Version = "v1" });
             });
+
+            services.AddSingleton(Tracer.Instance);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -41,10 +45,22 @@ namespace WebServiceDotNetCore
             {
                 app.UseDeveloperExceptionPage();
                 app.UseSwagger();
-                app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "WebServiceDotNetCore v1"));
+                app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "WeatherServiceDotNetCore v1"));
             }
 
             // app.UseHttpsRedirection();
+
+            // add a quick tracing middleware
+            app.Use(async (context, next) =>
+            {
+                using var scope = Tracer.Instance.StartActive("aspnetcore.middleware");
+                scope.Span.SetTag(Tags.HttpMethod, context.Request.Method);
+                scope.Span.SetTag(Tags.HttpUrl, context.Request.Path);
+
+                await next.Invoke();
+
+                scope.Span.SetTag(Tags.HttpStatusCode, context.Response.StatusCode.ToString("N0", CultureInfo.InvariantCulture));
+            });
 
             app.UseRouting();
 

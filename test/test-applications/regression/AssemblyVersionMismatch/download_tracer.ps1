@@ -16,7 +16,7 @@ if ($tracer_version -eq "") {
 
 Write-Output "Downloading tracer v$tracer_version..."
 
-# Download the binary file depending of the current operating system and extract the content to the "tracer-home" folder
+# Download the file for the current operating system and extract the content to the "tracer-home-$version" folder
 if ($env:os -eq "Windows_NT")
 {
     $tracer_home = "$(Get-Location)/tracer-home-$tracer_version"

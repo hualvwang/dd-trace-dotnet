@@ -1,6 +1,6 @@
 using System;
 
-namespace WebServiceDotNetCore
+namespace WeatherServiceDotNetCore
 {
     public class WeatherForecast
     {

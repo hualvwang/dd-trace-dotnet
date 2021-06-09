@@ -17,7 +17,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "WebServiceDotNetCore": {
+    "WeatherServiceDotNetCore": {
       "commandName": "Project",
       "dotnetRunMessages": "true",
       "launchBrowser": true,
