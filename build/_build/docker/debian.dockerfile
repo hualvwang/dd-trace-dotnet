@@ -50,6 +50,7 @@ RUN if [ "$(uname -m)" = "x86_64" ]; \
     && rm dotnet-install.sh
 
 RUN dotnet tool install --global dd-trace
+ENV PATH="${PATH}:/root/.dotnet/tools"
 
 # Copy the build project in and build it
 COPY . /build

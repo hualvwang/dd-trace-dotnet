@@ -38,6 +38,7 @@ RUN curl -sSL https://dot.net/v1/dotnet-install.sh --output dotnet-install.sh \
     && rm dotnet-install.sh
 
 RUN dotnet tool install --global dd-trace
+ENV PATH="${PATH}:/root/.dotnet/tools"
 
 # Copy the build project in and build it
 WORKDIR /project
