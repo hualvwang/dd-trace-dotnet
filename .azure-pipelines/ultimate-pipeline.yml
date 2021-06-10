@@ -238,14 +238,6 @@ stages:
     pool:
       vmImage: macOS-10.15
     steps:
-      - script: |
-          DD_AGENT_MAJOR_VERSION=7 \
-          DD_API_KEY=$(ddApiKey) \
-          DD_SITE="datadoghq.com" \
-          bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_mac_os.sh)"
-          datadog-agent status
-        displayName: Install Datadog agent
-
       - template: steps/install-dotnet.yml
       - template: steps/restore-working-directory.yml
         parameters:
