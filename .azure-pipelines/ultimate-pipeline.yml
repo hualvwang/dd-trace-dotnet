@@ -557,6 +557,11 @@ stages:
         testResultsFiles: build_data/results/**/*.trx
       condition: succeededOrFailed()
 
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: 'build_data/results/'
+      continueOnError: true
+
 - stage: benchmarks
   condition: and(succeeded(), ne(variables['skip_benchmarks'], 'true'))
   dependsOn: build_windows
