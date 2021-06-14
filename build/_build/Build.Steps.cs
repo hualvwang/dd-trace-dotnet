@@ -782,6 +782,34 @@ partial class Build
         });
 
 
+    Target RunWindowsGacIntegrationTests => _ => _
+        .After(BuildTracerHome)
+        .After(CompileIntegrationTests)
+        .After(CompileSamples)
+        .After(CompileFrameworkReproductions)
+        .After(PublishIisSamples)
+        .Executes(() =>
+        {
+            ClrProfilerIntegrationTests.ForEach(EnsureResultsDirectory);
+            try
+            {
+                // Only run tests for which LoadFromGac=True
+                DotNetTest(config => config
+                    .SetConfiguration(BuildConfiguration)
+                    .SetTargetPlatform(Platform)
+                    .EnableNoRestore()
+                    .EnableNoBuild()
+                    .SetFilter(Filter ?? "LoadFromGAC=True")
+                    .CombineWith(ClrProfilerIntegrationTests, (s, project) => s
+                        .EnableTrxLogOutput(GetResultsDirectory(project))
+                        .SetProjectFile(project)));
+            }
+            finally
+            {
+                MoveLogsToBuildData();
+            }
+        });
+
     Target RunWindowsIisIntegrationTests => _ => _
         .After(BuildTracerHome)
         .After(CompileIntegrationTests)
@@ -793,16 +821,16 @@ partial class Build
             ClrProfilerIntegrationTests.ForEach(EnsureResultsDirectory);
             try
             {
-                // Different filter from RunWindowsIntegrationTests
+                // Only run tests for which LoadFromGac=True
                 DotNetTest(config => config
                     .SetConfiguration(BuildConfiguration)
                     .SetTargetPlatform(Platform)
                     .EnableNoRestore()
                     .EnableNoBuild()
-                    .SetFilter(Filter ?? "(RunOnWindows=True|Category=Smoke)&LoadFromGAC=True")
+                    .SetFilter(Filter ?? "IIS=True")
                     .CombineWith(ClrProfilerIntegrationTests, (s, project) => s
-                        .EnableTrxLogOutput(GetResultsDirectory(project))
-                        .SetProjectFile(project)));
+                         .EnableTrxLogOutput(GetResultsDirectory(project))
+                         .SetProjectFile(project)));
             }
             finally
             {

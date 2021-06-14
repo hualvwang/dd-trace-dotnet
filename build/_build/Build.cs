@@ -175,6 +175,12 @@ partial class Build : NukeBuild
         .DependsOn(BuildWindowsIntegrationTests)
         .DependsOn(RunWindowsIisIntegrationTests);
 
+    Target BuildAndRunWindowsGacIntegrationTests => _ => _
+        .Requires(() => IsWin)
+        .Description("Builds and runs the Windows GAC integration tests")
+        .DependsOn(BuildWindowsIntegrationTests)
+        .DependsOn(RunWindowsGacIntegrationTests);
+
     Target BuildLinuxIntegrationTests => _ => _
         .Requires(() => !IsWin)
         .Description("Builds the linux integration tests")
