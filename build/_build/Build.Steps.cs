@@ -562,8 +562,8 @@ partial class Build
 
     Target CompileDependencyLibs => _ => _
         .Unlisted()
-        .DependsOn(Restore)
-        .DependsOn(CompileManagedSrc)
+        .After(Restore)
+        .After(CompileManagedSrc)
         .Executes(() =>
         {
             // Always AnyCPU
@@ -756,7 +756,7 @@ partial class Build
                 DotNetTest(config => config
                     .SetConfiguration(BuildConfiguration)
                     .SetTargetPlatform(Platform)
-                                    .EnableNoRestore()
+                    .EnableNoRestore()
                     .EnableNoBuild()
                     .When(!string.IsNullOrEmpty(Filter), c => c.SetFilter(Filter))
                     .When(CodeCoverage, ConfigureCodeCoverage)
