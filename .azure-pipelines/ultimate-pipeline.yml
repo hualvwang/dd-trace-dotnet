@@ -335,12 +335,22 @@ stages:
     timeoutInMinutes: 100
     strategy:
       matrix:
-        x64:
+        x64_net452:
           buildPlatform: x64
           enable32bit: false
-        x86:
+          publishTargetFramework: net452
+        x64_net461:
+          buildPlatform: x64
+          enable32bit: false
+          publishTargetFramework: net461
+        x86_net452:
           buildPlatform: x86
           enable32bit: true
+          publishTargetFramework: net452
+        x86_net461:
+          buildPlatform: x86
+          enable32bit: true
+          publishTargetFramework: net461
     pool:
       vmImage: windows-2019
     variables:
@@ -358,14 +368,14 @@ stages:
         patterns: '**/*.msi'
         path: $(System.DefaultWorkingDirectory)/$(relativeMsiOutputDirectory)
 
-    - script: build.cmd BuildWindowsIntegrationTests
-      displayName: BuildWindowsIntegrationTests
+    - script: build.cmd BuildWindowsIntegrationTests PublishIisTests --framework $(publishTargetFramework)
+      displayName: BuildWindowsIntegrationTests PublishIisTests
 
     - task: DockerCompose@0
       displayName: docker-compose build IIS containers
       inputs:
         containerregistrytype: Container Registry
-        dockerComposeCommand: build --build-arg dotnet_tracer_msi=.$(relativeMsiOutputDirectory)/*.msi --build-arg enable_32_bit=$(enable32bit) IntegrationTests.IIS.LoaderOptimizationRegKey
+        dockerComposeCommand: build --build-arg dotnet_tracer_msi=.$(relativeMsiOutputDirectory)/*.msi --build-arg enable_32_bit=$(enable32bit) IntegrationTests.IIS.LoaderOptimizationRegKey NukeIntegrationTests.IIS
 
     - task: DockerCompose@0
       displayName: docker-compose start IIS containers
@@ -373,8 +383,11 @@ stages:
         containerregistrytype: Container Registry
         dockerComposeCommand: up -d IntegrationTests.IIS.LoaderOptimizationRegKey
 
-    - script: build.cmd RunWindowsIisIntegrationTests
-      displayName: RunWindowsIisIntegrationTests
+    - task: DockerCompose@0
+      displayName: docker-compose run NukeIntegrationTests
+      inputs:
+        containerregistrytype: Container Registry
+        dockerComposeCommand: run --rm -e framework=$(publishTargetFramework) NukeIntegrationTests.IIS
 
     - task: PublishTestResults@2
       displayName: publish test results

@@ -718,6 +718,25 @@ services:
       - TIMEOUT_LENGTH=120
     command: servicestackredis:6379 stackexchangeredis:6379 elasticsearch7_arm64:9200 sqledge:1433 mongo:27017 postgres:5432 mysql:3306 rabbitmq:5672
 
+  NukeIntegrationTests.IIS:
+    build:
+      context: ./build/_build/
+      dockerfile: docker/windows.dockerfile
+      args:
+        - DOTNETSDK_VERSION=${dotnetCoreSdk5Version:-5.0.103}
+    image: dd-trace-dotnet/windows-tester
+    command: dotnet c:\\build\\bin\\Debug\\_build.dll RunWindowsIisIntegrationTests
+    volumes:
+      - ./:c:/project
+    environment:
+      - framework=${framework:-net461}
+      - NugetPackageDirectory=c:/project/${relativeNugetPackageDirectory:-packages}
+      - tracerHome=c:/project/${relativeTracerHome:-src/bin/windows-tracer-home}
+      - artifacts=c:/project/${relativeArtifacts:-src/bin/artifacts}
+      - LoaderOptimizationRegKeyUrl=http://IntegrationTests.IIS.LoaderOptimizationRegKey:80
+    depends_on:
+      - IntegrationTests.IIS.LoaderOptimizationRegKey
+
   IntegrationTests.ARM64.Core50:
     build:
       context: ./

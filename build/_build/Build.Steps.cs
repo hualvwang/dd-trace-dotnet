@@ -718,6 +718,7 @@ partial class Build
         .After(CompileManagedTestHelpers)
         .After(CompileRegressionSamples)
         .After(CompileFrameworkReproductions)
+        .After(CompileSamples)
         .Executes(() =>
         {
             var aspnetFolder = TestsDirectory / "test-applications" / "aspnet";
@@ -810,27 +811,45 @@ partial class Build
             }
         });
 
+    Target PublishIisTests => _ => _
+        .Unlisted()
+        .After(CompileIntegrationTests)
+        .Requires(() => Framework)
+        .Executes(() =>
+         {
+             // Have to publish the IIS tests as we build them _outside_ the container
+             DotNetPublish(x => x
+                .EnableNoBuild()
+                .EnableNoRestore()
+                .EnableNoDependencies()
+                .SetFramework(Framework)
+                .SetTargetPlatform(Platform)
+                .SetConfiguration(BuildConfiguration)
+                .CombineWith(ClrProfilerIntegrationTests, (c, project ) => c
+                    .SetProject(project))
+             );
+         });
+
     Target RunWindowsIisIntegrationTests => _ => _
         .After(BuildTracerHome)
         .After(CompileIntegrationTests)
         .After(CompileSamples)
         .After(CompileFrameworkReproductions)
         .After(PublishIisSamples)
+        .After(PublishIisTests)
+        .Requires(() => Framework)
         .Executes(() =>
         {
             ClrProfilerIntegrationTests.ForEach(EnsureResultsDirectory);
             try
             {
-                // Only run tests for which LoadFromGac=True
+                // Only run tests for which IIS=True
                 DotNetTest(config => config
-                    .SetConfiguration(BuildConfiguration)
-                    .SetTargetPlatform(Platform)
-                    .EnableNoRestore()
-                    .EnableNoBuild()
+                    .SetFramework(Framework)
                     .SetFilter(Filter ?? "IIS=True")
                     .CombineWith(ClrProfilerIntegrationTests, (s, project) => s
                          .EnableTrxLogOutput(GetResultsDirectory(project))
-                         .SetProjectFile(project)));
+                         .SetProjectFile(project.Directory / "bin" / Platform.ToString() / BuildConfiguration / Framework / "publish" / $"{project.Name}.dll")));
             }
             finally
             {

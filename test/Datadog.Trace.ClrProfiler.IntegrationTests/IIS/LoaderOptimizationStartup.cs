@@ -4,6 +4,7 @@
 // </copyright>
 
 #if NETFRAMEWORK
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -15,7 +16,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests.IIS
 {
     public class LoaderOptimizationStartup
     {
-        private const string Url = "http://localhost:8080";
+        private static readonly string Url = Environment.GetEnvironmentVariable("LoaderOptimizationRegKeyUrl") ?? "http://localhost:8080";
 
         public LoaderOptimizationStartup(ITestOutputHelper output)
         {
