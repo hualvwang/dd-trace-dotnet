@@ -1,4 +1,4 @@
-// <copyright file="AspNetMvc4Tests.cs" company="Datadog">
+// <copyright file="AspNetMvc4IisTests.cs" company="Datadog">
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
@@ -19,84 +19,84 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [CollectionDefinition("IisTests", DisableParallelization = true)]
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallsiteClassic : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallsiteClassic : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallsiteClassic(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallsiteClassic(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: false, classicMode: true, enableRouteTemplateResourceNames: false)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallsiteIntegrated : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallsiteIntegrated : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallsiteIntegrated(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallsiteIntegrated(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: false, classicMode: false, enableRouteTemplateResourceNames: false)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallsiteClassicWithFeatureFlag : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallsiteClassicWithFeatureFlag : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallsiteClassicWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallsiteClassicWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: false, classicMode: true, enableRouteTemplateResourceNames: true)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallsiteIntegratedWithFeatureFlag : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallsiteIntegratedWithFeatureFlag : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallsiteIntegratedWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallsiteIntegratedWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: false, classicMode: false, enableRouteTemplateResourceNames: true)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallTargetClassic : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallTargetClassic : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallTargetClassic(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallTargetClassic(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: true, classicMode: true, enableRouteTemplateResourceNames: false)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallTargetIntegrated : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallTargetIntegrated : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallTargetIntegrated(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallTargetIntegrated(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: true, classicMode: false, enableRouteTemplateResourceNames: false)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallTargetClassicWithFeatureFlag : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallTargetClassicWithFeatureFlag : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallTargetClassicWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallTargetClassicWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: true, classicMode: true, enableRouteTemplateResourceNames: true)
         {
         }
     }
 
     [Collection("IisTests")]
-    public class AspNetMvc4TestsCallTargetIntegratedWithFeatureFlag : AspNetMvc4Tests
+    public class AspNetMvc4IisTestsCallTargetIntegratedWithFeatureFlag : AspNetMvc4IisTests
     {
-        public AspNetMvc4TestsCallTargetIntegratedWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
+        public AspNetMvc4IisTestsCallTargetIntegratedWithFeatureFlag(IisFixture iisFixture, ITestOutputHelper output)
             : base(iisFixture, output, enableCallTarget: true, classicMode: false, enableRouteTemplateResourceNames: true)
         {
         }
     }
 
     [UsesVerify]
-    public abstract class AspNetMvc4Tests : TestHelper, IClassFixture<IisFixture>
+    public abstract class AspNetMvc4IisTests : TestHelper, IClassFixture<IisFixture>
     {
         private readonly IisFixture _iisFixture;
         private readonly string _testName;
 
-        public AspNetMvc4Tests(IisFixture iisFixture, ITestOutputHelper output, bool enableCallTarget, bool classicMode, bool enableRouteTemplateResourceNames)
+        public AspNetMvc4IisTests(IisFixture iisFixture, ITestOutputHelper output, bool enableCallTarget, bool classicMode, bool enableRouteTemplateResourceNames)
             : base("AspNetMvc4", @"test\test-applications\aspnet", output)
         {
             SetServiceVersion("1.0.0");
@@ -108,7 +108,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 
             _iisFixture = iisFixture;
             _iisFixture.TryStartIis(this, classicMode);
-            _testName = nameof(AspNetMvc4Tests)
+            _testName = nameof(AspNetMvc4IisTests)
                       + (enableCallTarget ? ".CallSite" : ".CallTarget")
                       + (classicMode ? ".Classic" : ".Integrated")
                       + (enableRouteTemplateResourceNames ? ".NoFF" : ".WithFF")
