@@ -10,13 +10,19 @@ RUN Add-WindowsFeature NET-Framework-45-ASPNET; \
     Remove-WebSite -Name 'Default Web Site'
 
 # Copy IIS websites
-ADD test/test-applications/aspnet/Samples.AspNet472.LoaderOptimizationRegKey/bin/Release/Publish LoaderOptimizationRegKey
+COPY test/test-applications/aspnet/Samples.AspNet472.LoaderOptimizationRegKey/bin/Release/publish LoaderOptimizationRegKey
+COPY test/test-applications/aspnet/Samples.AspNetMvc4/bin/Release/publish AspNetMvc4
+COPY test/test-applications/aspnet/Samples.AspNetMvc5/bin/Release/publish AspNetMvc5
+COPY test/test-applications/aspnet/Samples.WebForms/bin/Release/publish WebForms
 
 # Set up IIS websites
 ARG ENABLE_32_BIT
 ENV ENABLE_32_BIT=${ENABLE_32_BIT:-false}
-RUN Write-Host "Creating website with 32 bit reg key: $env:ENABLE_32_BIT"; \
+RUN Write-Host "Creating websites with 32 bit reg key: $env:ENABLE_32_BIT"; \
     New-Website -Name 'LoaderOptimizationRegKey' -Port 80 -PhysicalPath 'c:\LoaderOptimizationRegKey'; \
+    New-Website -Name 'AspNetMvc4' -Port 81 -PhysicalPath 'c:\AspNetMvc4'; \
+    New-Website -Name 'AspNetMvc5' -Port 82 -PhysicalPath 'c:\AspNetMvc5'; \
+    New-Website -Name 'WebForms' -Port 83 -PhysicalPath 'c:\WebForms'; \
     c:\Windows\System32\inetsrv\appcmd set apppool /apppool.name:DefaultAppPool /enable32bitapponwin64:$env:ENABLE_32_BIT
 
 # Install the .NET Tracer MSI
@@ -26,6 +32,5 @@ RUN Start-Process -Wait msiexec -ArgumentList '/qn /i datadog-apm.msi'
 
 # Restart IIS
 RUN net stop /y was; \
-    net start w3svc
-
-EXPOSE 80
+    net start w3svc; \
+    Get-IISSite

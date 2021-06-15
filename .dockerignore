@@ -11,4 +11,7 @@ packages/
 **/obj/
 
 !test/test-applications/aspnet/Samples.AspNet472.LoaderOptimizationRegKey/bin/
+!test/test-applications/aspnet/Samples.AspNetMvc4/bin/
+!test/test-applications/aspnet/Samples.AspNetMvc5/bin/
+!test/test-applications/aspnet/Samples.WebForms/bin/
 !src/WindowsInstaller/bin/

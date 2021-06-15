@@ -398,6 +398,12 @@ services:
     image: datadog-iis-loaderoptimizationregkey
     ports:
     - "8080:80"
+    - "8081:81"
+    - "8082:82"
+    - "8083:83"
+    environment:
+    - DD_AGENT_HOST=NukeIntegrationTests.IIS
+
 
   # .NET Core does not have apk packages for .NET Core runtimes, they only have base images
   # Until it's resolved, have a separate Dockerfile for each runtime
@@ -734,6 +740,9 @@ services:
       - tracerHome=c:/project/${relativeTracerHome:-src/bin/windows-tracer-home}
       - artifacts=c:/project/${relativeArtifacts:-src/bin/artifacts}
       - LoaderOptimizationRegKeyUrl=http://IntegrationTests.IIS.LoaderOptimizationRegKey:80
+      - SamplesAspNetMvc4Url=http://IntegrationTests.IIS.LoaderOptimizationRegKey:81
+      - SamplesAspNetMvc5Url=http://IntegrationTests.IIS.LoaderOptimizationRegKey:82
+      - SamplesWebFormsUrl=http://IntegrationTests.IIS.LoaderOptimizationRegKey:83
     depends_on:
       - IntegrationTests.IIS.LoaderOptimizationRegKey
 
