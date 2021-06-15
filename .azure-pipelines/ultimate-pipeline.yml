@@ -191,7 +191,7 @@ stages:
       - template: steps/install-dotnet.yml
       - template: steps/restore-working-directory.yml
 
-      - script: build.cmd BuildAndRunManagedUnitTests
+      - script: build.cmd BuildAndRunManagedUnitTests --code-coverage
         displayName: Build and Test
 
       - publish: build_data
@@ -204,6 +204,11 @@ stages:
           testResultsFormat: VSTest
           testResultsFiles: build_data/results/**/*.trx
         condition: succeededOrFailed()
+        
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: 'build_data/results/'
+        continueOnError: true
 
     - job: native
       steps:
@@ -232,7 +237,7 @@ stages:
         parameters:
           artifact: build-macos-working-directory
 
-      - script: ./build.sh BuildAndRunManagedUnitTests
+      - script: ./build.sh BuildAndRunManagedUnitTests --code-coverage
         displayName: Build and Test
 
       - publish: build_data
@@ -245,6 +250,11 @@ stages:
           testResultsFormat: VSTest
           testResultsFiles: build_data/results/**/*.trx
         condition: succeededOrFailed()
+        
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: 'build_data/results/'
+        continueOnError: true
 
 - stage: unit_tests_linux
   condition: and(succeeded(), eq(variables['benchmarksOnly'], 'False'))
@@ -281,7 +291,7 @@ stages:
       parameters:
         build: true
         baseImage: $(baseImage)
-        command: "BuildAndRunManagedUnitTests"
+        command: "BuildAndRunManagedUnitTests --code-coverage"
 
     - publish: build_data
       artifact: profiler-logs_unit_tests_linux_$(Agent.JobName)_$(System.JobAttempt)
@@ -293,6 +303,11 @@ stages:
         testResultsFormat: VSTest
         testResultsFiles: build_data/results/**/*.trx
       condition: succeededOrFailed()
+      
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: 'build_data/results/'
+      continueOnError: true
 
 - stage: integration_tests_windows
   condition: and(succeeded(), eq(variables['benchmarksOnly'], 'False'))
