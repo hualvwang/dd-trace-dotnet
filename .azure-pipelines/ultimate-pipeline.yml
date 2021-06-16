@@ -205,11 +205,6 @@ stages:
           testResultsFiles: build_data/results/**/*.trx
         condition: succeededOrFailed()
         
-      - task: PublishPipelineArtifact@1
-        inputs:
-          targetPath: 'build_data/results/'
-        continueOnError: true
-
     - job: native
       steps:
       - template: steps/install-dotnet.yml
@@ -251,10 +246,7 @@ stages:
           testResultsFiles: build_data/results/**/*.trx
         condition: succeededOrFailed()
         
-      - task: PublishPipelineArtifact@1
-        inputs:
-          targetPath: 'build_data/results/'
-        continueOnError: true
+
 
 - stage: unit_tests_linux
   condition: and(succeeded(), eq(variables['benchmarksOnly'], 'False'))
@@ -303,11 +295,6 @@ stages:
         testResultsFormat: VSTest
         testResultsFiles: build_data/results/**/*.trx
       condition: succeededOrFailed()
-      
-    - task: PublishPipelineArtifact@1
-      inputs:
-        targetPath: 'build_data/results/'
-      continueOnError: true
 
 - stage: integration_tests_windows
   condition: and(succeeded(), eq(variables['benchmarksOnly'], 'False'))
@@ -571,11 +558,6 @@ stages:
         testResultsFormat: VSTest
         testResultsFiles: build_data/results/**/*.trx
       condition: succeededOrFailed()
-
-    - task: PublishPipelineArtifact@1
-      inputs:
-        targetPath: 'build_data/results/'
-      continueOnError: true
 
 - stage: benchmarks
   condition: and(succeeded(), ne(variables['skip_benchmarks'], 'true'))
