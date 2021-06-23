@@ -1,6 +1,5 @@
 Param (
-    [String]
-    $tracer_version
+    [String] $tracer_version
 )
 
 $ProgressPreference = "SilentlyContinue"
@@ -17,8 +16,7 @@ if ($tracer_version -eq "") {
 Write-Output "Downloading tracer v$tracer_version..."
 
 # Download the file for the current operating system and extract the content to the "tracer-home-$version" folder
-if ($env:os -eq "Windows_NT")
-{
+if ($env:os -eq "Windows_NT") {
     $tracer_home = "$(Get-Location)/tracer-home-$tracer_version"
     $url = "https://github.com/DataDog/dd-trace-dotnet/releases/download/v$($tracer_version)/windows-tracer-home.zip"
     $filename = "windows-tracer-home-$tracer_version.zip"
@@ -28,8 +26,7 @@ if ($env:os -eq "Windows_NT")
     Expand-Archive $filename -DestinationPath $tracer_home
     Remove-Item $filename
 }
-else
-{
+else {
     # File version is the same as the release version without the prerelease suffix.
     $file_version = $tracer_version.Replace("-prerelease", "")
     $tracer_home = "$(Get-Location)/tracer-home-$file_version"

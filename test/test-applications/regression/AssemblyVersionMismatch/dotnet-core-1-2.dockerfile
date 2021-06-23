@@ -1,13 +1,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
 WORKDIR /source
 
-ARG past_tracer_version=1.27.0
+ARG past_tracer_version=1.27.1
 ARG next_tracer_version=1.98.0
 ARG future_tracer_version=1.99.0
 
 # TODO:
-# - download and extract https://github.com/DataDog/dd-trace-dotnet/releases/download/v1.27.0/windows-tracer-home.zip
-# - download and extract https://www.nuget.org/api/v2/package/Datadog.Trace/1.27.0
+# - download and extract https://github.com/DataDog/dd-trace-dotnet/releases/download/v1.27.1/windows-tracer-home.zip
+# - download and extract https://www.nuget.org/api/v2/package/Datadog.Trace/1.27.1
 # - update tracer version in source code
 
 # Directory.Build.props
