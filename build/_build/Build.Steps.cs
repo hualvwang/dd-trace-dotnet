@@ -734,7 +734,7 @@ partial class Build
                 .SetProperty("DeployOnBuild", true)
                 .SetProperty("PublishProfile", publishProfile)
                 .SetMaxCpuCount(null)
-                .CombineWith(aspnetProjects, (c, project ) => c
+                .CombineWith(aspnetProjects, (c, project) => c
                     .SetTargetPath(project))
             );
         });
@@ -904,6 +904,8 @@ partial class Build
                     .SetFramework(Framework)
                     // .SetTargetPlatform(Platform)
                     .SetNoWarnDotNetCore3()
+                    .SetProperty("ExcludeManagedProfiler", "true")
+                    .SetProperty("ExcludeNativeProfiler", "true")
                     .SetProperty("ManagedProfilerOutputDirectory", TracerHomeDirectory)
                     .When(TestAllPackageVersions, o => o.SetProperty("TestAllPackageVersions", "true"))
                     .When(!string.IsNullOrEmpty(NugetPackageDirectory), o => o.SetPackageDirectory(NugetPackageDirectory))
