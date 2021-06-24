@@ -22,13 +22,13 @@ There are 10 Docker files, one for each test in the text matrix.
 
 ## Test matrix
 
-| Tracer Home    | NuGet          | Dockerfile                 |
-| -------------- | -------------- | -------------------------- |
-| pre-merge      | post-merge     | `{runtime}-1-2.dockerfile` |
-| post-merge     | pre-merge      | `{runtime}-2-1.dockerfile` |
-| post-merge     | (same version) | `{runtime}-2-2.dockerfile` |
-| post-merge     | post-merge+1   | `{runtime}-2-3.dockerfile` |
-| post-merge + 1 | post-merge     | `{runtime}-3-2.dockerfile` |
+| Tracer Home  | NuGet          | Dockerfile                 |
+| ------------ | -------------- | -------------------------- |
+| pre-merge    | post-merge     | `{runtime}-1-2.dockerfile` |
+| post-merge   | pre-merge      | `{runtime}-2-1.dockerfile` |
+| post-merge   | (same version) | `{runtime}-2-2.dockerfile` |
+| post-merge   | post-merge+1   | `{runtime}-2-3.dockerfile` |
+| post-merge+1 | post-merge     | `{runtime}-3-2.dockerfile` |
 
 ## Steps
 
@@ -36,18 +36,18 @@ Determine versions:
 
 | Name              | Version                 |
 | ----------------- | ----------------------- |
-| 1. Pre-merge      | 1.27.0                  |
+| 1. Pre-merge      | 1.27.1                  |
 | 2. Post-merge     | _current version_       |
 | 3. Post-merge + 1 | _current version_ + 0.1 |
 
 Prepare 3 tracer home directories:
 - pre-merge: download and extract zip file `{pre-merge}` from github.com
-  - https://github.com/DataDog/dd-trace-dotnet/releases/download/v1.27.0/windows-tracer-home.zip
+  - https://github.com/DataDog/dd-trace-dotnet/releases/download/v1.27.1/windows-tracer-home.zip
 - post-merge: build a `{post-merge}` tracer home directory
 - post-merge+1: build a `{post-merge + 1}` tracer home directory
 
 Prepare 3 nuget packages:
 - pre-merge: download nuget package `{pre-merge}` from nuget.org
-  - https://www.nuget.org/api/v2/package/Datadog.Trace/1.27.0
+  - https://www.nuget.org/api/v2/package/Datadog.Trace/1.27.1
 - post-merge: build a `{post-merge}` nuget package
 - post-merge+1: build a `{post-merge + 1}` nuget package
