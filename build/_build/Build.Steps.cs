@@ -340,7 +340,7 @@ partial class Build
        .Executes(() =>
        {
            // start by copying everything from the tracer home dir
-           CopyDirectoryRecursively(TracerHomeDirectory, DDTracerHomeDirectory, DirectoryExistsPolicy.Merge);
+           CopyDirectoryRecursively(TracerHomeDirectory, DDTracerHomeDirectory, DirectoryExistsPolicy.Merge, FileExistsPolicy.Overwrite);
 
            if (IsWin)
            {
