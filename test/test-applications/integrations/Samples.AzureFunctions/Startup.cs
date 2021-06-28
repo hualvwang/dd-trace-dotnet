@@ -11,11 +11,11 @@ namespace Samples.AzureFunctions
         {
             Console.WriteLine("Startup method called.");
             // var profilerAttached = false;
-            var profilerAttached = Datadog.Trace.ClrProfiler.Instrumentation.ProfilerAttached;
-            if (profilerAttached)
-            {
-                Console.WriteLine("Profiler is attached.");
-            }
+            // var profilerAttached = Datadog.Trace.ClrProfiler.Instrumentation.ProfilerAttached;
+            // if (profilerAttached)
+            // {
+            //     Console.WriteLine("Profiler is attached.");
+            // }
         }
     }
 }

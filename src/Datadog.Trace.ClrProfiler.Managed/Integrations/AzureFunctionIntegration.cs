@@ -70,13 +70,13 @@ namespace Datadog.Trace.ClrProfiler.Integrations
         /// <param name="mdToken">The mdToken of the original method call.</param>
         /// <param name="moduleVersionPtr">A pointer to the module version GUID.</param>
         /// <returns>The value returned by the instrumented method.</returns>
-        [InterceptMethod(
-            TargetAssemblies = new[] { AssemblyName },
-            TargetMethod = MethodName,
-            TargetType = FunctionInvokerType,
-            TargetSignatureTypes = new[] { ClrNames.ObjectTask, ClrNames.Object, ClrNames.ObjectArray },
-            TargetMinimumVersion = MinimumVersion,
-            TargetMaximumVersion = MaximumVersion)]
+        // [InterceptMethod(
+        //     TargetAssemblies = new[] { AssemblyName },
+        //     TargetMethod = MethodName,
+        //     TargetType = FunctionInvokerType,
+        //     TargetSignatureTypes = new[] { ClrNames.ObjectTask, ClrNames.Object, ClrNames.ObjectArray },
+        //     TargetMinimumVersion = MinimumVersion,
+        //     TargetMaximumVersion = MaximumVersion)]
         public static object InvokeAsync(
             object instance,
             object instanceParam,
