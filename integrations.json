@@ -648,7 +648,7 @@
         "caller": {},
         "target": {
           "assembly": "Microsoft.Azure.WebJobs.Host",
-          "type": "Microsoft.Azure.WebJobs.Host.Executors.IFunctionInvoker",
+          "type": "Microsoft.Azure.WebJobs.Host.Executors.FunctionInvoker`2",
           "method": "InvokeAsync",
           "signature_types": [
             "System.Threading.Tasks.Task`1[System.Object]",
