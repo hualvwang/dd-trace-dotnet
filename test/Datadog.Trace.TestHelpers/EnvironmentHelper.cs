@@ -161,6 +161,7 @@ namespace Datadog.Trace.TestHelpers
             var processName = processPath;
             string profilerEnabled = _requiresProfiling ? "1" : "0";
             string profilerPath;
+            string integrations = GetIntegrationsFilePath();
 
             if (IsCoreClr())
             {
@@ -169,7 +170,7 @@ namespace Datadog.Trace.TestHelpers
 
                 profilerPath = GetProfilerPath();
                 environmentVariables["CORECLR_PROFILER_PATH"] = profilerPath;
-                environmentVariables["DD_DOTNET_TRACER_HOME"] = Path.GetDirectoryName(profilerPath);
+                environmentVariables["DD_DOTNET_TRACER_HOME"] = Path.GetDirectoryName(integrations);
             }
             else
             {
@@ -178,7 +179,7 @@ namespace Datadog.Trace.TestHelpers
 
                 profilerPath = GetProfilerPath();
                 environmentVariables["COR_PROFILER_PATH"] = profilerPath;
-                environmentVariables["DD_DOTNET_TRACER_HOME"] = Path.GetDirectoryName(profilerPath);
+                environmentVariables["DD_DOTNET_TRACER_HOME"] = Path.GetDirectoryName(integrations);
 
                 processName = Path.GetFileName(processPath);
             }
@@ -193,7 +194,6 @@ namespace Datadog.Trace.TestHelpers
                 environmentVariables["DD_PROFILER_PROCESSES"] = processName;
             }
 
-            string integrations = string.Join(";", GetIntegrationsFilePaths());
             environmentVariables["DD_INTEGRATIONS"] = integrations;
             environmentVariables["DD_TRACE_AGENT_HOSTNAME"] = "127.0.0.1";
             environmentVariables["DD_TRACE_AGENT_PORT"] = agentPort.ToString();
@@ -224,7 +224,7 @@ namespace Datadog.Trace.TestHelpers
             }
         }
 
-        public string[] GetIntegrationsFilePaths()
+        public string GetIntegrationsFilePath()
         {
             if (_integrationsFileLocation == null)
             {
@@ -268,10 +268,7 @@ namespace Datadog.Trace.TestHelpers
                 _output?.WriteLine($"Found integrations at {_integrationsFileLocation}.");
             }
 
-            return new[]
-            {
-                _integrationsFileLocation
-            };
+            return _integrationsFileLocation;
         }
 
         public string GetProfilerPath()
@@ -309,9 +306,20 @@ namespace Datadog.Trace.TestHelpers
                         relativePath);
                 }
 
-                if (!File.Exists(_profilerFileLocation))
+                if (!File.Exists(_profilerFileLocation) && EnvironmentTools.GetOS() is "win")
                 {
                     _output?.WriteLine($"Attempt 2: Unable to find profiler at {_profilerFileLocation}.");
+                    // One last attempt at the actual native project directory
+                    _profilerFileLocation = Path.Combine(
+                        GetExecutingProjectBin(),
+                        "profiler-lib",
+                        $"win-{GetBuildPlatform()}",
+                        fileName);
+                }
+
+                if (!File.Exists(_profilerFileLocation))
+                {
+                    _output?.WriteLine($"Attempt 3: Unable to find profiler at {_profilerFileLocation}.");
                     // One last attempt at the actual native project directory
                     _profilerFileLocation = Path.Combine(
                         GetProfilerProjectBin(),
@@ -320,7 +328,7 @@ namespace Datadog.Trace.TestHelpers
 
                 if (!File.Exists(_profilerFileLocation))
                 {
-                    throw new Exception($"Attempt 3: Unable to find profiler at {_profilerFileLocation}");
+                    throw new Exception($"Attempt 4: Unable to find profiler at {_profilerFileLocation}");
                 }
 
                 _output?.WriteLine($"Found profiler at {_profilerFileLocation}.");
@@ -428,10 +436,6 @@ namespace Datadog.Trace.TestHelpers
 
             string outputDir;
 
-            // Used to set the sample platform _separately_ from the "build/test" platform
-            // Means we don't need the 32 bit .NET SDK to run tests for the 32 bit application.
-            var buildPlatform = Environment.GetEnvironmentVariable("SamplePlatform") ?? EnvironmentTools.GetPlatform();
-
             if (_samplesDirectory.Contains("aspnet"))
             {
                 outputDir = Path.Combine(
@@ -444,7 +448,7 @@ namespace Datadog.Trace.TestHelpers
                 outputDir = Path.Combine(
                     binDir,
                     packageVersion,
-                    buildPlatform,
+                    GetBuildPlatform(),
                     EnvironmentTools.GetBuildConfiguration(),
                     targetFramework);
             }
@@ -498,6 +502,13 @@ namespace Datadog.Trace.TestHelpers
         private string GetExecutingProjectBin()
         {
             return Path.GetDirectoryName(ExecutingAssembly.Location);
+        }
+
+        private string GetBuildPlatform()
+        {
+            // Used to set the sample platform _separately_ from the "build/test" platform
+            // Means we don't need the 32 bit .NET SDK to run tests for the 32 bit application.
+            return Environment.GetEnvironmentVariable("SamplePlatform") ?? EnvironmentTools.GetPlatform();
         }
     }
 }
