@@ -673,7 +673,7 @@ partial class Build
                 .DisableRestore()
                 .EnableNoDependencies()
                 .SetConfiguration(BuildConfiguration)
-                .SetTargetPlatform(Platform)
+                .SetTargetPlatformAnyCPU()
                 .SetProperty("ManagedProfilerOutputDirectory", TracerHomeDirectory)
                 .SetTargets("BuildCsharpIntegrationTests")
                 .SetMaxCpuCount(null));
@@ -754,9 +754,10 @@ partial class Build
             {
                 DotNetTest(config => config
                     .SetConfiguration(BuildConfiguration)
-                    .SetTargetPlatform(Platform)
+                    .SetTargetPlatformAnyCPU()
                     .EnableNoRestore()
                     .EnableNoBuild()
+                    .SetProcessEnvironmentVariable("SamplePlatform", Platform.ToString())
                     .When(!string.IsNullOrEmpty(Filter), c => c.SetFilter(Filter))
                     .CombineWith(ParallelIntegrationTests, (s, project) => s
                         .EnableTrxLogOutput(GetResultsDirectory(project))
@@ -767,9 +768,10 @@ partial class Build
                 // (RunOnWindows!=False|Category=Smoke)&LoadFromGAC!=True&IIS!=True
                 DotNetTest(config => config
                     .SetConfiguration(BuildConfiguration)
-                    .SetTargetPlatform(Platform)
+                    .SetTargetPlatformAnyCPU()
                     .EnableNoRestore()
                     .EnableNoBuild()
+                    .SetProcessEnvironmentVariable("SamplePlatform", Platform.ToString())
                     .SetFilter(Filter ?? "(RunOnWindows=True|Category=Smoke)&LoadFromGAC!=True&IIS!=True")
                     .CombineWith(ClrProfilerIntegrationTests, (s, project) => s
                         .EnableTrxLogOutput(GetResultsDirectory(project))

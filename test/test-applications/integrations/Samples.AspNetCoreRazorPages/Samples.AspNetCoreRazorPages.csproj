@@ -3,7 +3,9 @@
   <PropertyGroup>
       <TargetFrameworks>netcoreapp2.1;netcoreapp3.0;netcoreapp3.1;net5.0</TargetFrameworks>
       <Configurations>Debug;Release</Configurations>
-      <Platforms>x64;x86;AnyCPU</Platforms>
+      <Platforms>AnyCPU</Platforms>
+      <OutDir>bin\$(Configuration)\$(TargetFramework)</OutDir>
+      <IntermediateOutputPath>obj\$(Configuration)\$(TargetFramework)</IntermediateOutputPath>
   </PropertyGroup>
 
   <PropertyGroup>

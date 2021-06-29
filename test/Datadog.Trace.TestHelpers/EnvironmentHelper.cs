@@ -428,6 +428,10 @@ namespace Datadog.Trace.TestHelpers
 
             string outputDir;
 
+            // Used to set the sample platform _separately_ from the "build/test" platform
+            // Means we don't need the 32 bit .NET SDK to run tests for the 32 bit application.
+            var buildPlatform = Environment.GetEnvironmentVariable("SamplePlatform") ?? EnvironmentTools.GetPlatform();
+
             if (_samplesDirectory.Contains("aspnet"))
             {
                 outputDir = Path.Combine(
@@ -440,7 +444,7 @@ namespace Datadog.Trace.TestHelpers
                 outputDir = Path.Combine(
                     binDir,
                     packageVersion,
-                    EnvironmentTools.GetPlatform(),
+                    buildPlatform,
                     EnvironmentTools.GetBuildConfiguration(),
                     targetFramework);
             }
