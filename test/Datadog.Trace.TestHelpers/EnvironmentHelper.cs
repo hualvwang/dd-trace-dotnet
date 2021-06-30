@@ -368,7 +368,13 @@ namespace Datadog.Trace.TestHelpers
             }
             else if (IsCoreClr())
             {
-                executor = EnvironmentTools.IsWindows() ? "dotnet.exe" : "dotnet";
+                executor = (EnvironmentTools.IsWindows(), RuntimeInformation.ProcessArchitecture) switch
+                {
+                    (true, Architecture.X64) => "dotnet.exe",
+                    (true, Architecture.X86) => Environment.GetEnvironmentVariable("DOTNET_EXE_32")
+                                                ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    _ => "dotnet"
+                };
             }
             else
             {
