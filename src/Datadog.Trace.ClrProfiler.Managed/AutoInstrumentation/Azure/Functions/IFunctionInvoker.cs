@@ -6,7 +6,7 @@
 namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Azure.Functions
 {
     /// <summary>
-    /// Redis native client for duck typing
+    /// For duck typing
     /// </summary>
     public interface IFunctionInvoker
     {

@@ -403,5 +403,11 @@ namespace Datadog.Trace
         internal const string ElasticsearchMethod = "elasticsearch.method";
 
         internal const string ElasticsearchUrl = "elasticsearch.url";
+
+        internal const string AzureFunctionShortName = "azfunc.name";
+
+        internal const string AzureFunctionFullName = "azfunc.fullname";
+
+        internal const string AzureFunctionClassName = "azfunc.class";
     }
 }
