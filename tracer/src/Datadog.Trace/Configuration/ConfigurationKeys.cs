@@ -310,7 +310,7 @@ namespace Datadog.Trace.Configuration
         /// <summary>
         /// Configuration key to enable db spans get assigned the instance name as the service name.
         /// </summary>
-        public const string DbClientSplitByInscance = "DD_TRACE_DB_CLIENT_SPLIT_BY_INSTANCE";
+        public const string DbClientSplitByInstance = "DD_TRACE_DB_CLIENT_SPLIT_BY_INSTANCE";
 
         /// <summary>
         /// Configuration key for controlling whether route parameters in ASP.NET and ASP.NET Core resource names

@@ -167,9 +167,9 @@ namespace Datadog.Trace.Configuration
             KafkaCreateConsumerScopeEnabled = source?.GetBool(ConfigurationKeys.KafkaCreateConsumerScopeEnabled)
                                            ?? true; // default
 
-            DbClientSplitByInscance = source?.GetBool(ConfigurationKeys.DbClientSplitByInscance) ??
-                                        // Default value
-                                        false;
+            DbClientSplitByInstance = source?.GetBool(ConfigurationKeys.DbClientSplitByInstance) ??
+                                      // Default value
+                                      false;
             DelayWcfInstrumentationEnabled = source?.GetBool(ConfigurationKeys.FeatureFlags.DelayWcfInstrumentationEnabled)
                                             ?? false;
 
@@ -315,7 +315,7 @@ namespace Datadog.Trace.Configuration
         /// <summary>
         /// Gets or sets a value indicating whether db spans get assigned the instance name as the service name.
         /// </summary>
-        public bool DbClientSplitByInscance { get; set; }
+        public bool DbClientSplitByInstance { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating the injection propagation style.

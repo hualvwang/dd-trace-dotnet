@@ -62,7 +62,7 @@ namespace Datadog.Trace.Configuration
             TraceBatchInterval = settings.TraceBatchInterval;
             RouteTemplateResourceNamesEnabled = settings.RouteTemplateResourceNamesEnabled;
             DelayWcfInstrumentationEnabled = settings.DelayWcfInstrumentationEnabled;
-            DbClientSplitByInscance = settings.DbClientSplitByInscance;
+            DbClientSplitByInstance = settings.DbClientSplitByInstance;
             PropagationStyleInject = settings.PropagationStyleInject;
             PropagationStyleExtract = settings.PropagationStyleExtract;
             TraceMethods = settings.TraceMethods;
@@ -240,7 +240,7 @@ namespace Datadog.Trace.Configuration
         /// <summary>
         /// Gets or sets a value indicating whether db spans get assigned the instance name as the service name.
         /// </summary>
-        public bool DbClientSplitByInscance { get; set; }
+        public bool DbClientSplitByInstance { get; set; }
 
         /// <summary>
         /// Gets a value indicating the injection propagation style.

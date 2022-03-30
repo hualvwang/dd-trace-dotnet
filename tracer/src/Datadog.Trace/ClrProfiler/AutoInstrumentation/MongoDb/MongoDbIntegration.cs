@@ -98,7 +98,7 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.MongoDb
 
             string serviceName;
 
-            if (tracer.Settings.DbClientSplitByInscance)
+            if (tracer.Settings.DbClientSplitByInstance)
             {
                 serviceName = databaseName ?? tracer.Settings.GetServiceName(tracer, ServiceName);
             }

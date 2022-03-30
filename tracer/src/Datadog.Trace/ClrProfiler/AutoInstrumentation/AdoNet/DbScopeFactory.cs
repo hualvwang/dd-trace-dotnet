@@ -194,7 +194,7 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet
 
             private static string GetServiceName(Tracer tracer, string dbTypeName, IDbCommand command)
             {
-                if (tracer.Settings.DbClientSplitByInscance)
+                if (tracer.Settings.DbClientSplitByInstance)
                 {
                     return command.Connection.Database;
                 }
