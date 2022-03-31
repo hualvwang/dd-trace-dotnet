@@ -102,7 +102,8 @@ namespace Datadog.Trace.ClrProfiler
 
                 tags = new HttpTags();
 
-                string serviceName = tracer.Settings.GetServiceName(tracer, ServiceName);
+                // string serviceName = tracer.Settings.GetServiceName(tracer, ServiceName);
+                var serviceName = requestUri != null ? $"{requestUri.Host}:{requestUri.Port}" : tracer.Settings.GetServiceName(tracer, ServiceName);
                 span = tracer.StartSpan(OperationName, tags, serviceName: serviceName, traceId: traceId, spanId: spanId, startTime: startTime, addToTraceContext: addToTraceContext);
 
                 span.Type = SpanTypes.Http;
