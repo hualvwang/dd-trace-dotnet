@@ -103,6 +103,11 @@ namespace Datadog.Trace
         public const string SqlRows = "sql.rows";
 
         /// <summary>
+        /// The parameters of query
+        /// </summary>
+        public const string SqlParameters = "sql.parameters";
+
+        /// <summary>
         /// The ASP.NET routing template.
         /// </summary>
         internal const string AspNetRoute = "aspnet.route";

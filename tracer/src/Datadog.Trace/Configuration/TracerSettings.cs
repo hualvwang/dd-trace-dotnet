@@ -170,6 +170,9 @@ namespace Datadog.Trace.Configuration
             DbClientSplitByInstance = source?.GetBool(ConfigurationKeys.DbClientSplitByInstance) ??
                                       // Default value
                                       false;
+            DbSqlRecordParam = source?.GetBool(ConfigurationKeys.DbSqlRecordParam) ??
+                               // Default value
+                               false;
             DelayWcfInstrumentationEnabled = source?.GetBool(ConfigurationKeys.FeatureFlags.DelayWcfInstrumentationEnabled)
                                             ?? false;
 
@@ -330,6 +333,11 @@ namespace Datadog.Trace.Configuration
         /// Gets or sets a value indicating whether db spans get assigned the instance name as the service name.
         /// </summary>
         public bool DbClientSplitByInstance { get; set; }
+
+        /// <summary>
+        ///  Gets or sets a value indicating whether db spans get assigned the sql parameters.
+        /// </summary>
+        public bool DbSqlRecordParam { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating the injection propagation style.

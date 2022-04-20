@@ -52,6 +52,10 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet
                            };
 
                 tags.SetAnalyticsSampleRate(integrationId, tracer.Settings, enabledWithGlobalSetting: false);
+                if (tracer.Settings.DbSqlRecordParam && command.Parameters.Count > 0)
+                {
+                    tags.SetTag(Tags.SqlParameters, string.Join(",", command.Parameters[0]));
+                }
 
                 scope = tracer.StartActiveInternal(operationName, tags: tags, serviceName: serviceName);
                 scope.Span.ResourceName = command.CommandText;

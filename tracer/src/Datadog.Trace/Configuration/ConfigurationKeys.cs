@@ -320,6 +320,11 @@ namespace Datadog.Trace.Configuration
         public const string DbClientSplitByInstance = "DD_TRACE_DB_CLIENT_SPLIT_BY_INSTANCE";
 
         /// <summary>
+        /// Configuration key to enable db spans get assigned the sql parameters.
+        /// </summary>
+        public const string DbSqlRecordParam = "DD_TRACE_DB_SQL_RECORD_PARAM";
+
+        /// <summary>
         /// Configuration key for controlling whether route parameters in ASP.NET and ASP.NET Core resource names
         /// should be expanded with their values. Only applies when
         /// <see cref="ConfigurationKeys.FeatureFlags.RouteTemplateResourceNamesEnabled"/> is enabled.
