@@ -6,7 +6,9 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Tagging;
@@ -52,9 +54,9 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet
                            };
 
                 tags.SetAnalyticsSampleRate(integrationId, tracer.Settings, enabledWithGlobalSetting: false);
-                if (tracer.Settings.DbSqlRecordParam && command.Parameters.Count > 0)
+                if (tracer.Settings.DbSqlRecordParam && command.Parameters.Count > 0 && command.Parameters is DbParameterCollection dbParameterCollection)
                 {
-                    tags.SetTag(Tags.SqlParameters, string.Join(",", command.Parameters[0]));
+                    tags.SetTag(Tags.SqlParameters, string.Join(",", dbParameterCollection.Cast<DbParameter>().Select(x => $"{x.ParameterName}={x.Value}")));
                 }
 
                 scope = tracer.StartActiveInternal(operationName, tags: tags, serviceName: serviceName);
