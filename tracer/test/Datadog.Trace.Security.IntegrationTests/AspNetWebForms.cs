@@ -60,6 +60,7 @@ namespace Datadog.Trace.Security.IntegrationTests
             : base("WebForms", output, "/home/shutdown", @"test\test-applications\security\aspnet")
         {
             SetSecurity(enableSecurity);
+            SetEnvironmentVariable(Configuration.ConfigurationKeys.AppSec.Rules, DefaultRuleFile);
             _iisFixture = iisFixture;
             _enableSecurity = enableSecurity;
             _iisFixture.TryStartIis(this, classicMode ? IisAppType.AspNetClassic : IisAppType.AspNetIntegrated);
@@ -74,6 +75,7 @@ namespace Datadog.Trace.Security.IntegrationTests
         [Trait("LoadFromGAC", "True")]
         [Theory]
         [InlineData("/Health?test&[$slice]", null)]
+        [InlineData("/Health/Params/appscan_fingerprint", null)]
         [InlineData("/Health/wp-config", null)]
         [InlineData("/Health?arg=[$slice]", null)]
         [InlineData("/Health", "ctl00%24MainContent%24testBox=%5B%24slice%5D")]
@@ -83,7 +85,7 @@ namespace Datadog.Trace.Security.IntegrationTests
             // NOTE: by integrating the latest version of the WAF, blocking was disabled, as it does not support blocking yet
             var sanitisedUrl = VerifyHelper.SanitisePathsForVerify(url);
             var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedUrl, body);
-            return TestBlockedRequestWithVerifyAsync(_iisFixture.Agent, url, body, 5, 1, settings, "application/x-www-form-urlencoded");
+            return TestAppSecRequestWithVerifyAsync(_iisFixture.Agent, url, body, 5, 1, settings, "application/x-www-form-urlencoded");
         }
 
         protected override string GetTestName() => _testName;

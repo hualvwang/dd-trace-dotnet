@@ -99,7 +99,7 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
 
         internal void EnableNewPipeline()
         {
-            CustomEnvironmentVariables[EnvironmentVariables.LibDdPprofPipepline] = "1";
+            CustomEnvironmentVariables[EnvironmentVariables.LibDdPprofPipeline] = "1";
         }
 
         internal void EnableTracer()
@@ -114,10 +114,10 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
 
         internal bool IsRunningWithNewPipeline()
         {
-            return CustomEnvironmentVariables.TryGetValue(EnvironmentVariables.LibDdPprofPipepline, out var value) && string.Equals("1", value);
+            return CustomEnvironmentVariables.TryGetValue(EnvironmentVariables.LibDdPprofPipeline, out var value) && string.Equals("1", value);
         }
 
-        internal void PopulateEnvironmentVarialbes(StringDictionary environmentVariables, int agentPort, int profilingExportIntervalInSeconds, string serviceName)
+        internal void PopulateEnvironmentVariables(StringDictionary environmentVariables, int agentPort, int profilingExportIntervalInSeconds, string serviceName)
         {
             var profilerPath = GetClrProfilerPath();
             if (!File.Exists(profilerPath))
@@ -270,6 +270,8 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
         {
             var baseOutputDir = GetTestOutputPath();
             CustomEnvironmentVariables[EnvironmentVariables.ProfilingLogDir] = Path.Combine(baseOutputDir, "logs");
+            // Set tracer log directory too
+            CustomEnvironmentVariables["DD_TRACE_LOG_DIRECTORY"] = Path.Combine(baseOutputDir, "logs");
             CustomEnvironmentVariables[EnvironmentVariables.ProfilingPprofDir] = Path.Combine(baseOutputDir, "pprofs");
         }
 

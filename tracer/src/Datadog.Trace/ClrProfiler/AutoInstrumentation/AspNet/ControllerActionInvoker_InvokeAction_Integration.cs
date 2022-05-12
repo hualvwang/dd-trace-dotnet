@@ -58,16 +58,11 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNet
         /// <param name="parameters">The parameters of the mvc method</param>
         /// <returns>Calltarget state value</returns>
         internal static CallTargetState OnMethodBegin<TTarget, TContext, TActionDescriptor>(TTarget instance, TContext controllerContext, TActionDescriptor actionDescriptor, IDictionary<string, object> parameters)
+            where TContext : IControllerContext
         {
             try
             {
-                var security = Security.Instance;
-                var context = HttpContext.Current;
-                if (context != null && security.Settings.Enabled)
-                {
-                    var scope = SharedItems.TryPeekScope(context, AspNetMvcIntegration.HttpContextKey);
-                    security.InstrumentationGateway.RaiseBodyAvailable(context, scope.Span, parameters);
-                }
+                controllerContext.MonitorBodyAndPathParams(parameters, AspNetMvcIntegration.HttpContextKey);
             }
             catch (Exception ex)
             {

@@ -29,13 +29,13 @@ namespace Datadog.Trace.ClrProfiler.Managed.Loader
             // Old versions of .net core have a major version of 4
             if ((version.Major == 3 && version.Minor >= 1) || version.Major >= 5)
             {
-                tracerFrameworkDirectory = "netcoreapp3.1";
+                tracerFrameworkDirectory = version.Major >= 6 ? "net6.0" : "netcoreapp3.1";
             }
 
             var tracerHomeDirectory = ReadEnvironmentVariable("DD_DOTNET_TRACER_HOME") ?? string.Empty;
             var fullPath = Path.Combine(tracerHomeDirectory, tracerFrameworkDirectory);
 
-            // We use the List/Array approach due the number of files in the tracer home folder (7 in netstandard, 2 netcoreapp3.1)
+            // We use the List/Array approach due the number of files in the tracer home folder (7 in netstandard, 2 netcoreapp3.1+)
             var assemblies = new List<CachedAssembly>();
             foreach (var file in Directory.EnumerateFiles(fullPath, "*.dll", SearchOption.TopDirectoryOnly))
             {
@@ -50,7 +50,13 @@ namespace Datadog.Trace.ClrProfiler.Managed.Loader
 
         private static Assembly AssemblyResolve_ManagedProfilerDependencies(object sender, ResolveEventArgs args)
         {
-            var assemblyName = new AssemblyName(args.Name);
+            return ResolveAssembly(args.Name);
+        }
+
+        private static Assembly ResolveAssembly(string name)
+        {
+            var assemblyName = new AssemblyName(name);
+            StartupLogger.Debug("Assembly Resolve event received for: {0}", name);
 
             // On .NET Framework, having a non-US locale can cause mscorlib
             // to enter the AssemblyResolve event when searching for resources
@@ -65,6 +71,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Loader
             }
 
             var path = Path.Combine(ManagedProfilerDirectory, $"{assemblyName.Name}.dll");
+            StartupLogger.Debug("Looking for: {0}", path);
 
             if (IsDatadogAssembly(path, out var cachedAssembly))
             {
@@ -72,6 +79,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Loader
                 if (cachedAssembly is not null)
                 {
                     // The assembly is already loaded.
+                    StartupLogger.Debug("Loading from cache. [Path: {0}]", path);
                     return cachedAssembly;
                 }
 
@@ -89,6 +97,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Loader
             }
 
             // The file doesn't exist in the Home folder.
+            StartupLogger.Debug("Assembly not found in path: {0}", path);
             return null;
         }
 

@@ -8,6 +8,7 @@
 #include "corprof.h"
 // end
 
+#include "ApplicationStore.h"
 #include "IAppDomainStore.h"
 #include "IClrLifetime.h"
 #include "IConfiguration.h"
@@ -176,6 +177,7 @@ public:
     ISymbolsResolver* GetSymbolsResolver() { return _pSymbolsResolver; }
     IStackSnapshotsBufferManager* GetStackSnapshotsBufferManager() { return _pStackSnapshotsBufferManager; }
     IStackSamplerLoopManager* GetStackSamplerLoopManager() { return _pStackSamplerLoopManager; }
+    IApplicationStore* GetApplicationStore() { return _pApplicationStore; }
 
 private :
     static CorProfilerCallback* _this;
@@ -195,6 +197,7 @@ private :
     IStackSamplerLoopManager* _pStackSamplerLoopManager = nullptr;
     IManagedThreadList* _pManagedThreadList = nullptr;
     ISymbolsResolver* _pSymbolsResolver = nullptr;
+    IApplicationStore* _pApplicationStore = nullptr;
 
     std::vector<std::unique_ptr<IService>> _services;
 
