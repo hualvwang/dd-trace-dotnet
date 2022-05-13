@@ -75,6 +75,14 @@ namespace Datadog.Trace
                     }
                 }
 
+                if (span.Context.Parent is SpanContext parentContext && parentContext.CustomPropagationHeaders.Count > 0)
+                {
+                    foreach (var pair in parentContext.CustomPropagationHeaders)
+                    {
+                        span.Context.CustomPropagationHeaders[pair.Key] = pair.Value;
+                    }
+                }
+
                 _openSpans++;
             }
         }

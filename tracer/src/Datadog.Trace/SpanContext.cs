@@ -193,6 +193,11 @@ namespace Datadog.Trace
         /// </summary>
         internal string RawSpanId { get; }
 
+        /// <summary>
+        /// Gets the custom propagation headers
+        /// </summary>
+        internal Dictionary<string, string> CustomPropagationHeaders { get; } = new Dictionary<string, string>();
+
         /// <inheritdoc/>
         int IReadOnlyCollection<KeyValuePair<string, string>>.Count => KeyNames.Length;
 

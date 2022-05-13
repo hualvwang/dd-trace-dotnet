@@ -110,6 +110,11 @@ namespace Datadog.Trace.Propagators
             {
                 _injectors[i].Inject(context, carrier, carrierSetter);
             }
+
+            foreach (var pair in context.CustomPropagationHeaders)
+            {
+                carrierSetter.Set(carrier, pair.Key, pair.Value);
+            }
         }
 
         /// <summary>
@@ -148,11 +153,35 @@ namespace Datadog.Trace.Propagators
             {
                 if (_extractors[i].TryExtract(carrier, carrierGetter, out var spanContext))
                 {
+                    ExtractCustomHeaders(spanContext, carrier, carrierGetter);
                     return spanContext;
                 }
             }
 
             return null;
+        }
+
+        private static void ExtractCustomHeaders<TCarrier, TCarrierGetter>(SpanContext? spanContext, TCarrier carrier, TCarrierGetter carrierGetter)
+            where TCarrierGetter : struct, ICarrierGetter<TCarrier>
+        {
+            if (spanContext == null)
+            {
+                return;
+            }
+
+            if (Tracer.Instance.Settings.CustomPropagationHeaders.Length <= 0)
+            {
+                return;
+            }
+
+            foreach (var header in Tracer.Instance.Settings.CustomPropagationHeaders)
+            {
+                var headerValues = carrierGetter.Get(carrier, header).ToArray();
+                if (headerValues.Length > 0)
+                {
+                    spanContext.CustomPropagationHeaders[header] = headerValues[0];
+                }
+            }
         }
 
         /// <summary>

@@ -350,6 +350,9 @@ namespace Datadog.Trace
                     writer.WritePropertyName("db_client_split_by_instance");
                     writer.WriteValue(instanceSettings.DbClientSplitByInstance);
 
+                    writer.WritePropertyName("custom_propagation_headers");
+                    writer.WriteValue(string.Join(",", instanceSettings.CustomPropagationHeaders));
+
                     writer.WritePropertyName("routetemplate_resourcenames_enabled");
                     writer.WriteValue(instanceSettings.RouteTemplateResourceNamesEnabled);
 

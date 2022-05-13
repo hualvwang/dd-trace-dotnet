@@ -284,6 +284,11 @@ namespace Datadog.Trace.Configuration
         public const string DbSqlRecordParam = "DD_TRACE_DB_SQL_RECORD_PARAM";
 
         /// <summary>
+        /// Configuration key for setting custom headers to propagate.
+        /// </summary>
+        public const string CustomPropagationHeaders = "DD_TRACE_CUSTOM_PROPAGATION_HEADERS";
+
+        /// <summary>
         /// Configuration key for controlling whether route parameters in ASP.NET and ASP.NET Core resource names
         /// should be expanded with their values. Only applies when
         /// <see cref="ConfigurationKeys.FeatureFlags.RouteTemplateResourceNamesEnabled"/> is enabled.

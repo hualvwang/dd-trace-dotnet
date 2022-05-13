@@ -169,6 +169,7 @@ namespace Datadog.Trace.Configuration
             DbSqlRecordParam = source?.GetBool(ConfigurationKeys.DbSqlRecordParam) ??
                                // Default value
                                false;
+            CustomPropagationHeaders = TrimSplitString(source?.GetString(ConfigurationKeys.CustomPropagationHeaders) ?? string.Empty, ',').ToArray();
             DelayWcfInstrumentationEnabled = source?.GetBool(ConfigurationKeys.FeatureFlags.DelayWcfInstrumentationEnabled)
                                             ?? false;
 
@@ -357,6 +358,11 @@ namespace Datadog.Trace.Configuration
         ///  Gets or sets a value indicating whether db spans get assigned the sql parameters.
         /// </summary>
         public bool DbSqlRecordParam { get; set; }
+
+        /// <summary>
+        /// Gets a value indicating custom headers to propagate.
+        /// </summary>
+        internal string[] CustomPropagationHeaders { get; }
 
         /// <summary>
         /// Gets or sets a value indicating the injection propagation style.
