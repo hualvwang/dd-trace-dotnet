@@ -33,13 +33,20 @@ namespace Datadog.Trace.Agent.Transports
 
         public async Task<IApiResponse> PostAsync(ArraySegment<byte> bytes, string contentType) => (await PostSegmentAsync(bytes, contentType).ConfigureAwait(false)).Item1;
 
-        private async Task<Tuple<IApiResponse, HttpRequest>> PostSegmentAsync(ArraySegment<byte> segment, string contentType)
+        public async Task<IApiResponse> PutAsync(ArraySegment<byte> bytes, string contentType) => (await PostSegmentAsync(bytes, contentType, "PUT").ConfigureAwait(false)).Item1;
+
+        public Task<IApiResponse> GetAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        private async Task<Tuple<IApiResponse, HttpRequest>> PostSegmentAsync(ArraySegment<byte> segment, string contentType, string method = "POST")
         {
             using (var bidirectionalStream = _streamFactory.GetBidirectionalStream())
             {
                 var content = new BufferContent(segment);
                 _headers.Add("Content-Type", contentType);
-                var request = new HttpRequest("POST", _uri.Host, _uri.PathAndQuery, _headers, content);
+                var request = new HttpRequest(method, _uri.Host, _uri.PathAndQuery, _headers, content);
                 // send request, get response
                 var response = await _client.SendAsync(request, bidirectionalStream, bidirectionalStream).ConfigureAwait(false);
 

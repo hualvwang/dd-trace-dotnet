@@ -46,5 +46,44 @@ namespace Datadog.Trace.Agent.Transports
                 return new ApiWebResponse((HttpWebResponse)exception.Response);
             }
         }
+
+        public async Task<IApiResponse> PutAsync(ArraySegment<byte> bytes, string contentType)
+        {
+            _request.Method = "PUT";
+            _request.ContentType = contentType;
+            using (var requestStream = await _request.GetRequestStreamAsync().ConfigureAwait(false))
+            {
+                await requestStream.WriteAsync(bytes.Array, bytes.Offset, bytes.Count).ConfigureAwait(false);
+            }
+
+            try
+            {
+                var httpWebResponse = (HttpWebResponse)await _request.GetResponseAsync().ConfigureAwait(false);
+                return new ApiWebResponse(httpWebResponse);
+            }
+            catch (WebException exception)
+                when (exception.Status == WebExceptionStatus.ProtocolError && exception.Response != null)
+            {
+                // If the exception is caused by an error status code, ignore it and let the caller handle the result
+                return new ApiWebResponse((HttpWebResponse)exception.Response);
+            }
+        }
+
+        public async Task<IApiResponse> GetAsync()
+        {
+            _request.Method = "GET";
+
+            try
+            {
+                var httpWebResponse = (HttpWebResponse)await _request.GetResponseAsync().ConfigureAwait(false);
+                return new ApiWebResponse(httpWebResponse);
+            }
+            catch (WebException exception)
+                when (exception.Status == WebExceptionStatus.ProtocolError && exception.Response != null)
+            {
+                // If the exception is caused by an error status code, ignore it and let the caller handle the result
+                return new ApiWebResponse((HttpWebResponse)exception.Response);
+            }
+        }
     }
 }

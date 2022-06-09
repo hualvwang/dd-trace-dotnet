@@ -4,9 +4,11 @@
 // </copyright>
 
 using System;
-using System.Net.Http;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Datadog.Trace.Agent;
+using Datadog.Trace.Agent.Transports;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Vendors.Newtonsoft.Json;
 
@@ -20,7 +22,7 @@ namespace Datadog.Trace.Configuration
 
         private readonly TimeSpan _consulUpdateInterval;
 
-        private readonly HttpClient _httpClient;
+        private readonly IApiRequestFactory _apiRequestFactory;
 
         private RemoteSettings()
         {
@@ -34,9 +36,11 @@ namespace Datadog.Trace.Configuration
                 return;
             }
 
-            _httpClient = new HttpClient();
-            _httpClient.BaseAddress = new Uri(_consulUrl);
-            _httpClient.Timeout = TimeSpan.FromSeconds(5);
+#if NETCOREAPP
+            _apiRequestFactory = new HttpClientRequestFactory(new Uri(_consulUrl), Array.Empty<KeyValuePair<string, string>>());
+#else
+            _apiRequestFactory = new ApiWebRequestFactory(new Uri(_consulUrl), Array.Empty<KeyValuePair<string, string>>());
+#endif
             Task.Run(
                 async () =>
                 {
@@ -62,11 +66,12 @@ namespace Datadog.Trace.Configuration
             var serviceName = Tracer.Instance.Settings.ServiceName;
             try
             {
-                var response = await _httpClient.GetAsync($"/v1/kv/datadog/{serviceName}").ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
+                var response = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint($"/v1/kv/datadog/{serviceName}")).GetAsync().ConfigureAwait(false);
+                if (response.StatusCode >= 400)
                 {
-                    var httpResponseMessage = await _httpClient.PutAsync($"/v1/kv/datadog/{serviceName}", new StringContent(JsonConvert.SerializeObject(this), Encoding.UTF8, "application/json")).ConfigureAwait(false);
-                    if (!httpResponseMessage.IsSuccessStatusCode)
+                    var bytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(this));
+                    var httpResponseMessage = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint($"/v1/kv/datadog/{serviceName}")).PutAsync(new ArraySegment<byte>(bytes), "application/json").ConfigureAwait(false);
+                    if (httpResponseMessage.StatusCode >= 400)
                     {
                         Logger.Error($"Failed to initialize remote settings for service {serviceName}");
                     }
@@ -84,10 +89,10 @@ namespace Datadog.Trace.Configuration
             var serviceName = Tracer.Instance.Settings.ServiceName;
             try
             {
-                var response = await _httpClient.GetAsync($"/v1/kv/datadog/{serviceName}").ConfigureAwait(false);
-                if (response.IsSuccessStatusCode)
+                var response = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint($"/v1/kv/datadog/{serviceName}")).GetAsync().ConfigureAwait(false);
+                if (response.StatusCode < 400)
                 {
-                    var settings = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var settings = await response.ReadAsStringAsync().ConfigureAwait(false);
                     var settingsJson = JsonConvert.DeserializeObject<RemoteSettingsConsulResponse[]>(settings);
                     if (settingsJson != null)
                     {

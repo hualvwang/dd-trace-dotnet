@@ -13,5 +13,9 @@ namespace Datadog.Trace.Agent
         void AddHeader(string name, string value);
 
         Task<IApiResponse> PostAsync(ArraySegment<byte> bytes, string contentType);
+
+        Task<IApiResponse> PutAsync(ArraySegment<byte> bytes, string contentType);
+
+        Task<IApiResponse> GetAsync();
     }
 }
