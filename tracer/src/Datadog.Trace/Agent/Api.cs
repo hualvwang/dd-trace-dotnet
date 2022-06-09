@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Datadog.Trace.Agent.Transports;
+using Datadog.Trace.Configuration;
 using Datadog.Trace.DogStatsd;
 using Datadog.Trace.Logging;
 using Datadog.Trace.PlatformHelpers;
@@ -53,6 +54,11 @@ namespace Datadog.Trace.Agent
 
         public async Task<bool> SendTracesAsync(ArraySegment<byte> traces, int numberOfTraces)
         {
+            if (RemoteSettings.Instance.TraceEnabled == false)
+            {
+                return true;
+            }
+
             // retry up to 5 times with exponential back-off
             var retryLimit = 5;
             var retryCount = 1;
