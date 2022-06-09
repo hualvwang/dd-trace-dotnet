@@ -15,6 +15,7 @@
 #include "IFrameStore.h"
 #include "IAppDomainStore.h"
 #include "IRuntimeIdStore.h"
+#include "IThreadsCpuManager.h"
 #include "ProviderBase.h"
 #include "RawSample.h"
 
@@ -47,15 +48,17 @@ class CollectorBase
 {
 public:
     CollectorBase<TRawSample>(
-        IConfiguration* pConfiguration,
+        const char* name,
+        IThreadsCpuManager* pThreadsCpuManager,
         IFrameStore* pFrameStore,
         IAppDomainStore* pAppDomainStore,
         IRuntimeIdStore* pRuntimeIdStore
         ) :
-        _isNativeFramesEnabled{pConfiguration->IsNativeFramesEnabled()},
+        ProviderBase(name),
         _pFrameStore{pFrameStore},
         _pAppDomainStore{pAppDomainStore},
-        _pRuntimeIdStore{pRuntimeIdStore}
+        _pRuntimeIdStore{pRuntimeIdStore},
+        _pThreadsCpuManager{pThreadsCpuManager}
     {
     }
 
@@ -65,19 +68,25 @@ public:
     {
         _transformerThread = std::thread(&CollectorBase<TRawSample>::ProcessSamples, this);
 
-        shared::WSTRINGSTREAM builder;
-        builder << WStr("DD.Profiler.") << GetName() << WStr(".Thread");
-        OpSysTools::SetNativeThreadName(&_transformerThread, builder.str().c_str());
-
         return true;
     }
 
     bool Stop() override
     {
+        if (_stopRequested.load())
+        {
+            return true;
+        }
+
         _stopRequested.store(true);
         _transformerThread.join();
 
         return true;
+    }
+
+    const char* GetName() override
+    {
+        return _name.c_str();
     }
 
     void Add(TRawSample&& sample) override
@@ -92,26 +101,38 @@ protected:
     virtual void OnTransformRawSample(const TRawSample& rawSample, Sample& sample) = 0;
 
 private:
-    inline static const std::chrono::nanoseconds CollectingPeriod = 50ms;
+    inline static const std::chrono::nanoseconds CollectingPeriod = 60ms;
+
+    void Flush()
+    {
+        std::list<TRawSample> input = FetchRawSamples();
+        if (input.size() != 0)
+        {
+            TransformRawSamples(input);
+        }
+    }
 
     void ProcessSamples()
     {
-        Log::Info("Starting to process raw '", GetName(), "' samples.");
+        auto name = GetName();
+        shared::WSTRINGSTREAM builder;
+        builder << WStr("DD.Profiler.") << name << WStr(".Thread");
+        auto threadName = builder.str();
+        OpSysTools::SetNativeThreadName(&_transformerThread, threadName.c_str());
+        _pThreadsCpuManager->Map(OpSysTools::GetThreadId(), threadName.c_str());
 
+        Log::Info("Starting to process raw '", name, "' samples.");
         while (!_stopRequested.load())
         {
-            std::list<TRawSample> input = FetchRawSamples();
-            if (input.size() != 0)
-            {
-                TransformRawSamples(input);
-            }
-
             // TODO: instead of sleeping, we could wait on an event
             //       that would be set in the Add() method
             std::this_thread::sleep_for(CollectingPeriod);
-        }
 
-        Log::Info("Stop processing raw '", GetName(), "' samples.");
+            Flush();
+        }
+        // Note: the last raw samples added since Stop was requested have been flushed
+
+        Log::Info("Stop processing raw '", name, "' samples.");
     }
 
     std::list<TRawSample> FetchRawSamples()
@@ -212,10 +233,9 @@ private:
     {
         for (auto const& instructionPointer : rawSample.Stack)
         {
-            auto [isManaged, moduleName, frame] = _pFrameStore->GetFrame(instructionPointer);
+            auto [isResolved, moduleName, frame] = _pFrameStore->GetFrame(instructionPointer);
 
-            // filter out native frames if needed
-            if (isManaged || _isNativeFramesEnabled)
+            if (isResolved)
             {
                 sample.AddFrame(moduleName, frame);
             }
@@ -226,6 +246,7 @@ private:
     IFrameStore* _pFrameStore = nullptr;
     IAppDomainStore* _pAppDomainStore = nullptr;
     IRuntimeIdStore* _pRuntimeIdStore = nullptr;
+    IThreadsCpuManager* _pThreadsCpuManager = nullptr;
     bool _isNativeFramesEnabled = false;
 
     // A thread is responsible for asynchronously fetching raw samples from the input queue

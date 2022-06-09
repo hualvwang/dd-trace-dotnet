@@ -17,6 +17,7 @@
 #include "CpuTimeProvider.h"
 #include "RawCpuSample.h"
 #include "RawWallTimeSample.h"
+#include "ThreadsCpuManagerHelper.h"
 
 using namespace std::chrono_literals;
 
@@ -83,13 +84,13 @@ TEST(WallTimeProviderTest, CheckNoMissingSample)
 // collect samples and check none are missing on the provider side (just count)
     auto frameStore = new FrameStoreHelper(true, "Frame", 1);
     auto appDomainStore = new AppDomainStoreHelper(2);
-    auto [configuration, mockConfiguration] = CreateConfiguration();
+    auto threadscpuManager = new ThreadsCpuManagerHelper();
     MockRuntimeIdStore runtimeIdStore;
 
     std::string expectedRuntimeId = "MyRid";
-    EXPECT_CALL(runtimeIdStore, GetId(::testing::_)).WillRepeatedly(::testing::ReturnRef(expectedRuntimeId));
+    EXPECT_CALL(runtimeIdStore, GetId(::testing::_)).WillRepeatedly(::testing::Return(expectedRuntimeId.c_str()));
 
-    WallTimeProvider provider(configuration.get(), frameStore, appDomainStore, &runtimeIdStore);
+    WallTimeProvider provider(threadscpuManager, frameStore, appDomainStore, &runtimeIdStore);
     provider.Start();
 
     // check the number of samples: 3 here
@@ -113,15 +114,16 @@ TEST(WallTimeProviderTest, CheckAppDomainInfoAndRuntimeId)
     auto frameStore = new FrameStoreHelper(true, "Frame", 1);
     auto appDomainStore = new AppDomainStoreHelper(2);
     auto [configuration, mockConfiguration] = CreateConfiguration();
+    auto threadscpuManager = new ThreadsCpuManagerHelper();
     MockRuntimeIdStore runtimeIdStore;
 
     std::string firstExpectedRuntimeId = "MyRid";
-    EXPECT_CALL(runtimeIdStore, GetId(static_cast<AppDomainID>(1))).WillRepeatedly(::testing::ReturnRef(firstExpectedRuntimeId));
+    EXPECT_CALL(runtimeIdStore, GetId(static_cast<AppDomainID>(1))).WillRepeatedly(::testing::Return(firstExpectedRuntimeId.c_str()));
 
     std::string secondExpectedRuntimeId = "OtherRid";
-    EXPECT_CALL(runtimeIdStore, GetId(static_cast<AppDomainID>(2))).WillRepeatedly(::testing::ReturnRef(secondExpectedRuntimeId));
+    EXPECT_CALL(runtimeIdStore, GetId(static_cast<AppDomainID>(2))).WillRepeatedly(::testing::Return(secondExpectedRuntimeId.c_str()));
 
-    WallTimeProvider provider(configuration.get(), frameStore, appDomainStore, &runtimeIdStore);
+    WallTimeProvider provider(threadscpuManager, frameStore, appDomainStore, &runtimeIdStore);
     provider.Start();
 
     std::vector<size_t> expectedAppDomainId { 1, 2, 2, 1};
@@ -194,12 +196,13 @@ TEST(WallTimeProviderTest, CheckFrames)
     auto frameStore = new FrameStoreHelper(true, "Frame", 4);
     auto appDomainStore = new AppDomainStoreHelper(1);
     auto [configuration, mockConfiguration] = CreateConfiguration();
+    auto threadscpuManager = new ThreadsCpuManagerHelper();
     MockRuntimeIdStore runtimeIdStore;
 
     std::string expectedRuntimeId = "MyRid";
-    EXPECT_CALL(runtimeIdStore, GetId(static_cast<AppDomainID>(1))).WillRepeatedly(::testing::ReturnRef(expectedRuntimeId));
+    EXPECT_CALL(runtimeIdStore, GetId(static_cast<AppDomainID>(1))).WillRepeatedly(::testing::Return(expectedRuntimeId.c_str()));
 
-    WallTimeProvider provider(configuration.get(), frameStore, appDomainStore, &runtimeIdStore);
+    WallTimeProvider provider(threadscpuManager, frameStore, appDomainStore, &runtimeIdStore);
     provider.Start();
 
     //                                                                 V-- check the frames are correct
@@ -250,12 +253,13 @@ TEST(WallTimeProviderTest, CheckValuesAndTimestamp)
     auto frameStore = new FrameStoreHelper(true, "Frame", 1);
     auto appDomainStore = new AppDomainStoreHelper(1);
     auto [configuration, mockConfiguration] = CreateConfiguration();
+    auto threadscpuManager = new ThreadsCpuManagerHelper();
     MockRuntimeIdStore runtimeIdStore;
 
     std::string expectedRuntimeId = "MyRid";
-    EXPECT_CALL(runtimeIdStore, GetId(::testing::_)).WillRepeatedly(::testing::ReturnRef(expectedRuntimeId));
+    EXPECT_CALL(runtimeIdStore, GetId(::testing::_)).WillRepeatedly(::testing::Return(expectedRuntimeId.c_str()));
 
-    WallTimeProvider provider(configuration.get(), frameStore, appDomainStore, &runtimeIdStore);
+    WallTimeProvider provider(threadscpuManager, frameStore, appDomainStore, &runtimeIdStore);
     provider.Start();
 
     //                                V-----V-- check these values are correct
@@ -297,10 +301,10 @@ TEST(CpuTimeProviderTest, CheckValuesAndTimestamp)
     // add samples and check their frames
     auto frameStore = new FrameStoreHelper(true, "Frame", 1);
     auto appDomainStore = new AppDomainStoreHelper(1);
-    auto [configuration, mockConfiguration] = CreateConfiguration();
+    auto threadscpuManager = new ThreadsCpuManagerHelper();
     RuntimeIdStoreHelper runtimeIdStore;
 
-    CpuTimeProvider provider(configuration.get(), frameStore, appDomainStore, &runtimeIdStore);
+    CpuTimeProvider provider(threadscpuManager, frameStore, appDomainStore, &runtimeIdStore);
     provider.Start();
 
     //                           V-----V-- check these values are correct

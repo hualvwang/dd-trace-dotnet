@@ -51,7 +51,11 @@ namespace Datadog.Trace.TestHelpers
             Output.WriteLine($"TargetFramework: {EnvironmentHelper.GetTargetFramework()}");
             Output.WriteLine($".NET Core: {EnvironmentHelper.IsCoreClr()}");
             Output.WriteLine($"Tracer Native DLL: {EnvironmentHelper.GetTracerNativeDLLPath()}");
-            Output.WriteLine($"Native Loader DLL: {EnvironmentHelper.GetNativeLoaderPath()}");
+
+            if (EnvironmentHelper.UseNativeLoader)
+            {
+                Output.WriteLine($"Native Loader DLL: {EnvironmentHelper.GetNativeLoaderPath()}");
+            }
         }
 
         protected EnvironmentHelper EnvironmentHelper { get; }
@@ -268,7 +272,7 @@ namespace Datadog.Trace.TestHelpers
             return new ProcessResult(process, standardOutput, standardError, exitCode);
         }
 
-        public (Process Process, string ConfigFile) StartIISExpress(MockTracerAgent agent, int iisPort, IisAppType appType)
+        public (Process Process, string ConfigFile) StartIISExpress(MockTracerAgent agent, int iisPort, IisAppType appType, string subAppPath)
         {
             var iisExpress = EnvironmentHelper.GetIisExpressPath();
 
@@ -294,10 +298,19 @@ namespace Datadog.Trace.TestHelpers
 
             var newConfig = Path.GetTempFileName();
 
+            var virtualAppSection = subAppPath switch
+            {
+                null or "" or "/" => string.Empty,
+                _ when !subAppPath.StartsWith("/") => throw new ArgumentException("Application path must start with '/'", nameof(subAppPath)),
+                _ when subAppPath.EndsWith("/") => throw new ArgumentException("Application path must not end with '/'", nameof(subAppPath)),
+                _ => $"<application path=\"{subAppPath}\" applicationPool=\"{appPool}\"><virtualDirectory path=\"/\" physicalPath=\"{appPath}\" /></application>",
+            };
+
             configTemplate = configTemplate
                             .Replace("[PATH]", appPath)
                             .Replace("[PORT]", iisPort.ToString())
-                            .Replace("[POOL]", appPool);
+                            .Replace("[POOL]", appPool)
+                            .Replace("[VIRTUAL_APPLICATION]", virtualAppSection);
 
             var isAspNetCore = appType == IisAppType.AspNetCoreInProcess || appType == IisAppType.AspNetCoreOutOfProcess;
             if (isAspNetCore)
@@ -447,6 +460,19 @@ namespace Datadog.Trace.TestHelpers
             SetEnvironmentVariable(ConfigurationKeys.DirectLogSubmission.Url, $"http://127.0.0.1:{intakePort}");
             SetEnvironmentVariable(ConfigurationKeys.DirectLogSubmission.EnabledIntegrations, integrationName);
             SetEnvironmentVariable(ConfigurationKeys.ApiKey, "DUMMY_KEY_REQUIRED_FOR_DIRECT_SUBMISSION");
+        }
+
+        protected void EnableTelemetry(bool enabled = true, int? standaloneAgentPort = null)
+        {
+            SetEnvironmentVariable("DD_INSTRUMENTATION_TELEMETRY_ENABLED", enabled.ToString());
+            SetEnvironmentVariable("DD_INSTRUMENTATION_TELEMETRY_AGENTLESS_ENABLED", standaloneAgentPort.HasValue.ToString());
+
+            if (standaloneAgentPort.HasValue)
+            {
+                SetEnvironmentVariable("DD_INSTRUMENTATION_TELEMETRY_URL", $"http://localhost:{standaloneAgentPort}");
+                // API key is required for agentless
+                SetEnvironmentVariable("DD_API_KEY", "INVALID_KEY_FOR_TESTS");
+            }
         }
 
         protected async Task<IImmutableList<MockSpan>> GetWebServerSpans(

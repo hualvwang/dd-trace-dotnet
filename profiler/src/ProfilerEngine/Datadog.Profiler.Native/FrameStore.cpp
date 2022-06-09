@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
 
 #include "FrameStore.h"
+
+#include "IConfiguration.h"
 #include "HResultConverter.h"
 #include "Log.h"
 #include "OpSysTools.h"
@@ -10,13 +12,17 @@
 #include "shared/src/native-src/dd_filesystem.hpp"
 // namespace fs is an alias defined in "dd_filesystem.hpp"
 
-FrameStore::FrameStore(ICorProfilerInfo4* pCorProfilerInfo) :
-    _pCorProfilerInfo{pCorProfilerInfo}
+FrameStore::FrameStore(ICorProfilerInfo4* pCorProfilerInfo, IConfiguration* pConfiguration) :
+    _pCorProfilerInfo{pCorProfilerInfo},
+    _resolveNativeFrames{pConfiguration->IsNativeFramesEnabled()}
 {
 }
 
 std::tuple<bool, std::string, std::string> FrameStore::GetFrame(uintptr_t instructionPointer)
 {
+    static const std::string NotResolvedModuleName("NotResolvedModule");
+    static const std::string NotResolvedFrame("NotResolvedFrame");
+
     FunctionID functionId;
     HRESULT hr = _pCorProfilerInfo->GetFunctionFromIP((LPCBYTE)instructionPointer, &functionId);
 
@@ -27,8 +33,13 @@ std::tuple<bool, std::string, std::string> FrameStore::GetFrame(uintptr_t instru
     }
     else
     {
+        if (!_resolveNativeFrames)
+        {
+            return {false, NotResolvedModuleName, NotResolvedFrame};
+        }
+
         auto [moduleName, frame] = GetNativeFrame(instructionPointer);
-        return {false, moduleName, frame};
+        return {true, moduleName, frame};
     }
 }
 
@@ -39,17 +50,36 @@ std::tuple<bool, std::string, std::string> FrameStore::GetFrame(uintptr_t instru
 std::pair<std::string, std::string> FrameStore::GetNativeFrame(uintptr_t instructionPointer)
 {
     static const std::string UnknownNativeFrame("|lm:Unknown-Native-Module |ns:NativeCode |ct:Unknown-Native-Module |fn:Function");
+    static const std::string UnknowNativeModule = "Unknown-Native-Module";
+
     auto moduleName = OpSysTools::GetModuleName(reinterpret_cast<void*>(instructionPointer));
     if (moduleName.empty())
     {
-        return {"Unknown-Native-Module", UnknownNativeFrame};
+        return {UnknowNativeModule, UnknownNativeFrame};
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(_nativeLock);
+
+        auto it = _framePerNativeModule.find(moduleName);
+        if (it != _framePerNativeModule.cend())
+        {
+            return {it->first, it->second};
+        }
     }
 
     // moduleName contains the full path: keep only the filename
-    moduleName = fs::path(moduleName).filename().string();
+    auto moduleFilename = fs::path(moduleName).filename().string();
     std::stringstream builder;
-    builder << "|lm:" << moduleName << " |ns:NativeCode |ct:" << moduleName << " |fn:Function";
-    return {moduleName, builder.str()};
+    builder << "|lm:" << moduleFilename << " |ns:NativeCode |ct:" << moduleFilename << " |fn:Function";
+
+    {
+        std::lock_guard<std::mutex> lock(_nativeLock);
+        // emplace returns a pair<iterator, bool>. It returns false if the element was already there
+        // we use the iterator (first element of the pair) to get a reference to the key and the value
+        auto it = _framePerNativeModule.emplace(std::move(moduleName), builder.str()).first;
+        return {it->first, it->second};
+    }
 }
 
 

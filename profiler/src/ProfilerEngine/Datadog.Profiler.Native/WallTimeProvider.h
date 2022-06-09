@@ -15,25 +15,20 @@ class IConfiguration;
 class IFrameStore;
 class IAppDomainStore;
 class IRuntimeIdStore;
+class IThreadsCpuManager;
+
 
 class WallTimeProvider
     : public CollectorBase<RawWallTimeSample> // accepts raw walltime samples
 {
 public:
     WallTimeProvider(
-        IConfiguration* pConfiguration,
+        IThreadsCpuManager* pThreadsCpuManager,
         IFrameStore* pFrameStore,
         IAppDomainStore* pAssemblyStore,
         IRuntimeIdStore* pRuntimeIdStore
         );
 
-// interfaces implementation
-public:
-    const char* GetName() override;
-
 private:
     virtual void OnTransformRawSample(const RawWallTimeSample& rawSample, Sample& sample) override;
-
-private:
-    const char* _serviceName = "WallTimeProvider";
 };

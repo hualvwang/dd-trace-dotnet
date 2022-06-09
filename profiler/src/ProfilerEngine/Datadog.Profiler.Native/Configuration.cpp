@@ -35,6 +35,7 @@ Configuration::Configuration()
     _isOperationalMetricsEnabled = GetEnvironmentValue(EnvironmentVariables::OperationalMetricsEnabled, false);
     _isNativeFrameEnabled = GetEnvironmentValue(EnvironmentVariables::NativeFramesEnabled, false);
     _isCpuProfilingEnabled = GetEnvironmentValue(EnvironmentVariables::CpuProfilingEnabled, false);
+    _isExceptionProfilingEnabled = GetEnvironmentValue(EnvironmentVariables::ExceptionProfilingEnabled, false);
     _uploadPeriod = ExtractUploadInterval();
     _userTags = ExtractUserTags();
     _version = GetEnvironmentValue(EnvironmentVariables::Version, DefaultVersion);
@@ -47,6 +48,7 @@ Configuration::Configuration()
     _apiKey = GetEnvironmentValue(EnvironmentVariables::ApiKey, DefaultEmptyString);
     _serviceName = GetEnvironmentValue(EnvironmentVariables::ServiceName, OpSysTools::GetProcessName());
     _isAgentLess = GetEnvironmentValue(EnvironmentVariables::Agentless, false);
+    _exceptionSampleLimit = GetEnvironmentValue(EnvironmentVariables::ExceptionSampleLimit, 100);
 }
 
 fs::path Configuration::ExtractLogDirectory()
@@ -92,6 +94,15 @@ bool Configuration::IsCpuProfilingEnabled() const
     return _isCpuProfilingEnabled;
 }
 
+bool Configuration::IsExceptionProfilingEnabled() const
+{
+    return _isExceptionProfilingEnabled;
+}
+
+int Configuration::ExceptionSampleLimit() const
+{
+    return _exceptionSampleLimit;
+}
 
 std::chrono::seconds Configuration::GetUploadInterval() const
 {
