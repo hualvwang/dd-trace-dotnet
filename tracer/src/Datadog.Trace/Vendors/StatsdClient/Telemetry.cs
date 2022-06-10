@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using Datadog.Trace.Configuration;
 using Datadog.Trace.Vendors.StatsdClient.Bufferize;
 using Datadog.Trace.Vendors.StatsdClient.Statistic;
 using Datadog.Trace.Vendors.StatsdClient.Transport;
@@ -150,6 +151,11 @@ namespace Datadog.Trace.Vendors.StatsdClient
 
         private void SendMetric(string metricName, int value)
         {
+            if (!RemoteSettings.Instance.StatsdEnabled)
+            {
+                return;
+            }
+
             if (_optionalTransport != null && _optionalMetricSerializer != null)
             {
                 var serializedMetric = new SerializedMetric();

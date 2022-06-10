@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Datadog.Trace.Agent;
 using Datadog.Trace.Agent.Transports;
@@ -18,42 +19,48 @@ namespace Datadog.Trace.Configuration
     {
         private static readonly IDatadogLogger Logger = DatadogLogging.GetLoggerFor<RemoteSettings>();
 
-        private readonly string _consulUrl;
-
-        private readonly TimeSpan _consulUpdateInterval;
+        private readonly string _consulResource;
 
         private readonly IApiRequestFactory _apiRequestFactory;
 
         private RemoteSettings()
         {
-            _consulUrl = Environment.GetEnvironmentVariable("DD_CONSUL_URL");
-            var updateInterval = Environment.GetEnvironmentVariable("DD_CONSUL_UPDATE_INTERVAL");
-            _consulUpdateInterval = updateInterval != null
-                                        ? TimeSpan.FromSeconds(double.Parse(updateInterval))
-                                        : TimeSpan.FromSeconds(60);
-            if (string.IsNullOrEmpty(_consulUrl))
+            var consulUrl = Environment.GetEnvironmentVariable("DD_CONSUL_URL");
+            var consulResourcePath = Environment.GetEnvironmentVariable("DD_CONSUL_RESOURCE_PATH");
+            var updateInterval = Environment.GetEnvironmentVariable("DD_CONSUL_UPDATE_INTERVAL") ?? "/v1/kv/datadog/";
+            var consulUpdateInterval = updateInterval != null
+                                            ? TimeSpan.FromSeconds(double.Parse(updateInterval))
+                                            : TimeSpan.FromSeconds(60);
+            if (string.IsNullOrEmpty(consulUrl))
             {
                 return;
             }
 
+            _consulResource = $"{consulResourcePath}{Tracer.Instance.Settings.ServiceName}";
+
 #if NETCOREAPP
-            _apiRequestFactory = new HttpClientRequestFactory(new Uri(_consulUrl), Array.Empty<KeyValuePair<string, string>>());
+            _apiRequestFactory = new HttpClientRequestFactory(new Uri(consulUrl), Array.Empty<KeyValuePair<string, string>>());
 #else
             _apiRequestFactory = new ApiWebRequestFactory(new Uri(_consulUrl), Array.Empty<KeyValuePair<string, string>>());
 #endif
             Task.Run(
                 async () =>
                 {
+                    await InitSettings().ConfigureAwait(false);
                     while (true)
                     {
                         try
                         {
                             await UpdateSettings().ConfigureAwait(false);
-                            await Task.Delay(_consulUpdateInterval).ConfigureAwait(false);
+                            await Task.Delay(consulUpdateInterval).ConfigureAwait(false);
                         }
-                        catch
+                        catch (ThreadAbortException)
                         {
-                            // ignore errors
+                            throw;
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.Error(e, "Error while updating settings from consul");
                         }
                     }
                 });
@@ -63,33 +70,30 @@ namespace Datadog.Trace.Configuration
 
         private async Task InitSettings()
         {
-            var serviceName = Tracer.Instance.Settings.ServiceName;
             try
             {
-                var response = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint($"/v1/kv/datadog/{serviceName}")).GetAsync().ConfigureAwait(false);
+                var response = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint(_consulResource)).GetAsync().ConfigureAwait(false);
                 if (response.StatusCode >= 400)
                 {
                     var bytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(this));
-                    var httpResponseMessage = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint($"/v1/kv/datadog/{serviceName}")).PutAsync(new ArraySegment<byte>(bytes), "application/json").ConfigureAwait(false);
+                    var httpResponseMessage = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint(_consulResource)).PutAsync(new ArraySegment<byte>(bytes), "application/json").ConfigureAwait(false);
                     if (httpResponseMessage.StatusCode >= 400)
                     {
-                        Logger.Error($"Failed to initialize remote settings for service {serviceName}");
+                        Logger.Error("Failed to initialize remote settings for service");
                     }
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                throw;
+                Logger.Error("Failed to initialize remote settings, {e}", e);
             }
         }
 
         private async Task UpdateSettings()
         {
-            var serviceName = Tracer.Instance.Settings.ServiceName;
             try
             {
-                var response = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint($"/v1/kv/datadog/{serviceName}")).GetAsync().ConfigureAwait(false);
+                var response = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint(_consulResource)).GetAsync().ConfigureAwait(false);
                 if (response.StatusCode < 400)
                 {
                     var settings = await response.ReadAsStringAsync().ConfigureAwait(false);
@@ -102,6 +106,10 @@ namespace Datadog.Trace.Configuration
                         TraceEnabled = remoteSettings.TraceEnabled;
                         StatsdEnabled = remoteSettings.StatsdEnabled;
                     }
+                }
+                else
+                {
+                    Logger.Warning("Failed to update remote settings, {response.StatusCode}", response.StatusCode.ToString());
                 }
             }
             catch (Exception e)
