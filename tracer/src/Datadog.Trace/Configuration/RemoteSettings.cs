@@ -27,7 +27,7 @@ namespace Datadog.Trace.Configuration
         {
             var consulUrl = Environment.GetEnvironmentVariable("DD_CONSUL_URL");
             var consulResourcePath = Environment.GetEnvironmentVariable("DD_CONSUL_RESOURCE_PATH");
-            var updateInterval = Environment.GetEnvironmentVariable("DD_CONSUL_UPDATE_INTERVAL") ?? "/v1/kv/datadog/";
+            var updateInterval = Environment.GetEnvironmentVariable("DD_CONSUL_UPDATE_INTERVAL") ?? "60";
             var consulUpdateInterval = updateInterval != null
                                             ? TimeSpan.FromSeconds(double.Parse(updateInterval))
                                             : TimeSpan.FromSeconds(60);
@@ -36,7 +36,7 @@ namespace Datadog.Trace.Configuration
                 return;
             }
 
-            _consulResource = $"{consulResourcePath}{Tracer.Instance.Settings.ServiceName}";
+            _consulResource = $"{consulResourcePath}{Tracer.Instance.Settings.ServiceName}/{Tracer.Instance.Settings.Environment}";
 
 #if NETCOREAPP
             _apiRequestFactory = new HttpClientRequestFactory(new Uri(consulUrl), Array.Empty<KeyValuePair<string, string>>());
