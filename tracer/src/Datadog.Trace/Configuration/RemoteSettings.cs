@@ -26,11 +26,13 @@ namespace Datadog.Trace.Configuration
         private RemoteSettings()
         {
             var consulUrl = Environment.GetEnvironmentVariable("DD_CONSUL_URL");
-            var consulResourcePath = Environment.GetEnvironmentVariable("DD_CONSUL_RESOURCE_PATH");
+            var consulResourcePath = Environment.GetEnvironmentVariable("DD_CONSUL_RESOURCE_PATH") ?? "/v1/kv/datadog/";
             var updateInterval = Environment.GetEnvironmentVariable("DD_CONSUL_UPDATE_INTERVAL") ?? "60";
             var consulUpdateInterval = updateInterval != null
                                             ? TimeSpan.FromSeconds(double.Parse(updateInterval))
                                             : TimeSpan.FromSeconds(60);
+
+            Logger.Information("Consul URL: {consulUrl}", consulUrl);
             if (string.IsNullOrEmpty(consulUrl))
             {
                 return;
@@ -79,13 +81,13 @@ namespace Datadog.Trace.Configuration
                     var httpResponseMessage = await _apiRequestFactory.Create(_apiRequestFactory.GetEndpoint(_consulResource)).PutAsync(new ArraySegment<byte>(bytes), "application/json").ConfigureAwait(false);
                     if (httpResponseMessage.StatusCode >= 400)
                     {
-                        Logger.Error("Failed to initialize remote settings for service");
+                        Logger.Error($"Failed to initialize remote settings for service, code: {httpResponseMessage.StatusCode}");
                     }
                 }
             }
             catch (Exception e)
             {
-                Logger.Error("Failed to initialize remote settings, {e}", e);
+                Logger.Error($"Failed to initialize remote settings, {e}");
             }
         }
 
@@ -109,12 +111,12 @@ namespace Datadog.Trace.Configuration
                 }
                 else
                 {
-                    Logger.Warning("Failed to update remote settings, {response.StatusCode}", response.StatusCode.ToString());
+                    Logger.Warning($"Failed to update remote settings, {response.StatusCode}");
                 }
             }
             catch (Exception e)
             {
-                Logger.Warning("Failed to update settings from Consul, {e}", e);
+                Logger.Warning($"Failed to update settings from Consul, {e}");
             }
         }
     }
