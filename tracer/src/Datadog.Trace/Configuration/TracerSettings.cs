@@ -169,7 +169,7 @@ namespace Datadog.Trace.Configuration
             DbSqlRecordParam = source?.GetBool(ConfigurationKeys.DbSqlRecordParam) ??
                                // Default value
                                false;
-            CustomPropagationHeaders = TrimSplitString(source?.GetString(ConfigurationKeys.CustomPropagationHeaders) ?? string.Empty, ',').ToArray();
+            CustomPropagationHeaders = TrimSplitString(source?.GetString(ConfigurationKeys.CustomPropagationHeaders) ?? string.Empty, new[] { ',' }).ToArray();
             DelayWcfInstrumentationEnabled = source?.GetBool(ConfigurationKeys.FeatureFlags.DelayWcfInstrumentationEnabled)
                                           ?? false;
 

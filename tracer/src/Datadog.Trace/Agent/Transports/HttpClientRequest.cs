@@ -24,6 +24,7 @@ namespace Datadog.Trace.Agent.Transports
 
         private readonly HttpClient _client;
         private readonly HttpRequestMessage _postRequest;
+        private readonly HttpRequestMessage _putRequest;
         private readonly HttpRequestMessage _getRequest;
         private readonly Uri _uri;
 
@@ -31,6 +32,7 @@ namespace Datadog.Trace.Agent.Transports
         {
             _client = client;
             _postRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            _putRequest = new HttpRequestMessage(HttpMethod.Put, endpoint);
             _getRequest = new HttpRequestMessage(HttpMethod.Get, endpoint);
             _uri = endpoint;
         }
@@ -152,20 +154,13 @@ namespace Datadog.Trace.Agent.Transports
             using (var content = new ByteArrayContent(bytes.Array, bytes.Offset, bytes.Count))
             {
                 content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-                _request.Method = HttpMethod.Put;
-                _request.Content = content;
+                _putRequest.Method = HttpMethod.Put;
+                _putRequest.Content = content;
 
-                var response = await _client.SendAsync(_request).ConfigureAwait(false);
+                var response = await _client.SendAsync(_putRequest).ConfigureAwait(false);
 
                 return new HttpClientResponse(response);
             }
-        }
-
-        public async Task<IApiResponse> GetAsync()
-        {
-            _request.Method = HttpMethod.Get;
-            var response = await _client.SendAsync(_request).ConfigureAwait(false);
-            return new HttpClientResponse(response);
         }
     }
 }
