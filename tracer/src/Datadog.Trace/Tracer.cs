@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Datadog.Trace.Agent;
+using Datadog.Trace.Agent.DiscoveryService;
 using Datadog.Trace.ClrProfiler;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.PlatformHelpers;
@@ -75,8 +76,8 @@ namespace Datadog.Trace
         /// Note that this API does NOT replace the global Tracer instance.
         /// The <see cref="TracerManager"/> created will be scoped specifically to this instance.
         /// </summary>
-        internal Tracer(TracerSettings settings, IAgentWriter agentWriter, ISampler sampler, IScopeManager scopeManager, IDogStatsd statsd, ITelemetryController telemetry = null)
-            : this(TracerManagerFactory.Instance.CreateTracerManager(settings?.Build(), agentWriter, sampler, scopeManager, statsd, runtimeMetrics: null, logSubmissionManager: null, telemetry: telemetry ?? NullTelemetryController.Instance))
+        internal Tracer(TracerSettings settings, IAgentWriter agentWriter, ITraceSampler sampler, IScopeManager scopeManager, IDogStatsd statsd, ITelemetryController telemetry = null, IDiscoveryService discoveryService = null)
+            : this(TracerManagerFactory.Instance.CreateTracerManager(settings?.Build(), agentWriter, sampler, scopeManager, statsd, runtimeMetrics: null, logSubmissionManager: null, telemetry: telemetry ?? NullTelemetryController.Instance, discoveryService ?? NullDiscoveryService.Instance, dataStreamsManager: null))
         {
         }
 
@@ -214,9 +215,9 @@ namespace Datadog.Trace
         ImmutableTracerSettings ITracer.Settings => Settings;
 
         /// <summary>
-        /// Gets the <see cref="ISampler"/> instance used by this <see cref="IDatadogTracer"/> instance.
+        /// Gets the <see cref="ITraceSampler"/> instance used by this <see cref="IDatadogTracer"/> instance.
         /// </summary>
-        ISampler IDatadogTracer.Sampler => TracerManager.Sampler;
+        ITraceSampler IDatadogTracer.Sampler => TracerManager.Sampler;
 
         internal static string RuntimeId => DistributedTracer.Instance.GetRuntimeId();
 
@@ -321,7 +322,7 @@ namespace Datadog.Trace
         /// <param name="trace">The <see cref="Span"/> collection to write.</param>
         void IDatadogTracer.Write(ArraySegment<Span> trace)
         {
-            if (Settings.TraceEnabled || AzureAppServices.Metadata.CustomTracingEnabled)
+            if (Settings.TraceEnabled || Settings.AzureAppServiceMetadata?.CustomTracingEnabled is true)
             {
                 TracerManager.WriteTrace(trace);
             }
@@ -345,22 +346,33 @@ namespace Datadog.Trace
 
             TraceContext traceContext;
 
-            // try to get the trace context (from local spans) or
-            // sampling priority (from propagated spans),
-            // otherwise start a new trace context
+            // try to get the trace context (from local spans),
+            // otherwise start a new trace context and get sampling priority (from propagated spans)
             if (parent is SpanContext parentSpanContext)
             {
+                // if traceContext is not null, parent is from a local (non-propagated) span
+                // and this child span belongs in the same TraceContext
                 traceContext = parentSpanContext.TraceContext;
+
                 if (traceContext == null)
                 {
-                    traceContext = new TraceContext(this);
-                    traceContext.SetSamplingPriority(parentSpanContext.SamplingPriority ?? DistributedTracer.Instance.GetSamplingPriority());
+                    // if traceContext is null, parent was extracted from propagation headers.
+                    // start a new trace and keep the sampling priority, origin, and trace tags.
+                    var traceTags = TagPropagation.ParseHeader(parentSpanContext.PropagatedTags, Settings.OutgoingTagPropagationHeaderMaxLength);
+                    traceContext = new TraceContext(this, traceTags);
+
+                    var samplingPriority = parentSpanContext.SamplingPriority ?? DistributedTracer.Instance.GetSamplingPriority();
+                    traceContext.SetSamplingPriority(samplingPriority);
+                    traceContext.Origin = parentSpanContext.Origin;
                 }
             }
             else
             {
-                traceContext = new TraceContext(this);
-                traceContext.SetSamplingPriority(DistributedTracer.Instance.GetSamplingPriority());
+                // parent is not a SpanContext, start a new trace
+                var samplingPriority = DistributedTracer.Instance.GetSamplingPriority();
+
+                traceContext = new TraceContext(this, tags: null);
+                traceContext.SetSamplingPriority(samplingPriority);
 
                 if (traceId == null)
                 {
@@ -396,24 +408,13 @@ namespace Datadog.Trace
             // Apply any global tags
             if (Settings.GlobalTags.Count > 0)
             {
+                // if DD_TAGS contained "env" and "version", they were used to set
+                // ImmutableTracerSettings.Environment and ImmutableTracerSettings.ServiceVersion
+                // and removed from Settings.GlobalTags
                 foreach (var entry in Settings.GlobalTags)
                 {
                     span.SetTag(entry.Key, entry.Value);
                 }
-            }
-
-            // automatically add the "env" tag if defined, taking precedence over an "env" tag set from a global tag
-            var env = Settings.Environment;
-            if (!string.IsNullOrWhiteSpace(env))
-            {
-                span.SetTag(Tags.Env, env);
-            }
-
-            // automatically add the "version" tag if defined, taking precedence over an "version" tag set from a global tag
-            var version = Settings.ServiceVersion;
-            if (!string.IsNullOrWhiteSpace(version) && string.Equals(spanContext.ServiceName, DefaultServiceName))
-            {
-                span.SetTag(Tags.Version, version);
             }
 
             if (addToTraceContext)

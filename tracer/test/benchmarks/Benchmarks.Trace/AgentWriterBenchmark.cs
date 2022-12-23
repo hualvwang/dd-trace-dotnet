@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Datadog.Trace;
@@ -26,9 +27,9 @@ namespace Benchmarks.Trace
             settings.StartupDiagnosticLogEnabled = false;
             settings.TraceEnabled = false;
 
-            var api = new Api(new FakeApiRequestFactory(settings.Exporter.AgentUri), statsd: null, updateSampleRates: null, partialFlushEnabled: false, statsComputationEnabled: false);
+            var api = new Api(new FakeApiRequestFactory(settings.Exporter.AgentUri), statsd: null, updateSampleRates: null, partialFlushEnabled: false);
 
-            AgentWriter = new AgentWriter(api, statsAggregator: null, statsd: null, automaticFlush: false);
+            AgentWriter = new AgentWriter(api, statsAggregator: null, statsd: null, spanSampler: null, automaticFlush: false);
 
             var enrichedSpans = new Span[SpanCount];
             var now = DateTimeOffset.UtcNow;
@@ -104,7 +105,15 @@ namespace Benchmarks.Trace
                 _realRequest.AddHeader(name, value);
             }
 
-            public async Task<IApiResponse> PostAsync(ArraySegment<byte> traces, string contentType)
+            public Task<IApiResponse> GetAsync()
+            {
+                return Task.FromResult<IApiResponse>(new FakeApiResponse());
+            }
+
+            public Task<IApiResponse> PostAsync(ArraySegment<byte> traces, string contentType)
+                => PostAsync(traces, contentType, null);
+
+            public async Task<IApiResponse> PostAsync(ArraySegment<byte> traces, string contentType, string contentEncoding)
             {
                 using (var requestStream = Stream.Null)
                 {
@@ -113,6 +122,7 @@ namespace Benchmarks.Trace
 
                 return new FakeApiResponse();
             }
+
         }
 
         private class FakeApiResponse : IApiResponse
@@ -121,7 +131,14 @@ namespace Benchmarks.Trace
 
             public long ContentLength => 0;
 
+            public Encoding ContentEncoding => Encoding.UTF8;
+
             public string GetHeader(string headerName) => string.Empty;
+
+            public Task<Stream> GetStreamAsync()
+            {
+                throw new NotImplementedException();
+            }
 
             public Task<string> ReadAsStringAsync()
             {

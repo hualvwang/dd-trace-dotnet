@@ -51,11 +51,12 @@ namespace UpdateVendors
 
             Add(
                 libraryName: "Newtonsoft.Json",
-                version: "12.0.1",
-                downloadUrl: "https://github.com/JamesNK/Newtonsoft.Json/archive/12.0.1.zip",
-                pathToSrc: new[] { "Newtonsoft.Json-12.0.1", "src", "Newtonsoft.Json" },
-                transform: filePath => RewriteCsFileWithStandardTransform(filePath, originalNamespace: "Newtonsoft.Json"));
-            
+                version: "13.0.2",
+                downloadUrl: "https://github.com/JamesNK/Newtonsoft.Json/archive/13.0.2.zip",
+                pathToSrc: new[] { "Newtonsoft.Json-13.0.2", "src", "Newtonsoft.Json" },
+                transform: filePath => RewriteCsFileWithStandardTransform(filePath, originalNamespace: "Newtonsoft.Json", AddNullableDirectiveTransform, AddIgnoreNullabilityWarningDisablePragma),
+                relativePathsToExclude: new[] { "Utilities/NullableAttributes.cs" });
+
             Add(
                 libraryName: "dnlib",
                 version: "3.4.0",
@@ -71,6 +72,16 @@ namespace UpdateVendors
                 pathToSrc: new[] { "sketches-dotnet-1.0.0", "src", "Datadog.Sketches" },
                 // Perform standard CS file transform with additional '#nullable enable' directive at the beginning of the files, since the vendored project was built with <Nullable>enable</Nullable>
                 transform: filePath => RewriteCsFileWithStandardTransform(filePath, originalNamespace: "Datadog.Sketches", AddNullableDirectiveTransform));
+
+            Add(
+                libraryName: "IndieSystem.Text.RegularExpressions",
+                version: "0.6",
+                downloadUrl: "https://github.com/robertpi/IndieRegex/archive/refs/tags/v0.6.zip",
+                pathToSrc: new[] { "IndieRegex-0.6", "src" },
+                // Perform standard CS file transform with additional '#nullable enable' directive at the beginning of the files, since the vendored project was built with <Nullable>enable</Nullable>
+                transform: filePath => RewriteCsFileWithStandardTransform(filePath, originalNamespace: "IndieSystem.Text.RegularExpressions",
+                    AddIfNetcoreapp31OrGreater, AddNullableDirectiveTransform, AddIgnoreNullabilityWarningDisablePragma),
+                relativePathsToExclude: new[] { "additional/HashCode.cs", "SR.resx" });
         }
 
         public static List<VendoredDependency> All { get; set; } = new List<VendoredDependency>();
@@ -85,12 +96,15 @@ namespace UpdateVendors
 
         public Action<string> Transform { get; set; }
 
+        public string[] RelativePathsToExclude { get; set; }
+
         private static void Add(
             string libraryName,
             string version,
             string downloadUrl,
             string[] pathToSrc,
-            Action<string> transform)
+            Action<string> transform,
+            string[] relativePathsToExclude = null)
         {
             All.Add(new VendoredDependency()
             {
@@ -99,7 +113,13 @@ namespace UpdateVendors
                 DownloadUrl = downloadUrl,
                 PathToSrc = pathToSrc,
                 Transform = transform,
+                RelativePathsToExclude = relativePathsToExclude ?? Array.Empty<string>(),
             });
+        }
+
+        private static string AddIfNetcoreapp31OrGreater(string filePath, string content)
+        {
+            return "#if NETCOREAPP3_1_OR_GREATER" + Environment.NewLine + content + Environment.NewLine + "#endif";
         }
 
         private static string AddNullableDirectiveTransform(string filePath, string content)
@@ -112,7 +132,7 @@ namespace UpdateVendors
             return content;
         }
 
-        private static void RewriteCsFileWithStandardTransform(string filePath, string originalNamespace, Func<string, string, string> extraTransform = null)
+        private static void RewriteCsFileWithStandardTransform(string filePath, string originalNamespace, params Func<string, string, string>[] extraTransform)
         {
             if (string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
             {
@@ -120,9 +140,12 @@ namespace UpdateVendors
                     filePath,
                     content =>
                     {
-                        if (extraTransform != null)
+                        foreach (var transform in extraTransform)
                         {
-                            content = extraTransform(filePath, content);
+                            if (transform != null)
+                            {
+                                content = transform(filePath, content);
+                            }
                         }
 
                         // Disable analyzer
@@ -140,15 +163,46 @@ namespace UpdateVendors
                                 builder.Replace($"Func<", $"System.Func<");
                                 builder.Replace($"Action<", $"System.Action<");
                             }
+
+                            var filename = Path.GetFileName(filePath);
+                            if (filename == "JsonSerializerInternalReader.cs")
+                            {
+                                builder.Replace("#pragma warning restore CS8600, CS8602, CS8603, CS8604", string.Empty);
+                            }
+
+                            builder.Replace("#if !(PORTABLE40 || PORTABLE || DOTNET || NETSTANDARD2_0)", "#if NETFRAMEWORK");
+
+                            if (filename == "JsonPropertyCollection.cs")
+                            {
+                                // eww
+                                builder.Replace(
+                                    @"        private bool TryGetValue(string key, [NotNullWhen(true)]out JsonProperty? item)",
+                                    @"#if NETCOREAPP
+        private new bool TryGetValue(string key, [NotNullWhen(true)]out JsonProperty? item)
+#else
+        private bool TryGetValue(string key, [NotNullWhen(true)]out JsonProperty? item)
+#endif");
+                            }
                         }
 
 
                         if (originalNamespace.Equals("dnlib"))
                         {
-                            // dnlib's only targets net461 and netstandard2.0. 
+                            // dnlib's only targets net461 and netstandard2.0.
                             // For our needs, it's more correct to consider `NETSTANDARD` as 'everything not .NET Framework'
                             builder.Replace("#if NETSTANDARD", "#if !NETFRAMEWORK");
+
+                            // Make certain classes partial so we can extend them.
+                            foreach (var className in new[] { "SymbolReaderImpl", "PdbReader", "PortablePdbReader" })
+                            {
+                                builder.Replace($"class {className}", $"partial class {className}");
+                            }
                         }
+
+                        // Debugger.Break() is a dangerous method that may crash the process. We don't
+                        // want to take any risk of calling it, ever, so replace it with a noop.
+                        builder.Replace("Debugger.Break();", "{}");
+
                         // Prevent namespace conflicts
                         builder.Replace($"using {originalNamespace}", $"using Datadog.Trace.Vendors.{originalNamespace}");
                         builder.Replace($"namespace {originalNamespace}", $"namespace Datadog.Trace.Vendors.{originalNamespace}");
@@ -164,13 +218,13 @@ namespace UpdateVendors
                                 @$"using\s+(\S+)\s+=\s+{Regex.Escape(originalNamespace)}.(.*);",
                                 match => $"using {match.Groups[1].Value} = Datadog.Trace.Vendors.{originalNamespace}.{match.Groups[2].Value};");
 
-                        
-                        
+
+
                         // Don't expose anything we don't intend to
                         // by replacing all "public" access modifiers with "internal"
                         return Regex.Replace(
                             result,
-                            @"public(\s+((abstract|sealed|static|unsafe)\s+)*?(partial\s+)?(partial\s+)?(class|readonly\s+struct|struct|interface|enum|delegate))",
+                            @"public(\s+((abstract|sealed|static|unsafe)\s+)*?(partial\s+)?(class|readonly\s+(ref\s+)?struct|struct|interface|enum|delegate))",
                             match => $"internal{match.Groups[1]}");
                     });
             }
@@ -178,14 +232,38 @@ namespace UpdateVendors
 
         static string GenerateWarningDisablePragma() =>
             "#pragma warning disable " +
-            "CS0618, " +      // Type or member is obsolete 
-            "CS0649, " +      // Field is never assigned to, and will always have its default value 
+            "CS0618, " +      // Type or member is obsolete
+            "CS0649, " +      // Field is never assigned to, and will always have its default value
             "CS1574, " +      // XML comment has a cref attribute that could not be resolved
-            "CS1580, " +      // Invalid type for parameter in XML comment cref attribute 
+            "CS1580, " +      // Invalid type for parameter in XML comment cref attribute
             "CS1581, " +      // Invalid return type in XML comment cref attribute
             "CS1584, " +      // XML comment has syntactically incorrect cref attribute
-            "SYSLIB0011, " +  // BinaryFormatter serialization is obsolete and should not be used. 
+            "CS1591, " +      // Missing XML comment for publicly visible type or member 'x'
+            "CS1573, " +      // Parameter 'x' has no matching param tag in the XML comment for 'y' (but other parameters do)
+            "CS8018, " +      // Within cref attributes, nested types of generic types should be qualified
+            "SYSLIB0011, " +  // BinaryFormatter serialization is obsolete and should not be used.
             "SYSLIB0032";     // Recovery from corrupted process state exceptions is not supported; HandleProcessCorruptedStateExceptionsAttribute is ignored."
+
+        static string AddIgnoreNullabilityWarningDisablePragma(string filePath, string content) =>
+            "#pragma warning disable " +
+            "CS8600, " + // Converting null literal or possible null value to non-nullable type.
+            "CS8601, " + // Possible null reference assignment
+            "CS8602, " + // Dereference of a possibly null reference
+            "CS8603, " + // Possible null reference return
+            "CS8604, " + // Possible null reference argument for parameter 'x' in 'y'
+            "CS8618, " + // Non-nullable field 'x' must contain a non-null value when exiting constructor. Consider declaring the field as nullable.
+            "CS8620, " + // Argument of type 'x' cannot be used for parameter 'y' of type 'z[]' in 'a' due to differences in the nullability of reference types.
+            "CS8714, " + // The type 'x' cannot be used as type parameter 'y' in the generic type or method 'z'. Nullability of type argument 'x' doesn't match 'notnull' constraint.
+            "CS8762, " + // Parameter 'x' must have a non-null value when exiting with 'true'
+            "CS8765, " + // Nullability of type of parameter 'x' doesn't match overridden member (possibly because of nullability attributes)
+            "CS8766, " + // Nullability of reference types in return type of 'x' doesn't match implicitly implemented member 'y' (possibly because of nullability attributes)
+            "CS8767, " + // Nullability of reference types in type of parameter 'x' of 'y' doesn't match implicitly implemented member 'z' (possibly because of nullability attributes)
+            "CS8768, " + // Nullability of reference types in return type doesn't match implemented member 'x' (possibly because of nullability attributes)
+            "CS8769, " + // Nullability of reference types in type of parameter 'x' doesn't match implemented member 'y'  (possibly because of nullability attributes)
+            "CS8612, " + // Nullability of reference types in type of 'x' doesn't match implicitly implemented member 'y'.
+            "CS8629, " + // Nullable value type may be null with temporary variables
+            "CS8774" +   // Member 'x' must have a non-null value when exiting.
+            Environment.NewLine + content;
 
         private static void RewriteFileWithTransform(string filePath, Func<string, string> transform)
         {

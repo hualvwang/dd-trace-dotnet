@@ -99,7 +99,7 @@ namespace Datadog.Trace.Tests.Logging.DirectSubmission.Sink.PeriodicBatching
                 WaitForBatches(sink, batchCount: i + 1);
             }
 
-            mutex.Wait(10_000).Should().BeTrue($"Sink should be disabled after {BatchingSink.FailuresBeforeCircuitBreak} faults");
+            mutex.Wait(30_000).Should().BeTrue($"Sink should be disabled after {BatchingSink.FailuresBeforeCircuitBreak} faults");
         }
 
         [Fact]
@@ -161,7 +161,7 @@ namespace Datadog.Trace.Tests.Logging.DirectSubmission.Sink.PeriodicBatching
 
         private static ConcurrentStack<IList<DatadogLogEvent>> WaitForBatches(InMemoryBatchedSink pbs, int batchCount = 1)
         {
-            var deadline = DateTime.UtcNow.AddSeconds(10);
+            var deadline = DateTime.UtcNow.AddSeconds(30);
             var batches = pbs.Batches;
             while (batches.Count < batchCount && DateTime.UtcNow < deadline)
             {

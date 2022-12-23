@@ -2,6 +2,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,6 +10,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Datadog.Trace.AppSec.Waf.NativeBindings;
 using Datadog.Trace.AppSec.Waf.ReturnTypesManaged;
+using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Util;
 using Datadog.Trace.Vendors.Newtonsoft.Json;
@@ -23,10 +25,27 @@ namespace Datadog.Trace.AppSec.Waf.Initialization
 
         internal static InitializationResult Configure(string rulesFile, WafNative wafNative, Encoder encoder, string obfuscationParameterKeyRegex, string obfuscationParameterValueRegex)
         {
-            var argCache = new List<Obj>();
-            var configObj = GetConfigObj(rulesFile, argCache, encoder);
-            if (configObj == null)
+            if (wafNative.ExportErrorHappened)
             {
+                Log.Error("Waf couldn't initialize properly because of missing methods in native library, please make sure the tracer has been correctly installed and that previous versions are correctly uninstalled.");
+                return InitializationResult.FromExportErrors();
+            }
+
+            var argCache = new List<Obj>();
+            return Configure(GetConfigObj(rulesFile, argCache, encoder), rulesFile, argCache, wafNative, encoder, obfuscationParameterKeyRegex, obfuscationParameterValueRegex);
+        }
+
+        internal static InitializationResult ConfigureFromRemoteConfig(string rulesJson, WafNative wafNative, Encoder encoder, string obfuscationParameterKeyRegex, string obfuscationParameterValueRegex)
+        {
+            var argCache = new List<Obj>();
+            return Configure(GetConfigObjFromRemoteJson(rulesJson, argCache, encoder), "RemoteConfig", argCache, wafNative, encoder, obfuscationParameterKeyRegex, obfuscationParameterValueRegex);
+        }
+
+        internal static InitializationResult Configure(Obj rulesObj, string rulesFile, List<Obj> argCache, WafNative wafNative, Encoder encoder, string obfuscationParameterKeyRegex, string obfuscationParameterValueRegex)
+        {
+            if (rulesObj == null)
+            {
+                Log.Error("Waf couldn't initialize properly because of an unusable rule file. If you set the environment variable {appsecrule_env}, check the path and content of the file are correct.", ConfigurationKeys.AppSec.Rules);
                 return InitializationResult.FromUnusableRuleFile();
             }
 
@@ -41,8 +60,9 @@ namespace Datadog.Trace.AppSec.Waf.Initialization
                 valueRegex = Marshal.StringToHGlobalAnsi(obfuscationParameterValueRegex);
                 args.KeyRegex = keyRegex;
                 args.ValueRegex = valueRegex;
+                args.FreeWafFunction = wafNative.ObjectFreeFuncPtr;
 
-                var ruleHandle = wafNative.Init(configObj.RawPtr, ref args, ref ruleSetInfo);
+                var ruleHandle = wafNative.Init(rulesObj.RawPtr, ref args, ref ruleSetInfo);
                 if (ruleHandle == IntPtr.Zero)
                 {
                     Log.Warning("DDAS-0005-00: WAF initialization failed.");
@@ -86,8 +106,8 @@ namespace Datadog.Trace.AppSec.Waf.Initialization
                 }
 
                 wafNative.RuleSetInfoFree(ref ruleSetInfo);
-                wafNative.ObjectFreePtr(configObj.RawPtr);
-                configObj.Dispose();
+                wafNative.ObjectFreePtr(rulesObj.RawPtr);
+                rulesObj.Dispose();
                 foreach (var arg in argCache)
                 {
                     arg.Dispose();
@@ -108,12 +128,7 @@ namespace Datadog.Trace.AppSec.Waf.Initialization
                 }
 
                 using var reader = new StreamReader(stream);
-                using var jsonReader = new JsonTextReader(reader);
-                var root = JToken.ReadFrom(jsonReader);
-
-                LogRuleDetailsIfDebugEnabled(root);
-                // applying safety limits during rule parsing could result in trucated rules
-                configObj = encoder.Encode(root, argCache, applySafetyLimits: false);
+                configObj = GetConfigObj(reader, argCache, encoder);
             }
             catch (Exception ex)
             {
@@ -129,6 +144,35 @@ namespace Datadog.Trace.AppSec.Waf.Initialization
                 return null;
             }
 
+            return configObj;
+        }
+
+        private static Obj GetConfigObjFromRemoteJson(string rulesJson, List<Obj> argCache, Encoder encoder)
+        {
+            Obj configObj;
+            try
+            {
+                using var reader = new StringReader(rulesJson);
+                configObj = GetConfigObj(reader, argCache, encoder);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "DDAS-0003-02: AppSec could not read the rule file sent by remote config. Reason: Invalid file format. AppSec will not run any protections in this application.");
+
+                return null;
+            }
+
+            return configObj;
+        }
+
+        private static Obj GetConfigObj(TextReader reader, List<Obj> argCache, Encoder encoder)
+        {
+            using var jsonReader = new JsonTextReader(reader);
+            var root = JToken.ReadFrom(jsonReader);
+
+            LogRuleDetailsIfDebugEnabled(root);
+            // applying safety limits during rule parsing could result in trucated rules
+            var configObj = encoder.Encode(root, argCache, applySafetyLimits: false);
             return configObj;
         }
 
@@ -156,9 +200,7 @@ namespace Datadog.Trace.AppSec.Waf.Initialization
             }
         }
 
-        private static Stream GetRulesStream(string rulesFile) => string.IsNullOrWhiteSpace(rulesFile) ?
-                                                                      GetRulesManifestStream() :
-                                                                      GetRulesFileStream(rulesFile);
+        private static Stream GetRulesStream(string rulesFile) => string.IsNullOrWhiteSpace(rulesFile) ? GetRulesManifestStream() : GetRulesFileStream(rulesFile);
 
         private static Stream GetRulesManifestStream()
         {

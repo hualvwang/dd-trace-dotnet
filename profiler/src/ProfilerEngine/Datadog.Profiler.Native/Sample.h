@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
 
 #pragma once
+
 #include <array>
 #include <iostream>
 #include <list>
@@ -12,70 +13,34 @@
 
 struct SampleValueType
 {
-    const std::string& Name;
-    const std::string& Unit;
+    std::string Name;
+    std::string Unit;
 };
 
-//---------------------------------------------------------------
-// This array define the list of ALL values set by all profilers
-SampleValueType const SampleTypeDefinitions[] =
-{
-    {"wall", "nanoseconds"}, // WallTimeDuration
-    {"cpu", "nanoseconds"},  // CPUTimeDuration
-    {"exception", "count"},
 
-    // the new ones should be added here at the same time
-    // new identifiers are added to SampleValue
-};
-
-// Each profiler defines its own values index in the array
-// It will be used in the AddValue() method
-//
-enum class SampleValue : size_t
-{
-    // Wall time profiler
-    WallTimeDuration = 0,
-
-    // CPU time profiler
-    CpuTimeDuration = 1,
-
-    // Exception profiler
-    ExceptionCount = 2,
-
-    // Allocation tick profiler
-    //AllocationCount = 3,
-
-    // Thread contention profiler
-    //ContentionCount = 4,
-    //ContentionDuration = 5,
-
-
-};
-//
-static constexpr size_t array_size = sizeof(SampleTypeDefinitions) / sizeof(SampleTypeDefinitions[0]);
-//---------------------------------------------------------------
-
-typedef std::array<int64_t, array_size> Values;
-typedef std::pair<std::string, std::string> Label; // TODO: use stringview to avoid copy
+typedef std::vector<int64_t> Values;
+typedef std::pair<std::string_view, std::string> Label;
 typedef std::list<Label> Labels;
+typedef std::vector<std::pair<std::string_view, std::string_view>> CallStack;
 
-/// <summary>
-/// Unfinished class. The purpose, for now, is just to work on the export component.
-/// </summary>
 class Sample
 {
 public:
+    static size_t ValuesCount;
+
+public:
     Sample(std::string_view runtimeId); // only for tests
-    Sample(uint64_t timestamp, std::string_view runtimeId);
+    Sample(uint64_t timestamp, std::string_view runtimeId, size_t framesCount);
+
     Sample(const Sample&) = delete;
     Sample& operator=(const Sample& sample) = delete;
-    Sample(Sample&& sample) noexcept;
-    Sample& operator=(Sample&& other) noexcept;
+    Sample(Sample&& sample) noexcept = delete;
+    Sample& operator=(Sample&& other) noexcept = delete;
 
 public:
     uint64_t GetTimeStamp() const;
     const Values& GetValues() const;
-    const std::vector<std::pair<std::string, std::string>>& GetCallstack() const;
+    const CallStack& GetCallstack() const;
     const Labels& GetLabels() const;
     std::string_view GetRuntimeId() const;
 
@@ -84,16 +49,40 @@ public:
 
     // should be protected if we want to derive classes from Sample such as WallTimeSample
     // but it seems better for encapsulation to do the transformation between collected raw data
-    // and a Sample in each Provider (this is the each behind CollectorBase template class)
-    void AddValue(std::int64_t value, SampleValue index);
-    void AddFrame(const std::string& moduleName, const std::string& frame); // TODO: use stringview to avoid copy
-    void AddLabel(const Label& label);
+    // and a Sample in each Provider (this is behind CollectorBase template class)
+    void AddValue(std::int64_t value, size_t index);
+    void AddFrame(std::string_view moduleName, std::string_view frame);
+
+    template<typename T>
+    void AddLabel(T&& label)
+    {
+        _labels.push_back(std::forward<T>(label));
+    }
 
     // helpers for well known mandatory labels
-    void SetPid(const std::string& pid);
-    void SetAppDomainName(const std::string& name);
-    void SetThreadId(const std::string& tid);
-    void SetThreadName(const std::string& name);
+    template <typename T>
+    void SetPid(T&& pid)
+    {
+        AddLabel(Label{ProcessIdLabel, std::forward<T>(pid)});
+    }
+
+    template <typename T>
+    void SetAppDomainName(T&& name)
+    {
+        AddLabel(Label{AppDomainNameLabel, std::forward<T>(name)});
+    }
+
+    template <typename T>
+    void SetThreadId(T&& tid)
+    {
+        AddLabel(Label{ThreadIdLabel, std::forward<T>(tid)});
+    }
+
+    template <typename T>
+    void SetThreadName(T&& name)
+    {
+        AddLabel(Label{ThreadNameLabel, std::forward<T>(name)});
+    }
 
     // well known labels
 public:
@@ -105,10 +94,20 @@ public:
     static const std::string SpanIdLabel;
     static const std::string ExceptionTypeLabel;
     static const std::string ExceptionMessageLabel;
+    static const std::string AllocationClassLabel;
+    static const std::string EndTimestampLabel;
+    static const std::string GarbageCollectionGenerationLabel;
+    static const std::string GarbageCollectionNumberLabel;
+    static const std::string TimelineEventTypeLabel;
+    static const std::string TimelineEventTypeStopTheWorld;
+    static const std::string TimelineEventTypeGarbageCollection;
+    static const std::string GarbageCollectionReasonLabel;
+    static const std::string GarbageCollectionTypeLabel;
+    static const std::string GarbageCollectionCompactingLabel;
 
 private:
     uint64_t _timestamp;
-    std::vector<std::pair<std::string, std::string>> _callstack; // TODO: use stringview to avoid copy
+    CallStack _callstack;
     Values _values;
     Labels _labels;
     std::string_view _runtimeId;

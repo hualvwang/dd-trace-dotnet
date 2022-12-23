@@ -13,9 +13,11 @@
       http.request.headers.host: localhost:00000,
       http.status_code: 404,
       http.url: http://localhost:00000/Health/login.php,
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -39,9 +41,11 @@
       http.request.headers.host: localhost:00000,
       http.status_code: 404,
       http.url: http://localhost:00000/Health/login.php,
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -65,9 +69,11 @@
       http.request.headers.host: localhost:00000,
       http.status_code: 404,
       http.url: http://localhost:00000/Health/login.php,
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -91,9 +97,11 @@
       http.request.headers.host: localhost:00000,
       http.status_code: 404,
       http.url: http://localhost:00000/Health/login.php,
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -117,9 +125,11 @@
       http.request.headers.host: localhost:00000,
       http.status_code: 404,
       http.url: http://localhost:00000/Health/login.php,
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,

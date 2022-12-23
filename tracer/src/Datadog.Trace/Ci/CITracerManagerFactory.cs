@@ -4,13 +4,13 @@
 // </copyright>
 
 using System;
-using System.Net;
 using Datadog.Trace.Agent;
-using Datadog.Trace.Agent.Transports;
+using Datadog.Trace.Agent.DiscoveryService;
 using Datadog.Trace.Ci.Agent;
 using Datadog.Trace.Ci.Configuration;
 using Datadog.Trace.Ci.Sampling;
 using Datadog.Trace.Configuration;
+using Datadog.Trace.DataStreamsMonitoring;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Logging.DirectSubmission;
 using Datadog.Trace.RuntimeMetrics;
@@ -23,98 +23,65 @@ namespace Datadog.Trace.Ci
     internal class CITracerManagerFactory : TracerManagerFactory
     {
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor<CITracerManagerFactory>();
-        private CIVisibilitySettings _settings;
+        private readonly CIVisibilitySettings _settings;
+        private readonly IDiscoveryService _discoveryService;
+        private readonly bool _enabledEventPlatformProxy;
 
-        public CITracerManagerFactory(CIVisibilitySettings settings)
+        public CITracerManagerFactory(CIVisibilitySettings settings, IDiscoveryService discoveryService, bool enabledEventPlatformProxy = false)
         {
             _settings = settings;
+            _discoveryService = discoveryService;
+            _enabledEventPlatformProxy = enabledEventPlatformProxy;
         }
 
         protected override TracerManager CreateTracerManagerFrom(
             ImmutableTracerSettings settings,
             IAgentWriter agentWriter,
-            ISampler sampler,
+            ITraceSampler sampler,
             IScopeManager scopeManager,
             IDogStatsd statsd,
             RuntimeMetricsWriter runtimeMetrics,
             DirectLogSubmissionManager logSubmissionManager,
             ITelemetryController telemetry,
+            IDiscoveryService discoveryService,
+            DataStreamsManager dataStreamsManager,
             string defaultServiceName)
         {
-            return new CITracerManager(settings, agentWriter, sampler, scopeManager, statsd, runtimeMetrics, logSubmissionManager, telemetry, defaultServiceName);
+            return new CITracerManager(settings, agentWriter, sampler, scopeManager, statsd, runtimeMetrics, logSubmissionManager, telemetry, discoveryService, dataStreamsManager, defaultServiceName);
         }
 
-        protected override ISampler GetSampler(ImmutableTracerSettings settings)
+        protected override ITraceSampler GetSampler(ImmutableTracerSettings settings)
         {
             return new CISampler();
         }
 
-        protected override IAgentWriter GetAgentWriter(ImmutableTracerSettings settings, IDogStatsd statsd, ISampler sampler)
+        protected override IAgentWriter GetAgentWriter(ImmutableTracerSettings settings, IDogStatsd statsd, ITraceSampler sampler, IDiscoveryService discoveryService)
         {
             // Check for agentless scenario
             if (_settings.Agentless)
             {
                 if (!string.IsNullOrEmpty(_settings.ApiKey))
                 {
-                    return new CIAgentlessWriter(new CIWriterHttpSender(GetRequestFactory(settings)));
+                    return new CIVisibilityProtocolWriter(_settings, new CIWriterHttpSender(CIVisibility.GetRequestFactory(settings)));
                 }
-                else
-                {
-                    Environment.FailFast("An API key is required in Agentless mode.");
-                    return null;
-                }
-            }
-            else
-            {
-                // With agent scenario:
 
-                // Set the tracer buffer size to the max
-                var traceBufferSize = 1024 * 1024 * 45; // slightly lower than the 50mb payload agent limit.
-                return new CIAgentWriter(settings, sampler, traceBufferSize);
+                Environment.FailFast("An API key is required in Agentless mode.");
+                return null;
             }
+
+            // With agent scenario:
+            if (_enabledEventPlatformProxy)
+            {
+                return new CIVisibilityProtocolWriter(_settings, new CIWriterHttpSender(CIVisibility.GetRequestFactory(settings)));
+            }
+
+            // Event platform proxy not found
+            // Set the tracer buffer size to the max
+            var traceBufferSize = 1024 * 1024 * 45; // slightly lower than the 50mb payload agent limit.
+            return new ApmAgentWriter(settings, sampler, discoveryService, traceBufferSize);
         }
 
-        private IApiRequestFactory GetRequestFactory(ImmutableTracerSettings settings)
-        {
-            IApiRequestFactory factory = null;
-            TimeSpan agentlessTimeout = TimeSpan.FromSeconds(15);
-
-#if NETCOREAPP
-            Log.Information("Using {FactoryType} for trace transport.", nameof(HttpClientRequestFactory));
-            factory = new HttpClientRequestFactory(settings.Exporter.AgentUri, AgentHttpHeaderNames.DefaultHeaders, timeout: agentlessTimeout);
-#else
-            Log.Information("Using {FactoryType} for trace transport.", nameof(ApiWebRequestFactory));
-            factory = new ApiWebRequestFactory(settings.Exporter.AgentUri, AgentHttpHeaderNames.DefaultHeaders, timeout: agentlessTimeout);
-#endif
-
-            if (!string.IsNullOrWhiteSpace(_settings.ProxyHttps))
-            {
-                var proxyHttpsUriBuilder = new UriBuilder(_settings.ProxyHttps);
-
-                var userName = proxyHttpsUriBuilder.UserName;
-                var password = proxyHttpsUriBuilder.Password;
-
-                proxyHttpsUriBuilder.UserName = string.Empty;
-                proxyHttpsUriBuilder.Password = string.Empty;
-
-                if (proxyHttpsUriBuilder.Scheme == "https")
-                {
-                    // HTTPS proxy is not supported by .NET BCL
-                    Log.Error($"HTTPS proxy is not supported. ({proxyHttpsUriBuilder})");
-                    return factory;
-                }
-
-                NetworkCredential credential = null;
-                if (!string.IsNullOrWhiteSpace(userName))
-                {
-                    credential = new NetworkCredential(userName, password);
-                }
-
-                Log.Information("Setting proxy to: {ProxyHttps}", proxyHttpsUriBuilder.Uri.ToString());
-                factory.SetProxy(new WebProxy(proxyHttpsUriBuilder.Uri, true, _settings.ProxyNoProxy, credential), credential);
-            }
-
-            return factory;
-        }
+        protected override IDiscoveryService GetDiscoveryService(ImmutableTracerSettings settings)
+            => _discoveryService;
     }
 }

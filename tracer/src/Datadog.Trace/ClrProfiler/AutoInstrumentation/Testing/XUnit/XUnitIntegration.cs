@@ -2,146 +2,125 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
+#nullable enable
 
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using Datadog.Trace.Ci;
 using Datadog.Trace.Ci.Tags;
 using Datadog.Trace.Configuration;
-using Datadog.Trace.ExtensionMethods;
-using Datadog.Trace.PDBs;
 
-namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit
+namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit;
+
+internal static class XUnitIntegration
 {
-    internal static class XUnitIntegration
+    internal const string IntegrationName = nameof(IntegrationId.XUnit);
+    internal const IntegrationId IntegrationId = Configuration.IntegrationId.XUnit;
+
+    internal static bool IsEnabled => CIVisibility.IsRunning && Tracer.Instance.Settings.IsIntegrationEnabled(IntegrationId);
+
+    internal static Test? CreateTest(ref TestRunnerStruct runnerInstance, Type targetType)
     {
-        internal const string IntegrationName = nameof(Configuration.IntegrationId.XUnit);
-        internal const IntegrationId IntegrationId = Configuration.IntegrationId.XUnit;
-
-        internal static bool IsEnabled => CIVisibility.IsRunning && Tracer.Instance.Settings.IsIntegrationEnabled(IntegrationId);
-
-        internal static Scope CreateScope(ref TestRunnerStruct runnerInstance, Type targetType)
+        // Get the test suite instance
+        var testSuite = TestSuite.Current;
+        if (testSuite is null)
         {
-            string testBundle = runnerInstance.TestClass.Assembly?.GetName().Name;
-            string testSuite = runnerInstance.TestClass.ToString();
-            string testName = runnerInstance.TestMethod.Name;
-
-            string testFramework = "xUnit";
-
-            Scope scope = Tracer.Instance.StartActiveInternal("xunit.test");
-            Span span = scope.Span;
-
-            span.Type = SpanTypes.Test;
-            span.SetTraceSamplingPriority(SamplingPriorityValues.AutoKeep);
-            span.ResourceName = $"{testSuite}.{testName}";
-            span.SetTag(Tags.Origin, TestTags.CIAppTestOriginName);
-            span.SetTag(TestTags.Bundle, testBundle);
-            span.SetTag(TestTags.Suite, testSuite);
-            span.SetTag(TestTags.Name, testName);
-            span.SetTag(TestTags.Framework, testFramework);
-            span.SetTag(TestTags.FrameworkVersion, targetType.Assembly?.GetName().Version.ToString());
-            span.SetTag(TestTags.Type, TestTags.TypeTest);
-
-            var framework = FrameworkDescription.Instance;
-            CIEnvironmentValues.Instance.DecorateSpan(span);
-
-            span.SetTag(CommonTags.LibraryVersion, TracerConstants.AssemblyVersion);
-            span.SetTag(CommonTags.RuntimeName, framework.Name);
-            span.SetTag(CommonTags.RuntimeVersion, framework.ProductVersion);
-            span.SetTag(CommonTags.RuntimeArchitecture, framework.ProcessArchitecture);
-            span.SetTag(CommonTags.OSArchitecture, framework.OSArchitecture);
-            span.SetTag(CommonTags.OSPlatform, framework.OSPlatform);
-            span.SetTag(CommonTags.OSVersion, Environment.OSVersion.VersionString);
-
-            // Get test parameters
-            object[] testMethodArguments = runnerInstance.TestMethodArguments;
-            ParameterInfo[] methodParameters = runnerInstance.TestMethod.GetParameters();
-            if (methodParameters?.Length > 0 && testMethodArguments?.Length > 0)
-            {
-                TestParameters testParameters = new TestParameters();
-                testParameters.Metadata = new Dictionary<string, object>();
-                testParameters.Arguments = new Dictionary<string, object>();
-                testParameters.Metadata[TestTags.MetadataTestName] = runnerInstance.TestCase.DisplayName;
-
-                for (int i = 0; i < methodParameters.Length; i++)
-                {
-                    if (i < testMethodArguments.Length)
-                    {
-                        testParameters.Arguments[methodParameters[i].Name] = Common.GetParametersValueData(testMethodArguments[i]);
-                    }
-                    else
-                    {
-                        testParameters.Arguments[methodParameters[i].Name] = "(default)";
-                    }
-                }
-
-                span.SetTag(TestTags.Parameters, testParameters.ToJSON());
-            }
-
-            // Get traits
-            Dictionary<string, List<string>> traits = runnerInstance.TestCase.Traits;
-            if (traits.Count > 0)
-            {
-                span.SetTag(TestTags.Traits, Datadog.Trace.Vendors.Newtonsoft.Json.JsonConvert.SerializeObject(traits));
-            }
-
-            // Test code and code owners
-            Common.DecorateSpanWithSourceAndCodeOwners(span, runnerInstance.TestMethod);
-
-            Tracer.Instance.TracerManager.Telemetry.IntegrationGeneratedSpan(IntegrationId);
-            Ci.Coverage.CoverageReporter.Handler.StartSession();
-
-            // Skip tests
-            if (runnerInstance.SkipReason != null)
-            {
-                span.SetTag(TestTags.Status, TestTags.StatusSkip);
-                span.SetTag(TestTags.SkipReason, runnerInstance.SkipReason);
-
-                var coverageSession = Ci.Coverage.CoverageReporter.Handler.EndSession();
-                if (coverageSession is not null)
-                {
-                    scope.Span.SetTag("test.coverage", Datadog.Trace.Vendors.Newtonsoft.Json.JsonConvert.SerializeObject(coverageSession));
-                }
-
-                span.Finish(TimeSpan.Zero);
-                scope.Dispose();
-                return null;
-            }
-
-            span.ResetStartTime();
-            return scope;
+            Common.Log.Warning("Test suite cannot be found.");
+            return null;
         }
 
-        internal static void FinishScope(Scope scope, IExceptionAggregator exceptionAggregator)
+        var testMethod = runnerInstance.TestMethod;
+        var test = testSuite.CreateTest(testMethod?.Name ?? string.Empty);
+
+        // Get test parameters
+        var testMethodArguments = runnerInstance.TestMethodArguments;
+        var methodParameters = testMethod?.GetParameters();
+        if (methodParameters?.Length > 0 && testMethodArguments?.Length > 0)
         {
-            var coverageSession = Ci.Coverage.CoverageReporter.Handler.EndSession();
-            if (coverageSession is not null)
-            {
-                scope.Span.SetTag("test.coverage", Datadog.Trace.Vendors.Newtonsoft.Json.JsonConvert.SerializeObject(coverageSession));
-            }
+            var testParameters = new TestParameters();
+            testParameters.Metadata = new Dictionary<string, object>();
+            testParameters.Arguments = new Dictionary<string, object>();
+            testParameters.Metadata[TestTags.MetadataTestName] = runnerInstance.TestCase.DisplayName ?? string.Empty;
 
-            Exception exception = exceptionAggregator.ToException();
-
-            if (exception != null)
+            for (var i = 0; i < methodParameters.Length; i++)
             {
-                if (exception.GetType().Name == "SkipException")
+                var key = methodParameters[i].Name ?? string.Empty;
+                if (i < testMethodArguments.Length)
                 {
-                    scope.Span.SetTag(TestTags.Status, TestTags.StatusSkip);
-                    scope.Span.SetTag(TestTags.SkipReason, exception.Message);
+                    testParameters.Arguments[key] = Common.GetParametersValueData(testMethodArguments[i]);
                 }
                 else
                 {
-                    scope.Span.SetException(exception);
-                    scope.Span.SetTag(TestTags.Status, TestTags.StatusFail);
+                    testParameters.Arguments[key] = "(default)";
+                }
+            }
+
+            test.SetParameters(testParameters);
+        }
+
+        // Get traits
+        if (runnerInstance.TestCase.Traits is { } traits)
+        {
+            test.SetTraits(traits);
+        }
+
+        // Test code and code owners
+        if (testMethod is not null)
+        {
+            test.SetTestMethodInfo(testMethod);
+        }
+
+        // Telemetry
+        Tracer.Instance.TracerManager.Telemetry.IntegrationGeneratedSpan(IntegrationId);
+
+        // Skip tests
+        if (runnerInstance.SkipReason is { } skipReason)
+        {
+            test.Close(TestStatus.Skip, skipReason: skipReason, duration: TimeSpan.Zero);
+            return null;
+        }
+
+        test.ResetStartTime();
+        return test;
+    }
+
+    internal static void FinishTest(Test test, IExceptionAggregator? exceptionAggregator)
+    {
+        try
+        {
+            if (exceptionAggregator?.ToException() is { } exception)
+            {
+                if (exception.GetType().Name == "SkipException")
+                {
+                    test.Close(TestStatus.Skip, TimeSpan.Zero, exception.Message);
+                }
+                else
+                {
+                    test.SetErrorInfo(exception);
+                    test.Close(TestStatus.Fail);
                 }
             }
             else
             {
-                scope.Span.SetTag(TestTags.Status, TestTags.StatusPass);
+                test.Close(TestStatus.Pass);
             }
-
-            scope.Dispose();
         }
+        catch (Exception ex)
+        {
+            CIVisibility.Log.Warning(ex, "Error finishing test scope");
+            test.Close(TestStatus.Pass);
+        }
+    }
+
+    internal static bool ShouldSkip(ref TestRunnerStruct runnerInstance)
+    {
+        if (CIVisibility.Settings.IntelligentTestRunnerEnabled != true)
+        {
+            return false;
+        }
+
+        var testClass = runnerInstance.TestClass;
+        var testMethod = runnerInstance.TestMethod;
+        return Common.ShouldSkip(testClass?.ToString() ?? string.Empty, testMethod?.Name ?? string.Empty, runnerInstance.TestMethodArguments, testMethod?.GetParameters());
     }
 }

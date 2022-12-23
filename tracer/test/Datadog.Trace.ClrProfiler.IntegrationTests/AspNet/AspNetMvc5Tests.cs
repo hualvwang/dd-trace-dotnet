@@ -3,10 +3,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
 #pragma warning disable SA1402 // File may only contain a single class
 #pragma warning disable SA1649 // File name must match first type name
 
+using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -70,6 +71,8 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             : base(iisFixture, output, virtualApp: true, classicMode: false, enableRouteTemplateResourceNames: true)
         {
         }
+
+        protected override string ExpectedServiceName => "sample/my-app";
     }
 
     [Collection("IisTests")]
@@ -109,7 +112,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
     }
 
     [UsesVerify]
-    public abstract class AspNetMvc5Tests : TestHelper, IClassFixture<IisFixture>
+    public abstract class AspNetMvc5Tests : TracingIntegrationTest, IClassFixture<IisFixture>
     {
         private readonly IisFixture _iisFixture;
         private readonly string _testName;
@@ -132,11 +135,11 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             _testName = nameof(AspNetMvc5Tests)
                       + (virtualApp ? ".VirtualApp" : string.Empty)
                       + (classicMode ? ".Classic" : ".Integrated")
-                      + (enableRouteTemplateExpansion ? ".WithExpansion" :
-                        (enableRouteTemplateResourceNames ?  ".WithFF" : ".NoFF"));
+                      + (enableRouteTemplateExpansion     ? ".WithExpansion" :
+                         enableRouteTemplateResourceNames ? ".WithFF" : ".NoFF");
         }
 
-        public static TheoryData<string, int> Data() => new()
+        public static TheoryData<string, int> Data => new()
         {
             { "/DataDog", 200 }, // Contains child actions
             { "/DataDog/DogHouse", 200 }, // Contains child actions
@@ -159,6 +162,16 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             { "/graphql/GetAllFoo", 200 }, // Slug in route template
         };
 
+        protected virtual string ExpectedServiceName => "sample";
+
+        public override Result ValidateIntegrationSpan(MockSpan span) =>
+            span.Name switch
+            {
+                "aspnet.request" => span.IsAspNet(),
+                "aspnet-mvc.request" => span.IsAspNetMvc(),
+                _ => Result.DefaultSuccess,
+            };
+
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
@@ -175,9 +188,9 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 
             // Append virtual directory to the actual request
             var spans = await GetWebServerSpans(_iisFixture.VirtualApplicationPath + path, _iisFixture.Agent, _iisFixture.HttpPort, statusCode);
+            ValidateIntegrationSpans(spans, expectedServiceName: ExpectedServiceName, isExternalSpan: false);
 
             var sanitisedPath = VerifyHelper.SanitisePathsForVerify(path);
-
             var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedPath, (int)statusCode);
 
             // Overriding the type name here as we have multiple test classes in the file

@@ -5,7 +5,9 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using Datadog.Trace.Ci;
+using Datadog.Trace.DataStreamsMonitoring;
 using Datadog.Trace.Util;
 
 namespace Datadog.Trace
@@ -23,6 +25,8 @@ namespace Datadog.Trace
             Keys.Origin,
             Keys.RawTraceId,
             Keys.RawSpanId,
+            Keys.PropagatedTags,
+
             // For mismatch version support we need to keep supporting old keys.
             HttpHeaderNames.TraceId,
             HttpHeaderNames.ParentId,
@@ -36,6 +40,8 @@ namespace Datadog.Trace
         /// to specify that the new span should not inherit the currently active scope as its parent.
         /// </summary>
         public static readonly ISpanContext None = new ReadOnlySpanContext(traceId: 0, spanId: 0, serviceName: null);
+
+        private string _origin;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SpanContext"/> class
@@ -107,13 +113,14 @@ namespace Datadog.Trace
         internal SpanContext(ISpanContext parent, TraceContext traceContext, string serviceName, ulong? traceId = null, ulong? spanId = null, string rawTraceId = null, string rawSpanId = null)
             : this(parent?.TraceId ?? traceId, serviceName)
         {
-            SpanId = spanId ?? SpanIdGenerator.ThreadInstance.CreateNew();
+            SpanId = spanId ?? SpanIdGenerator.CreateNew();
             Parent = parent;
             TraceContext = traceContext;
+
             if (parent is SpanContext spanContext)
             {
-                Origin = spanContext.Origin;
                 RawTraceId = spanContext.RawTraceId ?? rawTraceId;
+                PathwayContext = spanContext.PathwayContext;
             }
             else
             {
@@ -127,7 +134,7 @@ namespace Datadog.Trace
         {
             TraceId = traceId > 0
                           ? traceId.Value
-                          : SpanIdGenerator.ThreadInstance.CreateNew();
+                          : SpanIdGenerator.CreateNew();
 
             ServiceName = serviceName;
 
@@ -167,9 +174,30 @@ namespace Datadog.Trace
         public string ServiceName { get; set; }
 
         /// <summary>
-        /// Gets or sets the origin of the trace
+        /// Gets or sets the origin of the trace.
+        /// For local contexts, this property delegates to TraceContext.Origin.
+        /// This is a temporary work around because we use SpanContext
+        /// for all local spans and also for propagation.
         /// </summary>
-        internal string Origin { get; set; }
+        internal string Origin
+        {
+            get => TraceContext?.Origin ?? _origin;
+            set
+            {
+                _origin = value;
+
+                if (TraceContext is not null)
+                {
+                    TraceContext.Origin = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the header value that contains the propagated trace tags,
+        /// formatted as "key1=value1,key2=value2".
+        /// </summary>
+        internal string PropagatedTags { get; set; }
 
         /// <summary>
         /// Gets the trace context.
@@ -192,6 +220,8 @@ namespace Datadog.Trace
         /// Gets the raw spanId
         /// </summary>
         internal string RawSpanId { get; }
+
+        internal PathwayContext? PathwayContext { get; private set; }
 
         /// <summary>
         /// Gets the custom propagation headers
@@ -265,21 +295,25 @@ namespace Datadog.Trace
         /// <inheritdoc/>
         bool IReadOnlyDictionary<string, string>.TryGetValue(string key, out string value)
         {
+            var invariant = CultureInfo.InvariantCulture;
+
             switch (key)
             {
                 case Keys.TraceId:
                 case HttpHeaderNames.TraceId:
-                    value = TraceId.ToString();
+                    value = TraceId.ToString(invariant);
                     return true;
 
                 case Keys.ParentId:
                 case HttpHeaderNames.ParentId:
-                    value = SpanId.ToString();
+                    value = SpanId.ToString(invariant);
                     return true;
 
                 case Keys.SamplingPriority:
                 case HttpHeaderNames.SamplingPriority:
-                    value = SamplingPriority?.ToString();
+                    // return the value from TraceContext if available
+                    var samplingPriority = TraceContext?.SamplingPriority ?? SamplingPriority;
+                    value = samplingPriority?.ToString(invariant);
                     return true;
 
                 case Keys.Origin:
@@ -295,21 +329,67 @@ namespace Datadog.Trace
                     value = RawSpanId;
                     return true;
 
+                case Keys.PropagatedTags:
+                case HttpHeaderNames.PropagatedTags:
+                    // return the value from TraceContext if available
+                    value = TraceContext?.Tags.ToPropagationHeader() ?? PropagatedTags;
+                    return true;
+
                 default:
                     value = null;
                     return false;
             }
         }
 
+        /// <summary>
+        /// Sets a DataStreams checkpoint
+        /// </summary>
+        /// <param name="manager">The <see cref="DataStreamsManager"/> to use</param>
+        /// <param name="edgeTags">The edge tags for this checkpoint. NOTE: These MUST be sorted alphabetically</param>
+        internal void SetCheckpoint(DataStreamsManager manager, string[] edgeTags)
+        {
+            PathwayContext = manager.SetCheckpoint(PathwayContext, edgeTags);
+        }
+
+        /// <summary>
+        /// Merges two DataStreams <see cref="PathwayContext"/>
+        /// Should be called when a pathway context is extracted from an incoming span
+        /// Used to merge contexts in a "fan in" scenario.
+        /// </summary>
+        internal void MergePathwayContext(PathwayContext? pathwayContext)
+        {
+            if (pathwayContext is null)
+            {
+                return;
+            }
+
+            if (PathwayContext is null)
+            {
+                PathwayContext = pathwayContext;
+                return;
+            }
+
+            // This is purposely not thread safe
+            // The code randomly chooses between the two PathwayContexts.
+            // If there is a race, then that's okay
+            // Randomly select between keeping the current context (0) or replacing (1)
+            if (ThreadSafeRandom.Next(2) == 1)
+            {
+                PathwayContext = pathwayContext;
+            }
+        }
+
         internal static class Keys
         {
             private const string Prefix = "__DistributedKey-";
+
             public const string TraceId = $"{Prefix}TraceId";
             public const string ParentId = $"{Prefix}ParentId";
             public const string SamplingPriority = $"{Prefix}SamplingPriority";
             public const string Origin = $"{Prefix}Origin";
             public const string RawTraceId = $"{Prefix}RawTraceId";
             public const string RawSpanId = $"{Prefix}RawSpanId";
+            public const string PropagatedTags = $"{Prefix}PropagatedTags";
         }
     }
 }

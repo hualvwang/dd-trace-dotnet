@@ -6,13 +6,21 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using Datadog.Trace.Agent;
+using Datadog.Trace.Agent.DiscoveryService;
 using Datadog.Trace.AppSec;
 using Datadog.Trace.Ci;
 using Datadog.Trace.ClrProfiler.ServerlessInstrumentation;
 using Datadog.Trace.Configuration;
+using Datadog.Trace.Debugger;
+using Datadog.Trace.Debugger.Helpers;
 using Datadog.Trace.DiagnosticListeners;
 using Datadog.Trace.Logging;
+using Datadog.Trace.RemoteConfigurationManagement;
+using Datadog.Trace.RemoteConfigurationManagement.Transport;
 using Datadog.Trace.ServiceFabric;
 
 namespace Datadog.Trace.ClrProfiler
@@ -95,13 +103,24 @@ namespace Datadog.Trace.ClrProfiler
 
             try
             {
+                Log.Debug("Initializing TraceAttribute instrumentation.");
+                var payload = InstrumentationDefinitions.GetTraceAttributeDefinitions();
+                NativeMethods.AddTraceAttributeInstrumentation(payload.DefinitionsId, payload.AssemblyName, payload.TypeName);
+                Log.Information("TraceAttribute instrumentation enabled with Assembly={AssemblyName} and Type={TypeName}.", payload.AssemblyName, payload.TypeName);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, ex.Message);
+            }
+
+            InitializeNoNativeParts();
+            var tracer = Tracer.Instance;
+
+            try
+            {
                 Log.Debug("Sending CallTarget integration definitions to native library.");
                 var payload = InstrumentationDefinitions.GetAllDefinitions();
                 NativeMethods.InitializeProfiler(payload.DefinitionsId, payload.Definitions);
-                foreach (var def in payload.Definitions)
-                {
-                    def.Dispose();
-                }
 
                 Log.Information<int>("The profiler has been initialized with {count} definitions.", payload.Definitions.Length);
             }
@@ -124,10 +143,6 @@ namespace Datadog.Trace.ClrProfiler
                 Log.Debug("Sending CallTarget derived integration definitions to native library.");
                 var payload = InstrumentationDefinitions.GetDerivedDefinitions();
                 NativeMethods.AddDerivedInstrumentations(payload.DefinitionsId, payload.Definitions);
-                foreach (var def in payload.Definitions)
-                {
-                    def.Dispose();
-                }
 
                 Log.Information<int>("The profiler has been initialized with {count} derived definitions.", payload.Definitions.Length);
             }
@@ -138,18 +153,16 @@ namespace Datadog.Trace.ClrProfiler
 
             try
             {
-                Log.Debug("Initializing TraceAttribute instrumentation.");
-                var payload = InstrumentationDefinitions.GetTraceAttributeDefinitions();
-                NativeMethods.AddTraceAttributeInstrumentation(payload.DefinitionsId, payload.AssemblyName, payload.TypeName);
-                Log.Information("TraceAttribute instrumentation enabled with Assembly={AssemblyName} and Type={TypeName}.", payload.AssemblyName, payload.TypeName);
+                Log.Debug("Sending CallTarget interface integration definitions to native library.");
+                var payload = InstrumentationDefinitions.GetInterfaceDefinitions();
+                NativeMethods.AddInterfaceInstrumentations(payload.DefinitionsId, payload.Definitions);
+
+                Log.Information<int>("The profiler has been initialized with {count} interface definitions.", payload.Definitions.Length);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, ex.Message);
             }
-
-            InitializeNoNativeParts();
-            var tracer = Tracer.Instance;
 
             if (tracer is null)
             {
@@ -157,6 +170,15 @@ namespace Datadog.Trace.ClrProfiler
             }
             else
             {
+                try
+                {
+                    InitRemoteConfigurationManagement(tracer);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, e.Message);
+                }
+
                 try
                 {
                     Log.Debug("Initializing TraceMethods instrumentation.");
@@ -171,7 +193,29 @@ namespace Datadog.Trace.ClrProfiler
                 }
             }
 
+#if NETSTANDARD2_0 || NETCOREAPP3_1
+            try
+            {
+                // On .NET Core 2.0-3.0 we see an occasional hang caused by OpenSSL being loaded
+                // while the app is shutting down, which results in flaky tests due to the short-
+                // lived nature of our apps. This appears to be a bug in the runtime (although
+                // we haven't yet confirmed that). Calling the `ToUuid()` method uses an MD5
+                // hash which calls into the native library, triggering the load.
+                _ = string.Empty.ToUUID();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error triggering eager OpenSSL load");
+            }
+#endif
+            LifetimeManager.Instance.AddShutdownTask(RunShutdown);
+
             Log.Debug("Initialization finished.");
+        }
+
+        private static void RunShutdown()
+        {
+            InstrumentationDefinitions.Dispose();
         }
 
         internal static void InitializeNoNativeParts()
@@ -229,7 +273,7 @@ namespace Datadog.Trace.ClrProfiler
 #if !NETFRAMEWORK
             try
             {
-                if (GlobalSettings.Source.DiagnosticSourceEnabled)
+                if (GlobalSettings.Instance.DiagnosticSourceEnabled)
                 {
                     // check if DiagnosticSource is available before trying to use it
                     var type = Type.GetType("System.Diagnostics.DiagnosticSource, System.Diagnostics.DiagnosticSource", throwOnError: false);
@@ -296,7 +340,7 @@ namespace Datadog.Trace.ClrProfiler
         {
             var observers = new List<DiagnosticObserver>();
 
-            if (!PlatformHelpers.AzureAppServices.Metadata.IsFunctionsApp)
+            if (Tracer.Instance.Settings.AzureAppServiceMetadata?.IsFunctionsApp is not true)
             {
                 // Not adding the `AspNetCoreDiagnosticObserver` is particularly important for Azure Functions.
                 // The AspNetCoreDiagnosticObserver will be loaded in a separate Assembly Load Context, breaking the connection of AsyncLocal
@@ -309,5 +353,81 @@ namespace Datadog.Trace.ClrProfiler
             DiagnosticManager.Instance = diagnosticManager;
         }
 #endif
+
+        private static void InitRemoteConfigurationManagement(Tracer tracer)
+        {
+            var serviceName = tracer.Settings.ServiceName ?? tracer.DefaultServiceName;
+            var discoveryService = tracer.TracerManager.DiscoveryService;
+
+            Task.Run(
+                async () =>
+                {
+                    // TODO: RCM and LiveDebugger should be initialized in TracerManagerFactory so they can respond
+                    // to changes in ExporterSettings etc.
+                    var isDiscoverySuccessful = await WaitForDiscoveryService(discoveryService).ConfigureAwait(false);
+                    if (isDiscoverySuccessful)
+                    {
+                        var rcmSettings = RemoteConfigurationSettings.FromDefaultSource();
+                        var rcmApi = RemoteConfigurationApiFactory.Create(tracer.Settings.Exporter, rcmSettings, discoveryService);
+
+                        var configurationManager = RemoteConfigurationManager.Create(discoveryService, rcmApi, rcmSettings, serviceName, tracer.Settings.Environment, tracer.Settings.ServiceVersion);
+                        // see comment above
+                        configurationManager.RegisterProduct(AsmRemoteConfigurationProducts.AsmFeaturesProduct);
+                        configurationManager.RegisterProduct(AsmRemoteConfigurationProducts.AsmDataProduct);
+                        configurationManager.RegisterProduct(AsmRemoteConfigurationProducts.AsmDDProduct); // This should be activated by Security only when Asm is active, but there is no visibility right now
+                        configurationManager.RegisterProduct(AsmRemoteConfigurationProducts.AsmProduct);
+
+                        var liveDebugger = LiveDebuggerFactory.Create(discoveryService, configurationManager, tracer.Settings, serviceName);
+
+                        Log.Debug("Initializing Remote Configuration management.");
+
+                        await Task
+                             .WhenAll(
+                                  InitializeRemoteConfigurationManager(configurationManager),
+                                  InitializeLiveDebugger(liveDebugger))
+                             .ConfigureAwait(false);
+                    }
+                });
+        }
+
+        internal static async Task<bool> WaitForDiscoveryService(IDiscoveryService discoveryService)
+        {
+            var tc = new TaskCompletionSource<bool>();
+            // Stop waiting if we're shutting down
+            LifetimeManager.Instance.AddShutdownTask(() => tc.TrySetResult(false));
+
+            discoveryService.SubscribeToChanges(Callback);
+            return await tc.Task.ConfigureAwait(false);
+
+            void Callback(AgentConfiguration x)
+            {
+                tc.TrySetResult(true);
+                discoveryService.RemoveSubscription(Callback);
+            }
+        }
+
+        internal static async Task InitializeRemoteConfigurationManager(IRemoteConfigurationManager remoteConfigurationManager)
+        {
+            try
+            {
+                await remoteConfigurationManager.StartPollingAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to initialize Remote Configuration management.");
+            }
+        }
+
+        internal static async Task InitializeLiveDebugger(LiveDebugger liveDebugger)
+        {
+            try
+            {
+                await liveDebugger.InitializeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to initialize Live Debugger");
+            }
+        }
     }
 }

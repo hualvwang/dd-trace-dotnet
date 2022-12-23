@@ -6,6 +6,7 @@
 #if NET6_0_OR_GREATER
 #pragma warning disable SA1402 // File may only contain a single class
 #pragma warning disable SA1649 // File name must match first type name
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Datadog.Trace.TestHelpers;
@@ -44,15 +45,18 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests.AspNetCore
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         [MemberData(nameof(Data))]
         public async Task MeetsAllAspNetCoreMvcExpectations(string path, HttpStatusCode statusCode)
         {
+            SetInstrumentationVerification();
+
             await Fixture.TryStartApp(this);
 
             var spans = await Fixture.WaitForSpans(path);
+            ValidateIntegrationSpans(spans, expectedServiceName: "Samples.AspNetCoreMinimalApis", isExternalSpan: false);
 
             var sanitisedPath = VerifyHelper.SanitisePathsForVerify(path);
-
             var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedPath, (int)statusCode);
 
             // Overriding the type name here as we have multiple test classes in the file
@@ -60,6 +64,8 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests.AspNetCore
             await Verifier.Verify(spans, settings)
                           .UseMethodName("_")
                           .UseTypeName(_testName);
+
+            VerifyInstrumentation(Fixture.Process);
         }
     }
 }

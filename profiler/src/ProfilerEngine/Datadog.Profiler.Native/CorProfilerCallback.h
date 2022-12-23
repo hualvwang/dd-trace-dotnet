@@ -8,7 +8,9 @@
 #include "corprof.h"
 // end
 
+#include "AllocationsProvider.h"
 #include "ApplicationStore.h"
+#include "ClrEventsParser.h"
 #include "ExceptionsProvider.h"
 #include "IAppDomainStore.h"
 #include "IClrLifetime.h"
@@ -18,19 +20,24 @@
 #include "IMetricsSender.h"
 #include "WallTimeProvider.h"
 #include "CpuTimeProvider.h"
+#include "SamplesCollector.h"
+#include "GarbageCollectionProvider.h"
+#include "StopTheWorldGCProvider.h"
+#include "IRuntimeInfo.h"
+#include "IEnabledProfilers.h"
 #include "shared/src/native-src/string.h"
 
 #include <atomic>
 #include <memory>
 #include <vector>
 
+class ContentionProvider;
 class IService;
 class IThreadsCpuManager;
 class IManagedThreadList;
 class IStackSamplerLoopManager;
 class IConfiguration;
 class IExporter;
-class SamplesAggregator;
 
 namespace shared {
 class Loader;
@@ -166,7 +173,8 @@ public:
     {
         return _this;
     }
-    static IClrLifetime* GetClrLifetime();
+
+    IClrLifetime* GetClrLifetime() const;
 
 // Access to global services
 // All services are allocated/started and stopped/deleted by the CorProfilerCallback (no need to use unique_ptr/shared_ptr)
@@ -174,15 +182,20 @@ public:
 public:
     IThreadsCpuManager* GetThreadsCpuManager() { return _pThreadsCpuManager; }
     IManagedThreadList* GetManagedThreadList() { return _pManagedThreadList; }
+    IManagedThreadList* GetCodeHotspotThreadList() { return _pCodeHotspotsThreadList; }
     IStackSamplerLoopManager* GetStackSamplerLoopManager() { return _pStackSamplerLoopManager; }
     IApplicationStore* GetApplicationStore() { return _pApplicationStore; }
+    IExporter* GetExporter() { return _pExporter.get(); }
 
 private :
     static CorProfilerCallback* _this;
     std::unique_ptr<IClrLifetime> _pClrLifetime = nullptr;
 
     std::atomic<ULONG> _refCount{0};
-    ICorProfilerInfo4* _pCorProfilerInfo = nullptr;
+    ICorProfilerInfo5* _pCorProfilerInfo = nullptr;
+    ICorProfilerInfo12* _pCorProfilerInfoEvents = nullptr;
+    std::unique_ptr<ClrEventsParser> _pClrEventsParser = nullptr;
+    EVENTPIPE_SESSION _session{0};
     inline static bool _isNet46OrGreater = false;
     std::shared_ptr<IMetricsSender> _metricsSender;
     std::atomic<bool> _isInitialized{false}; // pay attention to keeping ProfilerEngineStatus::IsProfilerEngiveActive in sync with this!
@@ -192,11 +205,16 @@ private :
     IThreadsCpuManager* _pThreadsCpuManager = nullptr;
     IStackSamplerLoopManager* _pStackSamplerLoopManager = nullptr;
     IManagedThreadList* _pManagedThreadList = nullptr;
+    IManagedThreadList* _pCodeHotspotsThreadList = nullptr;
     IApplicationStore* _pApplicationStore = nullptr;
     ExceptionsProvider* _pExceptionsProvider = nullptr;
     WallTimeProvider* _pWallTimeProvider = nullptr;
     CpuTimeProvider* _pCpuTimeProvider = nullptr;
-    SamplesAggregator* _pSamplesAggregator = nullptr;
+    AllocationsProvider* _pAllocationsProvider = nullptr;
+    ContentionProvider* _pContentionProvider = nullptr;
+    SamplesCollector* _pSamplesCollector = nullptr;
+    StopTheWorldGCProvider* _pStopTheWorldProvider = nullptr;
+    GarbageCollectionProvider* _pGarbageCollectionProvider = nullptr;
 
     std::vector<std::unique_ptr<IService>> _services;
 
@@ -204,12 +222,14 @@ private :
     std::unique_ptr<IConfiguration> _pConfiguration = nullptr;
     std::unique_ptr<IAppDomainStore> _pAppDomainStore = nullptr;
     std::unique_ptr<IFrameStore> _pFrameStore = nullptr;
+    std::unique_ptr<IRuntimeInfo> _pRuntimeInfo = nullptr;
+    std::unique_ptr<IEnabledProfilers> _pEnabledProfilers = nullptr;
 
 private:
     static void ConfigureDebugLog();
-    static void InspectRuntimeCompatibility(IUnknown* corProfilerInfoUnk);
+    static void InspectRuntimeCompatibility(IUnknown* corProfilerInfoUnk, uint16_t& runtimeMajor, uint16_t& runtimeMinor);
     static void InspectProcessorInfo();
-    static void InspectRuntimeVersion(ICorProfilerInfo4* pCorProfilerInfo);
+    static void InspectRuntimeVersion(ICorProfilerInfo5* pCorProfilerInfo, USHORT& major, USHORT& minor, COR_PRF_RUNTIME_TYPE& runtimeType);
     static const char* SysInfoProcessorArchitectureToStr(WORD wProcArch);
 
     void DisposeInternal();

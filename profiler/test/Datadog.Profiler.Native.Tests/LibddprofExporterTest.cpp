@@ -4,10 +4,12 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include "EnabledProfilers.h"
 #include "LibddprofExporter.h"
 #include "OpSysTools.h"
 
 #include "ProfilerMockedInterface.h"
+#include "RuntimeInfoHelper.h"
 
 #include "shared/src/native-src/dd_filesystem.hpp"
 
@@ -27,11 +29,22 @@ TEST(LibddprofExporterTest, CheckProfileIsWrittenToDisk)
 {
     auto [configuration, mockConfiguration] = CreateConfiguration();
 
+#ifdef LINUX
     fs::path pprofTempDir = fs::temp_directory_path() / tmpnam(nullptr);
+#else
+    char tempFilename[L_tmpnam];
+    tmpnam_s(tempFilename, sizeof(tempFilename));
+    fs::path pprofTempDir = fs::temp_directory_path() / tempFilename;
+#endif
     EXPECT_CALL(mockConfiguration, GetProfilesOutputDirectory()).Times(1).WillOnce(ReturnRef(pprofTempDir));
 
     std::string agentUrl;
     EXPECT_CALL(mockConfiguration, GetAgentUrl()).Times(1).WillOnce(ReturnRef(agentUrl));
+
+#if _WINDOWS
+    std::string namedPipeName;
+    EXPECT_CALL(mockConfiguration, GetNamedPipeName()).Times(1).WillOnce(ReturnRef(namedPipeName));
+#endif
 
     std::string agentHost = "localhost";
     EXPECT_CALL(mockConfiguration, GetAgentHost()).Times(1).WillOnce(ReturnRef(agentHost));
@@ -56,23 +69,33 @@ TEST(LibddprofExporterTest, CheckProfileIsWrittenToDisk)
     EXPECT_CALL(applicationStore, GetApplicationInfo(firstRid)).WillRepeatedly(Return(firstApplicationInfo));
     EXPECT_CALL(applicationStore, GetApplicationInfo(secondRid)).WillRepeatedly(Return(secondApplicationInfo));
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
 
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), & mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
 
     // Add samples to only one application
+    auto callstack1 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}});
+    auto labels1 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}};
     auto sample1 = CreateSample(firstRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}}),
-                                {{"label1", "value1"}, {"label2", "value2"}},
+                                callstack1,
+                                labels1,
                                 21);
 
+    auto callstack2 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}, {"module", "frame4"}});
+    auto labels2 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}, {"label3", "value3"}};
     auto sample2 = CreateSample(firstRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}, {"module", "frame4"}}),
-                                {{"label1", "value1"}, {"label2", "value2"}, {"label3", "value3"}},
+                                callstack2,
+                                labels2,
                                 42);
 
+    auto callstack3 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}});
+    auto labels3 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}};
     auto sample3 = CreateSample(firstRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}}),
-                                {{"label1", "value1"}},
+                                callstack3,
+                                labels3,
                                 84);
     exporter.Add(sample1);
     exporter.Add(sample2);
@@ -118,11 +141,22 @@ TEST(LibddprofExporterTest, EnsureOnlyProfileWithSamplesIsWrittenToDisk)
     //
     auto [configuration, mockConfiguration] = CreateConfiguration();
 
+#ifdef LINUX
     fs::path pprofTempDir = fs::temp_directory_path() / tmpnam(nullptr);
+#else
+    char tempFilename[L_tmpnam];
+    tmpnam_s(tempFilename, sizeof(tempFilename));
+    fs::path pprofTempDir = fs::temp_directory_path() / tempFilename;
+#endif
     EXPECT_CALL(mockConfiguration, GetProfilesOutputDirectory()).Times(1).WillOnce(ReturnRef(pprofTempDir));
 
     std::string agentUrl;
     EXPECT_CALL(mockConfiguration, GetAgentUrl()).Times(1).WillOnce(ReturnRef(agentUrl));
+
+#if _WINDOWS
+    std::string namedPipeName;
+    EXPECT_CALL(mockConfiguration, GetNamedPipeName()).Times(1).WillOnce(ReturnRef(namedPipeName));
+#endif
 
     std::string agentHost = "localhost";
     EXPECT_CALL(mockConfiguration, GetAgentHost()).Times(1).WillOnce(ReturnRef(agentHost));
@@ -146,16 +180,25 @@ TEST(LibddprofExporterTest, EnsureOnlyProfileWithSamplesIsWrittenToDisk)
     EXPECT_CALL(applicationStore, GetApplicationInfo(firstRid)).WillRepeatedly(Return(firstApplicationInfo));
     EXPECT_CALL(applicationStore, GetApplicationInfo(secondRid)).WillRepeatedly(Return(secondApplicationInfo));
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
 
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), &mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
+
+    auto callstack1 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}});
+    auto labels1 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}};
     auto sample1 = CreateSample(firstRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}}),
-                                {{"label1", "value1"}, {"label2", "value2"}},
+                                callstack1,
+                                labels1,
                                 21);
 
+    auto callstack2 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}, {"module", "frame4"}});
+    auto labels2 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}, {"label3", "value3"}};
     auto sample2 = CreateSample(secondRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}, {"module", "frame4"}}),
-                                {{"label1", "value1"}, {"label2", "value2"}, {"label3", "value3"}},
+                                callstack2,
+                                labels2,
                                 42);
 
     exporter.Add(sample1);
@@ -202,11 +245,22 @@ TEST(LibddprofExporterTest, EnsureTwoPprofFilesAreWrittenToDiskForTwoApplication
 {
     auto [configuration, mockConfiguration] = CreateConfiguration();
 
+#ifdef LINUX
     fs::path pprofTempDir = fs::temp_directory_path() / tmpnam(nullptr);
+#else
+    char tempFilename[L_tmpnam];
+    tmpnam_s(tempFilename, sizeof(tempFilename));
+    fs::path pprofTempDir = fs::temp_directory_path() / tempFilename;
+#endif
     EXPECT_CALL(mockConfiguration, GetProfilesOutputDirectory()).Times(1).WillOnce(ReturnRef(pprofTempDir));
 
     std::string agentUrl;
     EXPECT_CALL(mockConfiguration, GetAgentUrl()).Times(1).WillOnce(ReturnRef(agentUrl));
+
+#if _WINDOWS
+    std::string namedPipeName;
+    EXPECT_CALL(mockConfiguration, GetNamedPipeName()).Times(1).WillOnce(ReturnRef(namedPipeName));
+#endif
 
     std::string agentHost = "localhost";
     EXPECT_CALL(mockConfiguration, GetAgentHost()).Times(1).WillOnce(ReturnRef(agentHost));
@@ -230,16 +284,25 @@ TEST(LibddprofExporterTest, EnsureTwoPprofFilesAreWrittenToDiskForTwoApplication
     EXPECT_CALL(applicationStore, GetApplicationInfo(firstRid)).WillRepeatedly(Return(firstApplicationInfo));
     EXPECT_CALL(applicationStore, GetApplicationInfo(secondRid)).WillRepeatedly(Return(secondApplicationInfo));
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
 
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), &mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
+
+    auto callstack1 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}});
+    auto labels1 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}};
     auto sample1 = CreateSample(firstRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}}),
-                                {{"label1", "value1"}, {"label2", "value2"}},
+                                callstack1,
+                                labels1,
                                 21);
 
+    auto callstack2 = std::vector<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}});
+    auto labels2 = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}};
     auto sample2 = CreateSample(secondRid,
-                                std::initializer_list<std::pair<std::string, std::string>>({{"module", "frame1"}, {"module", "frame2"}, {"module", "frame3"}}),
-                                {{"label1", "value1"}, {"label2", "value2"}},
+                                callstack2,
+                                labels2,
                                 42);
 
     exporter.Add(sample1);
@@ -309,7 +372,12 @@ TEST(LibddprofExporterTest, MustCreateAgentBasedExporterIfAgentUrlIsSet)
 
     auto applicationStore = MockApplicationStore();
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
+
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), & mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
 }
 
 TEST(LibddprofExporterTest, MustCreateAgentBasedExporterIfAgentUrlIsNotSet)
@@ -318,6 +386,12 @@ TEST(LibddprofExporterTest, MustCreateAgentBasedExporterIfAgentUrlIsNotSet)
 
     std::string agentUrl = "";
     EXPECT_CALL(mockConfiguration, GetAgentUrl()).Times(1).WillOnce(ReturnRef(agentUrl));
+
+#if _WINDOWS
+    std::string namedPipeName;
+    EXPECT_CALL(mockConfiguration, GetNamedPipeName()).Times(1).WillOnce(ReturnRef(namedPipeName));
+#endif
+
     std::string agentHost = "localhost";
     EXPECT_CALL(mockConfiguration, GetAgentHost()).Times(1).WillOnce(ReturnRef(agentHost));
     int agentPort = 8126;
@@ -339,7 +413,12 @@ TEST(LibddprofExporterTest, MustCreateAgentBasedExporterIfAgentUrlIsNotSet)
 
     auto applicationStore = MockApplicationStore();
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
+
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), &mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
 }
 
 TEST(LibddprofExporterTest, MustCreateAgentLessExporterIfAgentless)
@@ -368,7 +447,12 @@ TEST(LibddprofExporterTest, MustCreateAgentLessExporterIfAgentless)
 
     auto applicationStore = MockApplicationStore();
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
+
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), &mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
 }
 
 TEST(LibddprofExporterTest, MakeSureNoCrashForReallyLongCallstack)
@@ -380,6 +464,11 @@ TEST(LibddprofExporterTest, MakeSureNoCrashForReallyLongCallstack)
 
     std::string agentUrl;
     EXPECT_CALL(mockConfiguration, GetAgentUrl()).Times(1).WillOnce(ReturnRef(agentUrl));
+
+#if _WINDOWS
+    std::string namedPipeName;
+    EXPECT_CALL(mockConfiguration, GetNamedPipeName()).Times(1).WillOnce(ReturnRef(namedPipeName));
+#endif
 
     std::string agentHost = "localhost";
     EXPECT_CALL(mockConfiguration, GetAgentHost()).Times(1).WillOnce(ReturnRef(agentHost));
@@ -393,13 +482,118 @@ TEST(LibddprofExporterTest, MakeSureNoCrashForReallyLongCallstack)
     EXPECT_CALL(mockConfiguration, GetUserTags()).Times(1).WillOnce(ReturnRef(tags));
 
     auto applicationStore = MockApplicationStore();
+    RuntimeInfoHelper helper(6, 0, false);
+    IRuntimeInfo* runtimeInfo = helper.GetRuntimeInfo();
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+    std::vector<SampleValueType> sampleTypeDefinitions({{"exception", "count"}});
 
-    auto exporter = LibddprofExporter(&mockConfiguration, &applicationStore);
+    auto exporter = LibddprofExporter(std::move(sampleTypeDefinitions), &mockConfiguration, &applicationStore, runtimeInfo, &enabledProfilers);
 
     std::string runtimeId = "MyRid";
-    auto sample1 = CreateSample(runtimeId, CreateCallstack(2048),
-                                {{"label1", "value1"}, {"label2", "value2"}},
-                                42);
+    auto callstack = CreateCallstack(2048);
+    auto labels = std::vector<std::pair<std::string, std::string>>{{"label1", "value1"}, {"label2", "value2"}};
+    auto sample1 = CreateSample(runtimeId, callstack, labels, 42);
 
     EXPECT_NO_THROW(exporter.Add(sample1));
+}
+
+TEST(LibddprofExporterTest, CheckNoEnabledProfilers)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(0).WillOnce(Return(false));
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag.empty());
+}
+
+TEST(LibddprofExporterTest, CheckAllEnabledProfilers)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EnabledProfilers enabledProfilers(configuration.get(), true);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag.find("walltime") != std::string::npos);
+    ASSERT_TRUE(tag.find("cpu") != std::string::npos);
+    ASSERT_TRUE(tag.find("exceptions") != std::string::npos);
+    ASSERT_TRUE(tag.find("allocations") != std::string::npos);
+}
+
+TEST(LibddprofExporterTest, CheckCpuIsEnabled)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(0).WillOnce(Return(false));
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag == "cpu");
+}
+
+TEST(LibddprofExporterTest, CheckWalltimeIsEnabled)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(0).WillOnce(Return(false));
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag == "walltime");
+}
+
+TEST(LibddprofExporterTest, CheckExceptionIsEnabled)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(0).WillOnce(Return(false));
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag == "exceptions");
+}
+
+TEST(LibddprofExporterTest, CheckAllocationIsEnabledWhenEvents)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(1).WillOnce(Return(true));
+    EnabledProfilers enabledProfilers(configuration.get(), true);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag == "allocations");
+}
+
+TEST(LibddprofExporterTest, CheckAllocationIsDisabledWhenNoEvents)
+{
+    auto [configuration, mockConfiguration] = CreateConfiguration();
+    EXPECT_CALL(mockConfiguration, IsWallTimeProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsCpuProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsExceptionProfilingEnabled()).Times(1).WillOnce(Return(false));
+    EXPECT_CALL(mockConfiguration, IsAllocationProfilingEnabled()).Times(0).WillOnce(Return(true));
+    EnabledProfilers enabledProfilers(configuration.get(), false);
+
+    std::string tag = LibddprofExporter::GetEnabledProfilersTag(&enabledProfilers);
+
+    ASSERT_TRUE(tag.empty());
 }

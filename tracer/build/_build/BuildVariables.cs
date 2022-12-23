@@ -1,52 +1,53 @@
 using System.Collections.Generic;
+using System.IO;
+using Newtonsoft.Json;
 using Nuke.Common;
 using Nuke.Common.IO;
 
-public static class BuildVariables
+partial class Build
 {
-    public static void AddDebuggerEnvironmentVariables(this Dictionary<string, string> envVars, AbsolutePath tracerHomeDirectory)
+    public void AddDebuggerEnvironmentVariables(Dictionary<string, string> envVars)
     {
-        envVars.AddTracerEnvironmentVariables(tracerHomeDirectory);
-        envVars.Add("DD_DEBUGGER_ENABLED", "1");
+        AddTracerEnvironmentVariables(envVars);
+        envVars.Add("DD_DYNAMIC_INSTRUMENTATION_ENABLED", "1");
+        envVars.Add("DD_INTERNAL_DEBUGGER_INSTRUMENT_ALL", "1");
+        envVars.Add("COMPlus_DbgEnableMiniDump", "1");
+        envVars.Add("COMPlus_DbgMiniDumpType", "4");
+        envVars.Add("VSTEST_CONNECTION_TIMEOUT", "200");
     }
 
-    public static void AddContinuousProfilerEnvironmentVariables(this Dictionary<string, string> envVars, AbsolutePath tracerHomeDirectory)
+    public void AddContinuousProfilerEnvironmentVariables(Dictionary<string, string> envVars)
     {
-        envVars.AddTracerEnvironmentVariables(tracerHomeDirectory);
+        AddTracerEnvironmentVariables(envVars);
     }
 
-    public static void AddTracerEnvironmentVariables(this Dictionary<string, string> envVars, AbsolutePath monitoringHomeDirectory)
+    public void AddTracerEnvironmentVariables(Dictionary<string, string> envVars)
     {
         envVars.Add("COR_ENABLE_PROFILING", "1");
         envVars.Add("COR_PROFILER", "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}");
 
-        envVars.Add("COR_PROFILER_PATH_32", monitoringHomeDirectory / "Datadog.AutoInstrumentation.NativeLoader.x86.dll");
-        envVars.Add("COR_PROFILER_PATH_64", monitoringHomeDirectory / "Datadog.AutoInstrumentation.NativeLoader.x64.dll");
-
-        if (EnvironmentInfo.IsWin)
-        {
-            envVars.Add("DD_DOTNET_TRACER_HOME", monitoringHomeDirectory / "tracer");
-        }
-        else
-        {
-            envVars.Add("DD_DOTNET_TRACER_HOME", monitoringHomeDirectory);
-        }
+        envVars.Add("DD_DOTNET_TRACER_HOME", MonitoringHomeDirectory);
 
         envVars.Add("CORECLR_ENABLE_PROFILING", "1");
         envVars.Add("CORECLR_PROFILER", "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}");
 
         if (EnvironmentInfo.IsWin)
         {
-            envVars.Add("CORECLR_PROFILER_PATH_32", monitoringHomeDirectory / "win-x86" / "Datadog.AutoInstrumentation.NativeLoader.x86.dll");
-            envVars.Add("CORECLR_PROFILER_PATH_64", monitoringHomeDirectory / "win-x64" / "Datadog.AutoInstrumentation.NativeLoader.x64.dll");
+            var loaderPath32 = MonitoringHomeDirectory / "win-x86" / $"{FileNames.NativeLoader}.dll";
+            var loaderPath64 = MonitoringHomeDirectory / "win-x64" / $"{FileNames.NativeLoader}.dll";
+            envVars.Add("COR_PROFILER_PATH_32", loaderPath32);
+            envVars.Add("COR_PROFILER_PATH_64", loaderPath64);
+            envVars.Add("CORECLR_PROFILER_PATH_32", loaderPath32);
+            envVars.Add("CORECLR_PROFILER_PATH_64", loaderPath64);
         }
         else
         {
-            envVars.Add("CORECLR_PROFILER_PATH", monitoringHomeDirectory / "Datadog.Trace.ClrProfiler.Native.so");
+            var (arch, ext) = GetUnixArchitectureAndExtension();
+            envVars.Add("CORECLR_PROFILER_PATH", MonitoringHomeDirectory / arch / $"{FileNames.NativeLoader}.{ext}");
         }
     }
 
-    public static void AddExtraEnvVariables(this Dictionary<string, string> envVars, string[] extraEnvVars)
+    public void AddExtraEnvVariables(Dictionary<string, string> envVars, string[] extraEnvVars)
     {
         if (extraEnvVars == null || extraEnvVars.Length == 0)
         {

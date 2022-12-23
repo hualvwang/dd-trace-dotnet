@@ -16,8 +16,8 @@
 class OpSysTools final
 {
 public:
-    static int GetProcId();
-    static int GetThreadId();
+    static int32_t GetProcId();
+    static int32_t GetThreadId();
     // static std::string UnicodeToAnsi(const WCHAR* str);
 
     /// <summary>
@@ -28,9 +28,9 @@ public:
     /// This function will return non-high-precision values or work slowly if a high precision timer
     /// is not available on the system or if <i>InitHighPrecisionTimer()</i> was not called.
     /// </summary>
-    static inline std::int64_t GetHighPrecisionNanoseconds(void);
+    static inline std::int64_t GetHighPrecisionNanoseconds();
 
-    static bool InitHighPrecisionTimer(void);
+    static bool InitHighPrecisionTimer();
 
     static inline bool QueryThreadCycleTime(HANDLE handle, PULONG64 cycleTime);
     static inline HANDLE GetCurrentProcess();
@@ -43,10 +43,36 @@ public:
 
     static void* AlignedMAlloc(size_t alignment, size_t size);
 
-    static void MemoryBarrierProcessWide(void);
+    static void MemoryBarrierProcessWide();
 
     static std::string GetHostname();
     static std::string GetProcessName();
+
+    static bool ParseThreadInfo(std::string line, char& state, int32_t& userTime, int32_t& kernelTime)
+    {
+        // based on https://linux.die.net/man/5/proc
+        // state  = 3rd position  and 'R' for Running
+        // user   = 14th position in clock ticks
+        // kernel = 15th position in clock ticks
+
+        // The thread name is in second position and wrapped by ()
+        // Since the name can contain SPACE and () characters, skip it before scanning the values
+        auto pos = line.find_last_of(")");
+        const char* pEnd = line.c_str() + pos + 1;
+
+#ifdef _WINDOWS
+        bool result = sscanf_s(pEnd, " %c %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %d %d", &state, 1, &userTime, &kernelTime) == 3;
+#else
+        bool result = sscanf(pEnd, " %c %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %d %d", &state, &userTime, &kernelTime) == 3;
+#endif
+
+        return result;
+    }
+
+    static bool IsSafeToStartProfiler(double coresThreshold);
+    static std::int64_t GetHighPrecisionTimestamp();
+
+    static void Sleep(std::chrono::nanoseconds duration);
 
 private:
     static constexpr std::int64_t NanosecondsPerSecond = 1000000000;
@@ -54,7 +80,7 @@ private:
     static std::int64_t s_nanosecondsPerHighPrecisionTimerTick;
     static std::int64_t s_highPrecisionTimerTicksPerNanosecond;
 
-    static std::int64_t GetHighPrecisionNanosecondsFallback(void);
+    static std::int64_t GetHighPrecisionNanosecondsFallback();
 
 #ifdef _WINDOWS
     typedef HRESULT(__stdcall* SetThreadDescriptionDelegate_t)(HANDLE threadHandle, PCWSTR pThreadDescription);
@@ -64,13 +90,21 @@ private:
     static SetThreadDescriptionDelegate_t s_setThreadDescriptionDelegate;
     static GetThreadDescriptionDelegate_t s_getThreadDescriptionDelegate;
 
-    static void InitDelegates_GetSetThreadDescription(void);
-    static SetThreadDescriptionDelegate_t GetDelegate_SetThreadDescription(void);
-    static GetThreadDescriptionDelegate_t GetDelegate_GetThreadDescription(void);
+    static void InitDelegates_GetSetThreadDescription();
+    static SetThreadDescriptionDelegate_t GetDelegate_SetThreadDescription();
+    static GetThreadDescriptionDelegate_t GetDelegate_GetThreadDescription();
 #endif
 };
 
-inline std::int64_t OpSysTools::GetHighPrecisionNanoseconds(void)
+inline std::int64_t OpSysTools::GetHighPrecisionTimestamp()
+{
+    auto now = std::chrono::system_clock::now();
+
+    int64_t totalNanosecs = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+    return static_cast<std::int64_t>(totalNanosecs);
+}
+
+inline std::int64_t OpSysTools::GetHighPrecisionNanoseconds()
 {
 #ifdef _WINDOWS
     if (0 != s_nanosecondsPerHighPrecisionTimerTick || 0 != s_highPrecisionTimerTicksPerNanosecond)

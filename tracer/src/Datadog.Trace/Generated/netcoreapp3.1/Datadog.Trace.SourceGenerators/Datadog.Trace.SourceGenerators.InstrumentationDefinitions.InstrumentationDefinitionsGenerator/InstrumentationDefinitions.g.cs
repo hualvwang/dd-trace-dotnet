@@ -12,29 +12,35 @@ namespace Datadog.Trace.ClrProfiler
     {
         private static IDictionary<InstrumentationCategory, Payload> Instrumentations = new Dictionary<InstrumentationCategory, Payload>();
         private static IDictionary<InstrumentationCategory, Payload> DerivedInstrumentations = new Dictionary<InstrumentationCategory, Payload>();
+        private static IDictionary<InstrumentationCategory, Payload> InterfaceInstrumentations = new Dictionary<InstrumentationCategory, Payload>();
         private static IEnumerable<NativeCallTargetDefinition> InstrumentationsNatives = new List<NativeCallTargetDefinition>();
         private static IEnumerable<NativeCallTargetDefinition> DerivedInstrumentationsNatives = new List<NativeCallTargetDefinition>();
+        private static IEnumerable<NativeCallTargetDefinition> InterfaceInstrumentationsNatives = new List<NativeCallTargetDefinition>();
 
         static InstrumentationDefinitions()
         {
             Payload payload = default;
-            // root types for InstrumentationCategory Tracing
-            payload = new Payload
-            {
-                DefinitionsId = "FFAFA5168C4F4718B40CA8788875C2DA",
-                Definitions = new NativeCallTargetDefinition[]
+                // root types for InstrumentationCategory Tracing
+                payload = new Payload
                 {
+                    DefinitionsId = "FFAFA5168C4F4718B40CA8788875C2DA",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
                 // AdoNet
                new ("System.Data", "System.Data.Common.DbCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
                new ("System.Data", "System.Data.Common.DbCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
                new ("System.Data", "System.Data.Common.DbCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
-               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
-               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
+               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
+               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
 
                 // Aerospike
                new ("AerospikeClient", "Aerospike.Client.AsyncCommand", "ExecuteCommand",  new[] { "System.Void" }, 4, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Aerospike.AsyncCommandIntegration"),
                new ("AerospikeClient", "Aerospike.Client.SyncCommand", "ExecuteCommand",  new[] { "System.Void" }, 4, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Aerospike.SyncCommandIntegration"),
+
+                // AspNetCore
+               new ("Microsoft.AspNetCore.Http", "Microsoft.AspNetCore.Builder.ApplicationBuilder", "Build",  new[] { "Microsoft.AspNetCore.Http.RequestDelegate" }, 3, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.AspNetCoreBlockMiddlewareIntegrationEnd"),
+               new ("Microsoft.AspNetCore.Http", "Microsoft.AspNetCore.Builder.Internal.ApplicationBuilder", "Build",  new[] { "Microsoft.AspNetCore.Http.RequestDelegate" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.AspNetCoreBlockMiddlewareIntegrationEnd"),
 
                 // AwsSdk
                new ("AWSSDK.Core", "Amazon.Runtime.Internal.RuntimePipeline", "InvokeAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "Amazon.Runtime.IExecutionContext" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AWS.SDK.RuntimePipelineInvokeAsyncIntegration"),
@@ -58,7 +64,7 @@ namespace Datadog.Trace.ClrProfiler
 
                 // AzureFunctions
                new ("Microsoft.Azure.WebJobs.Host", "Microsoft.Azure.WebJobs.Host.Executors.FunctionExecutor", "TryExecuteAsync",  new[] { "System.Threading.Tasks.Task`1[Microsoft.Azure.WebJobs.Host.Executors.IDelayedException]", "Microsoft.Azure.WebJobs.Host.Executors.IFunctionInstance", "System.Threading.CancellationToken" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Azure.Functions.AzureFunctionsExecutorTryExecuteAsyncIntegration"),
-               new ("Microsoft.Azure.WebJobs.Script.WebHost", "Microsoft.Azure.WebJobs.Script.WebHost.Middleware.FunctionInvocationMiddleware", "Invoke",  new[] { "System.Threading.Tasks.Task", "Microsoft.AspNetCore.Http.HttpContext" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Azure.Functions.FunctionInvocationMiddlewareInvokeIntegration"),
+               new ("Microsoft.Azure.WebJobs.Script.WebHost", "Microsoft.Azure.WebJobs.Script.WebHost.Middleware.FunctionInvocationMiddleware", "Invoke",  new[] { "System.Threading.Tasks.Task", "Microsoft.AspNetCore.Http.HttpContext" }, 3, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Azure.Functions.FunctionInvocationMiddlewareInvokeIntegration"),
 
                 // CosmosDb
                new ("Microsoft.Azure.Cosmos.Client", "Microsoft.Azure.Cosmos.ContainerCore", "GetItemQueryIterator",  new[] { "Microsoft.Azure.Cosmos.FeedIterator`1<T>", "Microsoft.Azure.Cosmos.QueryDefinition", "System.String", "Microsoft.Azure.Cosmos.QueryRequestOptions" }, 3, 6, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.CosmosDb.ContainerQueryIteratorsIntegrations"),
@@ -113,15 +119,15 @@ namespace Datadog.Trace.ClrProfiler
                new ("Elasticsearch.Net", "Elasticsearch.Net.Transport`1", "RequestAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "Elasticsearch.Net.HttpMethod", "System.String", "System.Threading.CancellationToken", "Elasticsearch.Net.PostData", "Elasticsearch.Net.IRequestParameters" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Elasticsearch.V7.Transport_RequestAsync_Integration"),
 
                 // GraphQL
-               new ("GraphQL", "GraphQL.Execution.ExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 2, 3, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncIntegration"),
-               new ("GraphQL", "GraphQL.Execution.ExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 5, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncV5Integration"),
-               new ("GraphQL", "GraphQL.Execution.SubscriptionExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 2, 3, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncIntegration"),
-               new ("GraphQL", "GraphQL.Execution.SubscriptionExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 5, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncV5Integration"),
-               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "Validate",  new[] { "GraphQL.Validation.IValidationResult", "System.String", "GraphQL.Types.ISchema", "GraphQL.Language.AST.Document", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]", "_", "GraphQL.Inputs" }, 2, 3, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateIntegration"),
-               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "ValidateAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "GraphQL.Types.ISchema", "GraphQL.Language.AST.Document", "GraphQL.Language.AST.VariableDefinitions", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]", "_", "GraphQL.Inputs" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateAsync4Integration"),
-               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "ValidateAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "System.String", "GraphQL.Types.ISchema", "GraphQL.Language.AST.Document", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]", "_", "GraphQL.Inputs" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateAsyncIntegration"),
-               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "ValidateAsyncCoreAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "GraphQL.Validation.ValidationContext", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]" }, 5, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateAsyncV5Integration"),
-               new ("GraphQL.SystemReactive", "GraphQL.Execution.SubscriptionExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncIntegration"),
+               new ("GraphQL", "GraphQL.Execution.ExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 2, 3, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncIntegration"),
+               new ("GraphQL", "GraphQL.Execution.ExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 5, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncV5Integration"),
+               new ("GraphQL", "GraphQL.Execution.SubscriptionExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 2, 3, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncIntegration"),
+               new ("GraphQL", "GraphQL.Execution.SubscriptionExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 5, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncV5Integration"),
+               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "Validate",  new[] { "GraphQL.Validation.IValidationResult", "System.String", "GraphQL.Types.ISchema", "GraphQL.Language.AST.Document", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]", "_", "GraphQL.Inputs" }, 2, 3, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateIntegration"),
+               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "ValidateAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "GraphQL.Types.ISchema", "GraphQL.Language.AST.Document", "GraphQL.Language.AST.VariableDefinitions", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]", "_", "GraphQL.Inputs" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateAsync4Integration"),
+               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "ValidateAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "System.String", "GraphQL.Types.ISchema", "GraphQL.Language.AST.Document", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]", "_", "GraphQL.Inputs" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateAsyncIntegration"),
+               new ("GraphQL", "GraphQL.Validation.DocumentValidator", "ValidateAsyncCoreAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "GraphQL.Validation.ValidationContext", "System.Collections.Generic.IEnumerable`1[GraphQL.Validation.IValidationRule]" }, 5, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateAsyncV5Integration"),
+               new ("GraphQL.SystemReactive", "GraphQL.Execution.SubscriptionExecutionStrategy", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<GraphQL.ExecutionResult>", "GraphQL.Execution.ExecutionContext" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncIntegration"),
 
                 // Grpc
                new ("Grpc.AspNetCore.Server", "Grpc.AspNetCore.Server.Internal.CallHandlers.ServerCallHandlerBase`3", "HandleCallAsync",  new[] { "System.Threading.Tasks.Task", "Microsoft.AspNetCore.Http.HttpContext" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcAspNetCoreServer.ServerCallHandlerBaseHandleCallAsyncIntegration"),
@@ -141,22 +147,29 @@ namespace Datadog.Trace.ClrProfiler
                new ("Grpc.Net.Client", "Grpc.Net.Client.Internal.GrpcCall`2", "FinishCall",  new[] { "System.Void", "System.Net.Http.HttpRequestMessage", "System.Boolean", "System.Diagnostics.Activity", "System.Nullable`1[Grpc.Core.Status]" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcNetClient.GrpcCallFinishCallPre243Integration"),
                new ("Grpc.Net.Client", "Grpc.Net.Client.Internal.GrpcCall`2", "RunCall",  new[] { "System.Threading.Tasks.Task", "System.Net.Http.HttpRequestMessage", "System.Nullable`1[System.TimeSpan]" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcNetClient.GrpcCallRunCallIntegration"),
 
+                // HotChocolate
+               new ("HotChocolate.Execution", "HotChocolate.Execution.Processing.MutationExecutor", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<HotChocolate.Execution.IExecutionResult>", "HotChocolate.Execution.Processing.IOperationContext" }, 11, 0, 0, 11, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.HotChocolate.ExecuteAsyncIntegrationExtra"),
+               new ("HotChocolate.Execution", "HotChocolate.Execution.Processing.QueryExecutor", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<HotChocolate.Execution.IExecutionResult>", "HotChocolate.Execution.Processing.IOperationContext" }, 11, 0, 0, 12, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.HotChocolate.ExecuteAsyncIntegrationExtra"),
+               new ("HotChocolate.Execution", "HotChocolate.Execution.RequestExecutor", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<HotChocolate.Execution.IExecutionResult>", "HotChocolate.Execution.IQueryRequest", "System.Threading.CancellationToken" }, 11, 0, 0, 12, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.HotChocolate.ExecuteAsyncIntegration"),
+
                 // HttpMessageHandler
                new ("System.Net.Http", "System.Net.Http.CurlHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.CurlHandler.CurlHandlerIntegration"),
-               new ("System.Net.Http", "System.Net.Http.HttpClientHandler", "Send",  new[] { "System.Net.Http.HttpResponseMessage", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 5, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.HttpClientHandler.HttpClientHandlerSyncIntegration"),
-               new ("System.Net.Http", "System.Net.Http.HttpClientHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.HttpClientHandler.HttpClientHandlerIntegration"),
-               new ("System.Net.Http", "System.Net.Http.SocketsHttpHandler", "Send",  new[] { "System.Net.Http.HttpResponseMessage", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 5, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.SocketsHttpHandler.SocketsHttpHandlerSyncIntegration"),
-               new ("System.Net.Http", "System.Net.Http.SocketsHttpHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.SocketsHttpHandler.SocketsHttpHandlerIntegration"),
-               new ("System.Net.Http", "System.Net.Http.WinHttpHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.WinHttpHandler.WinHttpHandlerIntegration"),
-               new ("System.Net.Http.WinHttpHandler", "System.Net.Http.WinHttpHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.WinHttpHandler.WinHttpHandlerIntegration"),
+               new ("System.Net.Http", "System.Net.Http.HttpClientHandler", "Send",  new[] { "System.Net.Http.HttpResponseMessage", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 5, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.HttpClientHandler.HttpClientHandlerSyncIntegration"),
+               new ("System.Net.Http", "System.Net.Http.HttpClientHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.HttpClientHandler.HttpClientHandlerIntegration"),
+               new ("System.Net.Http", "System.Net.Http.SocketsHttpHandler", "Send",  new[] { "System.Net.Http.HttpResponseMessage", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 5, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.SocketsHttpHandler.SocketsHttpHandlerSyncIntegration"),
+               new ("System.Net.Http", "System.Net.Http.SocketsHttpHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.SocketsHttpHandler.SocketsHttpHandlerIntegration"),
+               new ("System.Net.Http", "System.Net.Http.WinHttpHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.WinHttpHandler.WinHttpHandlerIntegration"),
+               new ("System.Net.Http.WinHttpHandler", "System.Net.Http.WinHttpHandler", "SendAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.Http.HttpResponseMessage>", "System.Net.Http.HttpRequestMessage", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.WinHttpHandler.WinHttpHandlerIntegration"),
 
                 // ILogger
                new ("Microsoft.Extensions.Logging", "Microsoft.Extensions.Logging.LoggerFactory", ".ctor",  new[] { "System.Void", "System.Collections.Generic.IEnumerable`1[Microsoft.Extensions.Logging.ILoggerProvider]", "Microsoft.Extensions.Options.IOptionsMonitor`1[Microsoft.Extensions.Logging.LoggerFilterOptions]" }, 2, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.DirectSubmission.LoggerFactoryConstructorIntegration"),
                new ("Microsoft.Extensions.Logging", "Microsoft.Extensions.Logging.LoggerFactory", ".ctor",  new[] { "System.Void", "System.Collections.Generic.IEnumerable`1[Microsoft.Extensions.Logging.ILoggerProvider]", "Microsoft.Extensions.Options.IOptionsMonitor`1[Microsoft.Extensions.Logging.LoggerFilterOptions]", "Microsoft.Extensions.Options.IOptions`1[Microsoft.Extensions.Logging.LoggerFactoryOptions]" }, 5, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.DirectSubmission.LoggerFactoryConstructorIntegration"),
-               new ("Microsoft.Extensions.Logging", "Microsoft.Extensions.Logging.LoggerFactoryScopeProvider", "ForEachScope",  new[] { "System.Void", "System.Action`2[System.Object,!!0]", "!!0" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.LoggerFactoryScopeProviderForEachScopeIntegration"),
-               new ("Microsoft.Extensions.Logging.Abstractions", "Microsoft.Extensions.Logging.LoggerExternalScopeProvider", "ForEachScope",  new[] { "System.Void", "System.Action`2[System.Object,!!0]", "!!0" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.LoggerExternalScopeProviderForEachScopeIntegration"),
+               new ("Microsoft.Extensions.Logging", "Microsoft.Extensions.Logging.LoggerFactory", ".ctor",  new[] { "System.Void", "System.Collections.Generic.IEnumerable`1[Microsoft.Extensions.Logging.ILoggerProvider]", "Microsoft.Extensions.Options.IOptionsMonitor`1[Microsoft.Extensions.Logging.LoggerFilterOptions]", "Microsoft.Extensions.Options.IOptions`1[Microsoft.Extensions.Logging.LoggerFactoryOptions]", "Microsoft.Extensions.Logging.IExternalScopeProvider" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.DirectSubmission.LoggerFactoryConstructorNet7Integration"),
+               new ("Microsoft.Extensions.Logging", "Microsoft.Extensions.Logging.LoggerFactoryScopeProvider", "ForEachScope",  new[] { "System.Void", "System.Action`2[System.Object,!!0]", "!!0" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.LoggerFactoryScopeProviderForEachScopeIntegration"),
+               new ("Microsoft.Extensions.Logging.Abstractions", "Microsoft.Extensions.Logging.LoggerExternalScopeProvider", "ForEachScope",  new[] { "System.Void", "System.Action`2[System.Object,!!0]", "!!0" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.LoggerExternalScopeProviderForEachScopeIntegration"),
 
                 // Kafka
+               new ("Confluent.Kafka", "Confluent.Kafka.Consumer`2", ".ctor",  new[] { "System.Void", "Confluent.Kafka.ConsumerBuilder`2[!0,!1]" }, 1, 4, 0, 1, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerConstructorIntegration"),
                new ("Confluent.Kafka", "Confluent.Kafka.Consumer`2", "Close",  new[] { "System.Void" }, 1, 4, 0, 1, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerCloseIntegration"),
                new ("Confluent.Kafka", "Confluent.Kafka.Consumer`2", "Consume",  new[] { "Confluent.Kafka.ConsumeResult`2[!0,!1]", "System.Int32" }, 1, 4, 0, 1, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerConsumeIntegration"),
                new ("Confluent.Kafka", "Confluent.Kafka.Consumer`2", "Dispose",  new[] { "System.Void" }, 1, 4, 0, 1, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerDisposeIntegration"),
@@ -192,7 +205,12 @@ namespace Datadog.Trace.ClrProfiler
                new ("System.Messaging", "System.Messaging.MessageQueue", "SendInternal",  new[] { "System.Void", "System.Object", "System.Messaging.MessageQueueTransaction", "System.Messaging.MessageQueueTransactionType" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Msmq.MessageQueue_SendInternal_Integration"),
 
                 // MsTestV2
+               new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestAssemblyInfo", "RunAssemblyCleanup",  new[] { "System.String" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestAssemblyInfoRunAssemblyCleanupIntegration"),
+               new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestAssemblyInfo", "RunAssemblyInitialize",  new[] { "System.Void", "_" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestAssemblyInfoRunAssemblyInitializeIntegration"),
+               new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestClassInfo", "RunClassCleanup",  new[] { "System.String", "_" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestClassInfoRunClassCleanupIntegration"),
+               new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestClassInfo", "RunClassInitialize",  new[] { "System.Void", "_" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestClassInfoRunClassInitializeIntegration"),
                new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodRunner", "Execute",  new[] { "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel.UnitTestResult[]" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestMethodRunnerExecuteIntegration"),
+               new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodRunner", "ExecuteTest",  new[] { "Microsoft.VisualStudio.TestTools.UnitTesting.TestResult[]", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestMethodRunnerExecuteTestIntegration"),
                new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.UnitTestRunner", "IsTestMethodRunnable",  new[] { "System.Boolean", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel.TestMethod", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.TestMethodInfo", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel.UnitTestResult[]&" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.UnitTestRunnerIsTestMethodRunnableIntegration"),
                new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.UnitTestRunner", "RunCleanup",  new[] { "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.RunCleanupResult" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.UnitTestRunnerRunCleanupIntegration"),
                new ("Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution.UnitTestRunner", "RunSingleTest",  new[] { "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel.UnitTestResult[]", "Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel.TestMethod", "System.Collections.Generic.IDictionary`2[System.String,System.Object]" }, 14, 0, 0, 14, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.UnitTestRunnerRunSingleTestIntegration"),
@@ -234,22 +252,26 @@ namespace Datadog.Trace.ClrProfiler
                new ("NLog", "NLog.LoggerImpl", "Write",  new[] { "System.Void", "System.Type", "NLog.Internal.TargetWithFilterChain", "NLog.LogEventInfo", "NLog.LogFactory" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.NLog.LogsInjection.LoggerImplWriteIntegration"),
 
                 // Npgsql
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteReader",  new[] { "Npgsql.NpgsqlDataReader" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteReader",  new[] { "Npgsql.NpgsqlDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Npgsql.NpgsqlDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteScalar",  new[] { "System.Object" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
-               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteReader",  new[] { "Npgsql.NpgsqlDataReader" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteReader",  new[] { "Npgsql.NpgsqlDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Npgsql.NpgsqlDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteScalar",  new[] { "System.Object" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
+               new ("Npgsql", "Npgsql.NpgsqlCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
 
                 // NUnit
-               new ("nunit.framework", "NUnit.Framework.Api.NUnitTestAssemblyRunner", "WaitForCompletion",  new[] { "System.Boolean", "System.Int32" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitTestAssemblyRunnerWaitForCompletionIntegration"),
                new ("nunit.framework", "NUnit.Framework.Internal.Commands.SkipCommand", "Execute",  new[] { "NUnit.Framework.Internal.TestResult", "NUnit.Framework.Internal.TestExecutionContext" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitSkipCommandExecuteIntegration"),
                new ("nunit.framework", "NUnit.Framework.Internal.Commands.TestMethodCommand", "Execute",  new[] { "NUnit.Framework.Internal.TestResult", "NUnit.Framework.Internal.TestExecutionContext" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitTestMethodCommandExecuteIntegration"),
                new ("nunit.framework", "NUnit.Framework.Internal.Execution.CompositeWorkItem", "SkipChildren",  new[] { "System.Void", "_", "NUnit.Framework.Interfaces.ResultState", "System.String" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitCompositeWorkItemSkipChildrenIntegration"),
+               new ("nunit.framework", "NUnit.Framework.Internal.Execution.WorkItem", "WorkItemComplete",  new[] { "System.Void" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitWorkItemWorkItemCompleteIntegration"),
                new ("NUnit3.TestAdapter", "NUnit.VisualStudio.TestAdapter.NUnitTestAdapter", "Unload",  new[] { "System.Void" }, 3, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitTestAdapterUnloadIntegration"),
+
+                // OpenTelemetry
+               new ("OpenTelemetry.Api", "OpenTelemetry.Trace.Tracer", "StartRootSpan",  new[] { "OpenTelemetry.Trace.TelemetrySpan", "System.String", "OpenTelemetry.Trace.SpanKind", "OpenTelemetry.Trace.SpanAttributes", "System.Collections.Generic.IEnumerable`1[OpenTelemetry.Trace.Link]", "System.DateTimeOffset" }, 1, 0, 0, 1, 0, 0, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.OpenTelemetry.StartRootSpanIntegration"),
+               new ("OpenTelemetry.Api", "OpenTelemetry.Trace.Tracer", "StartSpan",  new[] { "OpenTelemetry.Trace.TelemetrySpan", "System.String", "OpenTelemetry.Trace.SpanKind", "OpenTelemetry.Trace.SpanContext&", "OpenTelemetry.Trace.SpanAttributes", "System.Collections.Generic.IEnumerable`1[OpenTelemetry.Trace.Link]", "System.DateTimeOffset" }, 1, 0, 0, 1, 0, 0, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.OpenTelemetry.StartSpanIntegration"),
 
                 // Oracle
                new ("Oracle.DataAccess", "Oracle.DataAccess.Client.OracleCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 4, 122, 0, 4, 122, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
@@ -268,8 +290,11 @@ namespace Datadog.Trace.ClrProfiler
                new ("Oracle.ManagedDataAccess", "Oracle.ManagedDataAccess.Client.OracleCommand", "ExecuteScalar",  new[] { "System.Object" }, 4, 122, 0, 4, 122, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
                new ("Oracle.ManagedDataAccess", "Oracle.ManagedDataAccess.Client.OracleCommand", "ExecuteScalar",  new[] { "System.Object" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
 
+                // Process
+               new ("System", "System.Diagnostics.Process", "Start",  new[] { "System.Diagnostics.Process" }, 1, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Process.ProcessStartIntegration"),
+               new ("System.Diagnostics.Process", "System.Diagnostics.Process", "Start",  new[] { "System.Diagnostics.Process" }, 1, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Process.ProcessStartIntegration"),
+
                 // RabbitMQ
-               new ("RabbitMQ.Client", "RabbitMQ.Client.Events.EventingBasicConsumer", "HandleBasicDeliver",  new[] { "System.Void", "System.String", "System.UInt64", "System.Boolean", "System.String", "System.String", "RabbitMQ.Client.IBasicProperties", "_" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverIntegration"),
                new ("RabbitMQ.Client", "RabbitMQ.Client.Framing.Impl.Model", "_Private_BasicPublish",  new[] { "System.Void", "System.String", "System.String", "System.Boolean", "RabbitMQ.Client.IBasicProperties", "_" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicPublishIntegration"),
                new ("RabbitMQ.Client", "RabbitMQ.Client.Framing.Impl.Model", "_Private_ExchangeDeclare",  new[] { "System.Void", "System.String", "System.String", "System.Boolean", "System.Boolean", "System.Boolean", "System.Boolean", "System.Boolean", "System.Collections.Generic.IDictionary`2[System.String,System.Object]" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.ExchangeDeclareIntegration"),
                new ("RabbitMQ.Client", "RabbitMQ.Client.Framing.Impl.Model", "_Private_QueueDeclare",  new[] { "System.Void", "System.String", "System.Boolean", "System.Boolean", "System.Boolean", "System.Boolean", "System.Boolean", "System.Collections.Generic.IDictionary`2[System.String,System.Object]" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.QueueDeclareIntegration"),
@@ -283,20 +308,21 @@ namespace Datadog.Trace.ClrProfiler
 
                 // ServiceStackRedis
                new ("ServiceStack.Redis", "ServiceStack.Redis.RedisNativeClient", "SendReceive",  new[] { "T", "System.Byte[][]", "System.Func`1[!!0]", "System.Action`1[System.Func`1[!!0]]", "System.Boolean" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.ServiceStack.RedisNativeClientSendReceiveIntegration"),
+               new ("ServiceStack.Redis", "ServiceStack.Redis.RedisNativeClient", "SendReceive",  new[] { "T", "System.Byte[][]", "System.Func`1[!!0]", "System.Action`1[System.Func`1[!!0]]", "System.Boolean", "System.String" }, 6, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.ServiceStack.RedisNativeClientSendReceiveIntegration_6_2_0"),
 
                 // SqlClient
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReader",  new[] { "Microsoft.Data.SqlClient.SqlDataReader" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReader",  new[] { "Microsoft.Data.SqlClient.SqlDataReader", "System.Data.CommandBehavior" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderAsyncIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>", "System.Threading.CancellationToken" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithCancellationAsyncIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>", "System.Data.CommandBehavior" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAsyncIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteScalar",  new[] { "System.Object" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
-               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 1, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteNonQueryAsync",  new[] { "System.Threading.Tasks.Task`1<System.Int32>", "System.Threading.CancellationToken" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReader",  new[] { "Microsoft.Data.SqlClient.SqlDataReader" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReader",  new[] { "Microsoft.Data.SqlClient.SqlDataReader", "System.Data.CommandBehavior" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>", "System.Threading.CancellationToken" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithCancellationAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>", "System.Data.CommandBehavior" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.SqlClient.SqlDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteScalar",  new[] { "System.Object" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
+               new ("Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 1, 0, 0, 5, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
                new ("System.Data", "System.Data.SqlClient.SqlCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
                new ("System.Data", "System.Data.SqlClient.SqlCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
                new ("System.Data", "System.Data.SqlClient.SqlCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
@@ -317,13 +343,13 @@ namespace Datadog.Trace.ClrProfiler
                new ("System.Data.SqlClient", "System.Data.SqlClient.SqlCommand", "ExecuteScalarAsync",  new[] { "System.Threading.Tasks.Task`1<System.Object>", "System.Threading.CancellationToken" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarAsyncIntegration"),
 
                 // Sqlite
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteReader",  new[] { "Microsoft.Data.Sqlite.SqliteDataReader" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderIntegration"),
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteReader",  new[] { "Microsoft.Data.Sqlite.SqliteDataReader", "System.Data.CommandBehavior" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.Sqlite.SqliteDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
-               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteScalar",  new[] { "System.Object" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteDbDataReaderAsync",  new[] { "System.Threading.Tasks.Task`1<System.Data.Common.DbDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteReader",  new[] { "Microsoft.Data.Sqlite.SqliteDataReader" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteReader",  new[] { "Microsoft.Data.Sqlite.SqliteDataReader", "System.Data.CommandBehavior" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteReaderAsync",  new[] { "System.Threading.Tasks.Task`1<Microsoft.Data.Sqlite.SqliteDataReader>", "System.Data.CommandBehavior", "System.Threading.CancellationToken" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorAndCancellationAsyncIntegration"),
+               new ("Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.SqliteCommand", "ExecuteScalar",  new[] { "System.Object" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
                new ("System.Data.SQLite", "System.Data.SQLite.SQLiteCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
                new ("System.Data.SQLite", "System.Data.SQLite.SQLiteCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
                new ("System.Data.SQLite", "System.Data.SQLite.SQLiteCommand", "ExecuteNonQuery",  new[] { "System.Int32", "System.Data.CommandBehavior" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryWithBehaviorIntegration"),
@@ -334,17 +360,25 @@ namespace Datadog.Trace.ClrProfiler
 
                 // StackExchangeRedis
                new ("StackExchange.Redis", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteAsyncImpl",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "System.Object", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration"),
+               new ("StackExchange.Redis", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteAsyncImpl",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "System.Object", "StackExchange.Redis.ServerEndPoint", "!!0" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration_2_6_45"),
                new ("StackExchange.Redis", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteSyncImpl",  new[] { "T", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration"),
+               new ("StackExchange.Redis", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteSyncImpl",  new[] { "T", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint", "!!0" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration_2_6_45"),
                new ("StackExchange.Redis", "StackExchange.Redis.RedisBase", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"),
                new ("StackExchange.Redis", "StackExchange.Redis.RedisBase", "ExecuteSync",  new[] { "T", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteSyncIntegration"),
                new ("StackExchange.Redis", "StackExchange.Redis.RedisBatch", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"),
+               new ("StackExchange.Redis", "StackExchange.Redis.RedisBatch", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "!!0", "StackExchange.Redis.ServerEndPoint" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"),
                new ("StackExchange.Redis", "StackExchange.Redis.RedisTransaction", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"),
+               new ("StackExchange.Redis", "StackExchange.Redis.RedisTransaction", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "!!0", "StackExchange.Redis.ServerEndPoint" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"),
                new ("StackExchange.Redis.StrongName", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteAsyncImpl",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "System.Object", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration"),
+               new ("StackExchange.Redis.StrongName", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteAsyncImpl",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "System.Object", "StackExchange.Redis.ServerEndPoint", "!!0" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration_2_6_45"),
                new ("StackExchange.Redis.StrongName", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteSyncImpl",  new[] { "T", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration"),
+               new ("StackExchange.Redis.StrongName", "StackExchange.Redis.ConnectionMultiplexer", "ExecuteSyncImpl",  new[] { "T", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint", "!!0" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration_2_6_45"),
                new ("StackExchange.Redis.StrongName", "StackExchange.Redis.RedisBase", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"),
                new ("StackExchange.Redis.StrongName", "StackExchange.Redis.RedisBase", "ExecuteSync",  new[] { "T", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteSyncIntegration"),
                new ("StackExchange.Redis.StrongName", "StackExchange.Redis.RedisBatch", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"),
+               new ("StackExchange.Redis.StrongName", "StackExchange.Redis.RedisBatch", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "!!0", "StackExchange.Redis.ServerEndPoint" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"),
                new ("StackExchange.Redis.StrongName", "StackExchange.Redis.RedisTransaction", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "StackExchange.Redis.ServerEndPoint" }, 1, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"),
+               new ("StackExchange.Redis.StrongName", "StackExchange.Redis.RedisTransaction", "ExecuteAsync",  new[] { "System.Threading.Tasks.Task`1<T>", "StackExchange.Redis.Message", "StackExchange.Redis.ResultProcessor`1[!!0]", "!!0", "StackExchange.Redis.ServerEndPoint" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"),
 
                 // WebRequest
                new ("System", "System.Net.HttpWebRequest", "BeginGetRequestStream",  new[] { "System.IAsyncResult", "System.AsyncCallback", "System.Object" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_BeginGetRequestStream_Integration"),
@@ -353,47 +387,74 @@ namespace Datadog.Trace.ClrProfiler
                new ("System", "System.Net.HttpWebRequest", "GetRequestStream",  new[] { "System.IO.Stream" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_GetRequestStream_Integration"),
                new ("System", "System.Net.HttpWebRequest", "GetResponse",  new[] { "System.Net.WebResponse" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_GetResponse_Integration"),
                new ("System", "System.Net.WebRequest", "GetResponseAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.WebResponse>" }, 4, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.WebRequest_GetResponseAsync_Integration"),
-               new ("System.Net.Requests", "System.Net.HttpWebRequest", "BeginGetRequestStream",  new[] { "System.IAsyncResult", "System.AsyncCallback", "System.Object" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_BeginGetRequestStream_Integration"),
-               new ("System.Net.Requests", "System.Net.HttpWebRequest", "GetRequestStream",  new[] { "System.IO.Stream" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_GetRequestStream_Integration"),
-               new ("System.Net.Requests", "System.Net.HttpWebRequest", "GetResponse",  new[] { "System.Net.WebResponse" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_GetResponse_Integration"),
-               new ("System.Net.Requests", "System.Net.WebRequest", "GetResponseAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.WebResponse>" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.WebRequest_GetResponseAsync_Integration"),
+               new ("System.Net.Requests", "System.Net.HttpWebRequest", "BeginGetRequestStream",  new[] { "System.IAsyncResult", "System.AsyncCallback", "System.Object" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_BeginGetRequestStream_Integration"),
+               new ("System.Net.Requests", "System.Net.HttpWebRequest", "GetRequestStream",  new[] { "System.IO.Stream" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_GetRequestStream_Integration"),
+               new ("System.Net.Requests", "System.Net.HttpWebRequest", "GetResponse",  new[] { "System.Net.WebResponse" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_GetResponse_Integration"),
+               new ("System.Net.Requests", "System.Net.WebRequest", "GetResponseAsync",  new[] { "System.Threading.Tasks.Task`1<System.Net.WebResponse>" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.WebRequest_GetResponseAsync_Integration"),
 
                 // XUnit
                new ("xunit.execution.desktop", "Xunit.Sdk.TestAssemblyFinished", ".ctor",  new[] { "System.Void", "_", "_", "_", "_", "_", "_" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyFinishedCtorIntegration"),
-               new ("xunit.execution.desktop", "Xunit.Sdk.TestAssemblyRunner`1", "RunTestCollectionAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>", "Xunit.Sdk.IMessageBus", "_", "_", "_" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunTestCollectionAsyncIntegration"),
+               new ("xunit.execution.desktop", "Xunit.Sdk.TestAssemblyRunner`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunAsyncIntegration"),
+               new ("xunit.execution.desktop", "Xunit.Sdk.TestClassRunner`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestClassRunnerRunAsyncIntegration"),
                new ("xunit.execution.desktop", "Xunit.Sdk.TestInvoker`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<System.Decimal>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestInvokerRunAsyncIntegration"),
                new ("xunit.execution.desktop", "Xunit.Sdk.TestOutputHelper", "QueueTestOutput",  new[] { "System.Void", "System.String" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestOutputHelperQueueTestOutputIntegration"),
                new ("xunit.execution.desktop", "Xunit.Sdk.TestRunner`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestRunnerRunAsyncIntegration"),
                new ("xunit.execution.dotnet", "Xunit.Sdk.TestAssemblyFinished", ".ctor",  new[] { "System.Void", "_", "_", "_", "_", "_", "_" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyFinishedCtorIntegration"),
-               new ("xunit.execution.dotnet", "Xunit.Sdk.TestAssemblyRunner`1", "RunTestCollectionAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>", "Xunit.Sdk.IMessageBus", "_", "_", "_" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunTestCollectionAsyncIntegration"),
+               new ("xunit.execution.dotnet", "Xunit.Sdk.TestAssemblyRunner`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunAsyncIntegration"),
+               new ("xunit.execution.dotnet", "Xunit.Sdk.TestClassRunner`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestClassRunnerRunAsyncIntegration"),
                new ("xunit.execution.dotnet", "Xunit.Sdk.TestInvoker`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<System.Decimal>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestInvokerRunAsyncIntegration"),
                new ("xunit.execution.dotnet", "Xunit.Sdk.TestOutputHelper", "QueueTestOutput",  new[] { "System.Void", "System.String" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestOutputHelperQueueTestOutputIntegration"),
                new ("xunit.execution.dotnet", "Xunit.Sdk.TestRunner`1", "RunAsync",  new[] { "System.Threading.Tasks.Task`1<Xunit.Sdk.RunSummary>" }, 2, 2, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestRunnerRunAsyncIntegration"),
-                }
-            };
-            Instrumentations.Add(InstrumentationCategory.Tracing, payload);
-            InstrumentationsNatives = InstrumentationsNatives.Concat(payload.Definitions);
+                    }
+                };
+                Instrumentations.Add(InstrumentationCategory.Tracing, payload);
+                InstrumentationsNatives = InstrumentationsNatives.Concat(payload.Definitions);
                 
-            // root types for InstrumentationCategory AppSec
-            payload = new Payload
-            {
-                DefinitionsId = "8A0651DE92625A7EF3E2BBF32F0D2048",
-                Definitions = new NativeCallTargetDefinition[]
+                // root types for InstrumentationCategory AppSec
+                payload = new Payload
                 {
+                    DefinitionsId = "8A0651DE92625A7EF3E2BBF32F0D2048",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
 
                 // AspNetCore
-               new ("Microsoft.AspNetCore.Mvc.Core", "Microsoft.AspNetCore.Mvc.ModelBinding.DefaultModelBindingContext", "set_Result",  new[] { "System.Void", "Microsoft.AspNetCore.Mvc.ModelBinding.ModelBindingResult" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AspNetCore.DefaultModelBindingContext_SetResult_Integration"),
-                }
-            };
-            Instrumentations.Add(InstrumentationCategory.AppSec, payload);
-            InstrumentationsNatives = InstrumentationsNatives.Concat(payload.Definitions);
+               new ("Microsoft.AspNetCore.Mvc.Core", "Microsoft.AspNetCore.Mvc.ModelBinding.DefaultModelBindingContext", "set_Result",  new[] { "System.Void", "Microsoft.AspNetCore.Mvc.ModelBinding.ModelBindingResult" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.DefaultModelBindingContext_SetResult_Integration"),
+                    }
+                };
+                Instrumentations.Add(InstrumentationCategory.AppSec, payload);
+                InstrumentationsNatives = InstrumentationsNatives.Concat(payload.Definitions);
                 
-            // derived types for InstrumentationCategory Tracing
-            payload = new Payload
-            {
-                DefinitionsId = "61BF627FA9B5477F85595A9F0D68B29C",
-                Definitions = new NativeCallTargetDefinition[]
+                // root types for InstrumentationCategory Iast
+                payload = new Payload
                 {
+                    DefinitionsId = "18ADCFBDCCF14141B3473C7D3B1E9494",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
+
+                // HashAlgorithm
+               new ("System.Security.Cryptography", "System.Security.Cryptography.HashAlgorithm", "ComputeHash",  new[] { "System.Byte[]", "System.Byte[]", "System.Int32", "System.Int32" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegration"),
+               new ("System.Security.Cryptography", "System.Security.Cryptography.HashAlgorithm", "ComputeHash",  new[] { "System.Byte[]", "System.IO.Stream" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"),
+               new ("System.Security.Cryptography", "System.Security.Cryptography.HashAlgorithm", "ComputeHash",  new[] { "System.Byte[]", "System.Byte[]" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"),
+               new ("System.Security.Cryptography", "System.Security.Cryptography.HashAlgorithm", "ComputeHashAsync",  new[] { "System.Threading.Tasks.Task", "System.IO.Stream", "System.Threading.CancellationToken" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationTer"),
+               new ("System.Security.Cryptography.Primitives", "System.Security.Cryptography.HashAlgorithm", "ComputeHash",  new[] { "System.Byte[]", "System.Byte[]", "System.Int32", "System.Int32" }, 1, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegration"),
+               new ("System.Security.Cryptography.Primitives", "System.Security.Cryptography.HashAlgorithm", "ComputeHash",  new[] { "System.Byte[]", "System.IO.Stream" }, 1, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"),
+               new ("System.Security.Cryptography.Primitives", "System.Security.Cryptography.HashAlgorithm", "ComputeHash",  new[] { "System.Byte[]", "System.Byte[]" }, 1, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"),
+               new ("System.Security.Cryptography.Primitives", "System.Security.Cryptography.HashAlgorithm", "ComputeHashAsync",  new[] { "System.Threading.Tasks.Task", "System.IO.Stream", "System.Threading.CancellationToken" }, 1, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationTer"),
+
+                // SymmetricAlgorithm
+               new ("System.Security.Cryptography", "System.Security.Cryptography.SymmetricAlgorithm", ".ctor",  new[] { "System.Void" }, 7, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.CryptographyAlgorithm.SymmetricAlgorithmIntegration"),
+               new ("System.Security.Cryptography.Primitives", "System.Security.Cryptography.SymmetricAlgorithm", ".ctor",  new[] { "System.Void" }, 1, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.CryptographyAlgorithm.SymmetricAlgorithmIntegration"),
+                    }
+                };
+                Instrumentations.Add(InstrumentationCategory.Iast, payload);
+                InstrumentationsNatives = InstrumentationsNatives.Concat(payload.Definitions);
+                
+                // derived types for InstrumentationCategory Tracing
+                payload = new Payload
+                {
+                    DefinitionsId = "61BF627FA9B5477F85595A9F0D68B29C",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
                 // AdoNet
                new ("netstandard", "System.Data.Common.DbCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
                new ("netstandard", "System.Data.Common.DbCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 2, 0, 0, 2, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
@@ -401,28 +462,82 @@ namespace Datadog.Trace.ClrProfiler
                new ("System.Data", "System.Data.Common.DbCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 2, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
                new ("System.Data", "System.Data.Common.DbCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 2, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
                new ("System.Data", "System.Data.Common.DbCommand", "ExecuteScalar",  new[] { "System.Object" }, 2, 0, 0, 4, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
-               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
-               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
-               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteScalar",  new[] { "System.Object" }, 4, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
-                }
-            };
-            DerivedInstrumentations.Add(InstrumentationCategory.Tracing, payload);
-            DerivedInstrumentationsNatives = DerivedInstrumentationsNatives.Concat(payload.Definitions);
-            
-            // derived types for InstrumentationCategory AppSec
-            payload = new Payload
-            {
-                DefinitionsId = "02043D9EE45819725C08A53565EFDB14",
-                Definitions = new NativeCallTargetDefinition[]
+               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteDbDataReader",  new[] { "System.Data.Common.DbDataReader", "System.Data.CommandBehavior" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteReaderWithBehaviorIntegration"),
+               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteNonQuery",  new[] { "System.Int32" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteNonQueryIntegration"),
+               new ("System.Data.Common", "System.Data.Common.DbCommand", "ExecuteScalar",  new[] { "System.Object" }, 4, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AdoNet.CommandExecuteScalarIntegration"),
+
+                // NUnit
+               new ("nunit.framework", "NUnit.Framework.Internal.Execution.WorkItem", "PerformWork",  new[] { "System.Void" }, 3, 0, 0, 3, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitWorkItemPerformWorkIntegration"),
+
+                // RabbitMQ
+               new ("RabbitMQ.Client", "RabbitMQ.Client.AsyncDefaultBasicConsumer", "HandleBasicDeliver",  new[] { "System.Threading.Tasks.Task", "System.String", "System.UInt64", "System.Boolean", "System.String", "System.String", "RabbitMQ.Client.IBasicProperties", "_" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverAsyncIntegration"),
+               new ("RabbitMQ.Client", "RabbitMQ.Client.DefaultBasicConsumer", "HandleBasicDeliver",  new[] { "System.Void", "System.String", "System.UInt64", "System.Boolean", "System.String", "System.String", "RabbitMQ.Client.IBasicProperties", "_" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverIntegration"),
+                    }
+                };
+                DerivedInstrumentations.Add(InstrumentationCategory.Tracing, payload);
+                DerivedInstrumentationsNatives = DerivedInstrumentationsNatives.Concat(payload.Definitions);
+                
+                // derived types for InstrumentationCategory AppSec
+                payload = new Payload
                 {
+                    DefinitionsId = "02043D9EE45819725C08A53565EFDB14",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
 
                 // AspNetCore
-               new ("Microsoft.AspNetCore.Mvc.Core", "Microsoft.AspNetCore.Mvc.ModelBinding.DefaultModelBindingContext", "set_Result",  new[] { "System.Void", "Microsoft.AspNetCore.Mvc.ModelBinding.ModelBindingResult" }, 2, 0, 0, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AspNetCore.DefaultModelBindingContext_SetResult_Integration"),
-                }
-            };
-            DerivedInstrumentations.Add(InstrumentationCategory.AppSec, payload);
-            DerivedInstrumentationsNatives = DerivedInstrumentationsNatives.Concat(payload.Definitions);
-            
+               new ("Microsoft.AspNetCore.Mvc.Core", "Microsoft.AspNetCore.Mvc.ModelBinding.DefaultModelBindingContext", "set_Result",  new[] { "System.Void", "Microsoft.AspNetCore.Mvc.ModelBinding.ModelBindingResult" }, 2, 0, 0, 7, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.DefaultModelBindingContext_SetResult_Integration"),
+                    }
+                };
+                DerivedInstrumentations.Add(InstrumentationCategory.AppSec, payload);
+                DerivedInstrumentationsNatives = DerivedInstrumentationsNatives.Concat(payload.Definitions);
+                
+                // derived types for InstrumentationCategory Iast
+                payload = new Payload
+                {
+                    DefinitionsId = "0C21F56FE62D49D78DF30D714F869815",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
+                    }
+                };
+                DerivedInstrumentations.Add(InstrumentationCategory.Iast, payload);
+                DerivedInstrumentationsNatives = DerivedInstrumentationsNatives.Concat(payload.Definitions);
+                
+                // interface types for InstrumentationCategory Tracing
+                payload = new Payload
+                {
+                    DefinitionsId = "6410E14A2A2343BABBB45940190E1C3F",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
+                // RabbitMQ
+               new ("RabbitMQ.Client", "RabbitMQ.Client.IAsyncBasicConsumer", "HandleBasicDeliver",  new[] { "System.Threading.Tasks.Task", "System.String", "System.UInt64", "System.Boolean", "System.String", "System.String", "RabbitMQ.Client.IBasicProperties", "_" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverAsyncIntegration"),
+               new ("RabbitMQ.Client", "RabbitMQ.Client.IBasicConsumer", "HandleBasicDeliver",  new[] { "System.Void", "System.String", "System.UInt64", "System.Boolean", "System.String", "System.String", "RabbitMQ.Client.IBasicProperties", "_" }, 3, 6, 9, 6, 65535, 65535, assemblyFullName, "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverIntegration"),
+                    }
+                };
+                InterfaceInstrumentations.Add(InstrumentationCategory.Tracing, payload);
+                InterfaceInstrumentationsNatives = InterfaceInstrumentationsNatives.Concat(payload.Definitions);
+                
+                // interface types for InstrumentationCategory AppSec
+                payload = new Payload
+                {
+                    DefinitionsId = "ED012C3038C94D4FBE65900C7C29DD16",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
+                    }
+                };
+                InterfaceInstrumentations.Add(InstrumentationCategory.AppSec, payload);
+                InterfaceInstrumentationsNatives = InterfaceInstrumentationsNatives.Concat(payload.Definitions);
+                
+                // interface types for InstrumentationCategory Iast
+                payload = new Payload
+                {
+                    DefinitionsId = "2A8E770131E64FCCB0AAC21AE3857E5E",
+                    Definitions = new NativeCallTargetDefinition[]
+                    {
+                    }
+                };
+                InterfaceInstrumentations.Add(InstrumentationCategory.Iast, payload);
+                InterfaceInstrumentationsNatives = InterfaceInstrumentationsNatives.Concat(payload.Definitions);
+                
         }
 
         private static Payload GetDefinitionsArray(InstrumentationCategory instrumentationCategory = InstrumentationCategory.Tracing)
@@ -430,6 +545,9 @@ namespace Datadog.Trace.ClrProfiler
 
         private static Payload GetDerivedDefinitionsArray(InstrumentationCategory instrumentationCategory = InstrumentationCategory.Tracing)
             => DerivedInstrumentations[instrumentationCategory];
+
+        private static Payload GetInterfaceDefinitionsArray(InstrumentationCategory instrumentationCategory = InstrumentationCategory.Tracing)
+            => InterfaceInstrumentations[instrumentationCategory];
 
         internal static Datadog.Trace.Configuration.IntegrationId? GetIntegrationId(
             string? integrationTypeName, System.Type targetType)
@@ -440,8 +558,10 @@ namespace Datadog.Trace.ClrProfiler
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Aerospike.AsyncCommandIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Aerospike.SyncCommandIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.Aerospike,
-                "Datadog.Trace.ClrProfiler.AspNetCore.DefaultModelBindingContext_SetResult_Integration"
-                    or "Datadog.Trace.ClrProfiler.AspNetCore.DefaultModelBindingContext_SetResult_Integration"
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.AspNetCoreBlockMiddlewareIntegrationEnd"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.AspNetCoreBlockMiddlewareIntegrationEnd"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.DefaultModelBindingContext_SetResult_Integration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNetCore.DefaultModelBindingContext_SetResult_Integration"
                     => Datadog.Trace.Configuration.IntegrationId.AspNetCore,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.AWS.SDK.RuntimePipelineInvokeAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.AWS.SDK.RuntimePipelineInvokeSyncIntegration"
@@ -513,15 +633,15 @@ namespace Datadog.Trace.ClrProfiler
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Elasticsearch.V7.Transport_Request_Integration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Elasticsearch.V7.Transport_RequestAsync_Integration"
                     => Datadog.Trace.Configuration.IntegrationId.ElasticsearchNet,
-                "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncV5Integration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncV5Integration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateAsync4Integration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateAsyncIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ValidateAsyncV5Integration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.ExecuteAsyncIntegration"
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncV5Integration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncV5Integration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateAsync4Integration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ValidateAsyncV5Integration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.Net.ExecuteAsyncIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.GraphQL,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcAspNetCoreServer.ServerCallHandlerBaseHandleCallAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcAspNetCoreServer.GrpcProtocolHelpersBuildHttpErrorResponseIntegration"
@@ -540,6 +660,19 @@ namespace Datadog.Trace.ClrProfiler
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcNetClient.GrpcCallFinishCallPre243Integration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Grpc.GrpcDotNet.GrpcNetClient.GrpcCallRunCallIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.Grpc,
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationTer"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationBis"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.HashAlgorithm.HashAlgorithmIntegrationTer"
+                    => Datadog.Trace.Configuration.IntegrationId.HashAlgorithm,
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.HotChocolate.ExecuteAsyncIntegrationExtra"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.HotChocolate.ExecuteAsyncIntegrationExtra"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.GraphQL.HotChocolate.ExecuteAsyncIntegration"
+                    => Datadog.Trace.Configuration.IntegrationId.HotChocolate,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.CurlHandler.CurlHandlerIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.HttpClientHandler.HttpClientHandlerSyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.HttpClient.HttpClientHandler.HttpClientHandlerIntegration"
@@ -550,10 +683,12 @@ namespace Datadog.Trace.ClrProfiler
                     => Datadog.Trace.Configuration.IntegrationId.HttpMessageHandler,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.DirectSubmission.LoggerFactoryConstructorIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.DirectSubmission.LoggerFactoryConstructorIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.DirectSubmission.LoggerFactoryConstructorNet7Integration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.LoggerFactoryScopeProviderForEachScopeIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.ILogger.LoggerExternalScopeProviderForEachScopeIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.ILogger,
-                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerCloseIntegration"
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerConstructorIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerCloseIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerConsumeIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerDisposeIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka.KafkaConsumerUnsubscribeIntegration"
@@ -584,7 +719,12 @@ namespace Datadog.Trace.ClrProfiler
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Msmq.MessageQueue_ReceiveCurrent_Integration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Msmq.MessageQueue_SendInternal_Integration"
                     => Datadog.Trace.Configuration.IntegrationId.Msmq,
-                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestMethodRunnerExecuteIntegration"
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestAssemblyInfoRunAssemblyCleanupIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestAssemblyInfoRunAssemblyInitializeIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestClassInfoRunClassCleanupIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestClassInfoRunClassInitializeIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestMethodRunnerExecuteIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.TestMethodRunnerExecuteTestIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.UnitTestRunnerIsTestMethodRunnableIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.UnitTestRunnerRunCleanupIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.MsTestV2.UnitTestRunnerRunSingleTestIntegration"
@@ -594,16 +734,26 @@ namespace Datadog.Trace.ClrProfiler
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.NLog.DirectSubmission.LogFactoryGetConfigurationForLoggerInstrumentation"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.NLog.LogsInjection.LoggerImplWriteIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.NLog,
-                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitTestAssemblyRunnerWaitForCompletionIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitSkipCommandExecuteIntegration"
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitSkipCommandExecuteIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitTestMethodCommandExecuteIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitCompositeWorkItemSkipChildrenIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitWorkItemPerformWorkIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitWorkItemWorkItemCompleteIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.NUnit.NUnitTestAdapterUnloadIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.NUnit,
-                "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverIntegration"
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.OpenTelemetry.StartRootSpanIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.OpenTelemetry.StartSpanIntegration"
+                    => Datadog.Trace.Configuration.IntegrationId.OpenTelemetry,
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.Process.ProcessStartIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Process.ProcessStartIntegration"
+                    => Datadog.Trace.Configuration.IntegrationId.Process,
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicPublishIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.ExchangeDeclareIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.QueueDeclareIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicDeliverIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.BasicGetIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.RabbitMQ.QueueBindIntegration"
                     => Datadog.Trace.Configuration.IntegrationId.RabbitMQ,
@@ -612,20 +762,32 @@ namespace Datadog.Trace.ClrProfiler
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Logging.Serilog.DirectSubmission.LoggerConfigurationInstrumentation"
                     => Datadog.Trace.Configuration.IntegrationId.Serilog,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.ServiceStack.RedisNativeClientSendReceiveIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.ServiceStack.RedisNativeClientSendReceiveIntegration_6_2_0"
                     => Datadog.Trace.Configuration.IntegrationId.ServiceStackRedis,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration_2_6_45"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration_2_6_45"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteSyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteAsyncImplIntegration_2_6_45"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.ConnectionMultiplexerExecuteSyncImplIntegration_2_6_45"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteSyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis.StackExchange.RedisExecuteAsyncIntegration_2_6_48"
                     => Datadog.Trace.Configuration.IntegrationId.StackExchangeRedis,
+                "Datadog.Trace.ClrProfiler.AutoInstrumentation.CryptographyAlgorithm.SymmetricAlgorithmIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.CryptographyAlgorithm.SymmetricAlgorithmIntegration"
+                    => Datadog.Trace.Configuration.IntegrationId.SymmetricAlgorithm,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_BeginGetRequestStream_Integration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_BeginGetResponse_Integration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.HttpWebRequest_EndGetResponse_Integration"
@@ -638,12 +800,14 @@ namespace Datadog.Trace.ClrProfiler
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest.WebRequest_GetResponseAsync_Integration"
                     => Datadog.Trace.Configuration.IntegrationId.WebRequest,
                 "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyFinishedCtorIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunTestCollectionAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestClassRunnerRunAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestInvokerRunAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestOutputHelperQueueTestOutputIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestRunnerRunAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyFinishedCtorIntegration"
-                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunTestCollectionAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestAssemblyRunnerRunAsyncIntegration"
+                    or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestClassRunnerRunAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestInvokerRunAsyncIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestOutputHelperQueueTestOutputIntegration"
                     or "Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing.XUnit.XUnitTestRunnerRunAsyncIntegration"

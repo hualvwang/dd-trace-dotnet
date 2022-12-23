@@ -5,8 +5,10 @@
 
 using System;
 using System.Globalization;
+using System.Security.Cryptography;
 using Datadog.Trace.ExtensionMethods;
 using Datadog.Trace.Logging;
+using Datadog.Trace.Sampling;
 using Datadog.Trace.Tagging;
 using Datadog.Trace.Util;
 using Datadog.Trace.Vendors.Serilog.Events;
@@ -37,12 +39,15 @@ namespace Datadog.Trace
             Context = context;
             StartTime = start ?? Context.TraceContext.UtcNow;
 
-            Log.Debug(
-                "Span started: [s_id: {SpanID}, p_id: {ParentId}, t_id: {TraceId}]",
-                SpanId,
-                Context.ParentId,
-                TraceId);
-        }
+            if (IsLogLevelDebugEnabled)
+            {
+                var tagsType = Tags.GetType();
+
+                Log.Debug(
+                    "Span started: [s_id: {SpanId}, p_id: {ParentId}, t_id: {TraceId}] with Tags: [{Tags}], Tags Type: [{tagsType}])",
+                    new object[] { SpanId, Context.ParentId, TraceId, Tags, tagsType });
+            }
+         }
 
         /// <summary>
         /// Gets or sets operation name
@@ -94,14 +99,7 @@ namespace Datadog.Trace
         /// <para>A distributed operation represented by a trace may be re-entrant (e.g. service-A calls service-B, which calls service-A again).
         /// In such cases, the local process may be concurrently executing multiple local root spans.
         /// This API returns the id of the root span of the non-reentrant trace sub-set.</para></remarks>
-        internal ulong RootSpanId
-        {
-            get
-            {
-                Span localRootSpan = Context.TraceContext?.RootSpan;
-                return (localRootSpan == null || localRootSpan == this) ? SpanId : localRootSpan.SpanId;
-            }
-        }
+        internal ulong RootSpanId => Context.TraceContext?.RootSpan?.SpanId ?? SpanId;
 
         internal ITags Tags { get; set; }
 
@@ -165,39 +163,102 @@ namespace Datadog.Trace
                 return this;
             }
 
-            // some tags have special meaning
+            static void LogMissingTraceContext(string key, string value)
+            {
+                Log.Warning("Ignoring ISpan.SetTag({key}, {value}) because the span is not associated to a TraceContext.", key, value);
+            }
+
+            // since we don't expose a public API for setting trace-level attributes yet,
+            // allow setting them through any span in the trace.
+            // also, some "pseudo-tags" have special meaning, such as "manual.keep" and "_dd.measured".
             switch (key)
             {
-                case Trace.Tags.Origin:
-                    Context.Origin = value;
+                case Trace.Tags.Env:
+                    if (Context.TraceContext == null)
+                    {
+                        LogMissingTraceContext(key, value);
+                        return this;
+                    }
+
+                    Context.TraceContext.Environment = value;
                     break;
+                case Trace.Tags.Version:
+                    if (Context.TraceContext == null)
+                    {
+                        LogMissingTraceContext(key, value);
+                        return this;
+                    }
+
+                    Context.TraceContext.ServiceVersion = value;
+                    break;
+                case Trace.Tags.Origin:
+                    if (Context.TraceContext == null)
+                    {
+                        LogMissingTraceContext(key, value);
+                        return this;
+                    }
+
+                    Context.TraceContext.Origin = value;
+                    break;
+
+                case Trace.Tags.AzureAppServicesSiteName:
+                case Trace.Tags.AzureAppServicesSiteKind:
+                case Trace.Tags.AzureAppServicesSiteType:
+                case Trace.Tags.AzureAppServicesResourceGroup:
+                case Trace.Tags.AzureAppServicesSubscriptionId:
+                case Trace.Tags.AzureAppServicesResourceId:
+                case Trace.Tags.AzureAppServicesInstanceId:
+                case Trace.Tags.AzureAppServicesInstanceName:
+                case Trace.Tags.AzureAppServicesOperatingSystem:
+                case Trace.Tags.AzureAppServicesRuntime:
+                case Trace.Tags.AzureAppServicesExtensionVersion:
+                    Log.Warning("This tag is reserved for Azure App Service tagging. Value will be ignored");
+                    break;
+
                 case Trace.Tags.SamplingPriority:
-                    // allow setting the sampling priority via a tag
+                    if (Context.TraceContext == null)
+                    {
+                        LogMissingTraceContext(key, value);
+                        return this;
+                    }
+
                     // note: this tag allows numeric or string representations of the enum,
                     // (e.g. "AutoKeep" or "1"), but try parsing as `int` first since it's much faster
                     if (int.TryParse(value, out var samplingPriorityInt32))
                     {
-                        Context.TraceContext.SetSamplingPriority(samplingPriorityInt32);
+                        Context.TraceContext.SetSamplingPriority(samplingPriorityInt32, SamplingMechanism.Manual);
                     }
                     else if (Enum.TryParse<SamplingPriority>(value, out var samplingPriorityEnum))
                     {
-                        Context.TraceContext.SetSamplingPriority((int?)samplingPriorityEnum);
+                        Context.TraceContext.SetSamplingPriority((int?)samplingPriorityEnum, SamplingMechanism.Manual);
                     }
 
                     break;
                 case Trace.Tags.ManualKeep:
+                    if (Context.TraceContext == null)
+                    {
+                        LogMissingTraceContext(key, value);
+                        return this;
+                    }
+
                     if (value?.ToBoolean() == true)
                     {
                         // user-friendly tag to set UserKeep priority
-                        Context.TraceContext.SetSamplingPriority(SamplingPriorityValues.UserKeep);
+                        Context.TraceContext.SetSamplingPriority(SamplingPriorityValues.UserKeep, SamplingMechanism.Manual);
                     }
 
                     break;
                 case Trace.Tags.ManualDrop:
+                    if (Context.TraceContext == null)
+                    {
+                        LogMissingTraceContext(key, value);
+                        return this;
+                    }
+
                     if (value?.ToBoolean() == true)
                     {
                         // user-friendly tag to set UserReject priority
-                        Context.TraceContext.SetSamplingPriority(SamplingPriorityValues.UserReject);
+                        Context.TraceContext.SetSamplingPriority(SamplingPriorityValues.UserReject, SamplingMechanism.Manual);
                     }
 
                     break;
@@ -316,19 +377,24 @@ namespace Datadog.Trace
         }
 
         /// <summary>
-        /// Gets the value (or default/null if the key is not a valid tag) of a tag with the key value passed
+        /// Gets the value of the specified tag.
         /// </summary>
         /// <param name="key">The tag's key</param>
-        /// <returns> The value for the tag with the key specified, or null if the tag does not exist</returns>
+        /// <returns>The value for the tag with the specified key, or <c>null</c> if the tag does not exist.</returns>
         internal string GetTag(string key)
         {
+            // since we don't expose a public API for getting trace-level attributes yet,
+            // allow retrieval through any span in the trace
             switch (key)
             {
                 case Trace.Tags.SamplingPriority:
-                    var samplingPriority = Context.TraceContext?.SamplingPriority ?? Context.SamplingPriority;
-                    return samplingPriority?.ToString();
+                    return Context.TraceContext?.SamplingPriority?.ToString();
+                case Trace.Tags.Env:
+                    return Context.TraceContext?.Environment;
+                case Trace.Tags.Version:
+                    return Context.TraceContext?.ServiceVersion;
                 case Trace.Tags.Origin:
-                    return Context.Origin;
+                    return Context.TraceContext?.Origin;
                 default:
                     return Tags.GetTag(key);
             }

@@ -2,7 +2,7 @@
 # Project definition
 # ******************************************************
 
-project("Datadog.Linux.ApiWrapper" VERSION 1.0.0)
+project("Datadog.Linux.ApiWrapper" VERSION 2.21.0)
 
 # ******************************************************
 # Compiler options
@@ -12,19 +12,16 @@ project("Datadog.Linux.ApiWrapper" VERSION 1.0.0)
 add_compile_options(-std=c11 -fPIC) 
 
 
+if (DEFINED ENV{IsAlpine} AND "$ENV{IsAlpine}" MATCHES "true")
+    add_compile_options(-DDD_ALPINE)
+endif()
+
 # ******************************************************
 # Environment detection
 # ******************************************************
 
 SET(API_WRAPPER_BASENAME Datadog.Linux.ApiWrapper)
-SET(API_WRAPPER_SHARED_LIB_NAME ${API_WRAPPER_BASENAME}.${ARCH_POSTFIX})
-
-# Deployment directory
-SET(DEPLOY_DIR ${OUTPUT_BUILD_DIR}/DDProf-Deploy)
-
-# Set Managed Loader folder
-SET(MANAGED_LOADER_DIRECTORY ${OUTPUT_BUILD_DIR}/bin/Release-AnyCPU/shared/src/managed-lib/ManagedLoader/netcoreapp2.0/)
-
+SET(API_WRAPPER_SHARED_LIB_NAME ${API_WRAPPER_BASENAME}.x64)
 
 SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${DEPLOY_DIR})
 SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${DEPLOY_DIR})

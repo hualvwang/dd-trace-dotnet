@@ -1,4 +1,4 @@
-﻿[
+[
   {
     TraceId: Id_1,
     SpanId: Id_2,
@@ -13,6 +13,7 @@
       aspnet_core.route: datarazorpage,
       component: aspnet_core,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.endpoint: datarazorpage,
       http.method: POST,
       http.request.headers.content-length: 34,
@@ -22,8 +23,10 @@
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-length: 36,
       http.response.headers.content-type: text/plain; charset=utf-8,
+      http.route: datarazorpage,
       http.status_code: 200,
       http.url: http://localhost:00000/datarazorpage,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: 127.0.0.1,
       runtime-id: Guid_1,
@@ -31,6 +34,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-942-290","name":"Finds basic MongoDB SQL injection attempts","tags":{"category":"attack_attempt","type":"nosql_injection"}},"rule_matches":[{"operator":"match_regex","operator_value":"(?i:(?:\\[\\$(?:ne|eq|lte?|gte?|n?in|mod|all|size|exists|type|slice|x?or|div|like|between|and)\\]))","parameters":[{"address":"server.request.body","highlight":["[$slice]"],"key_path":["Property"],"value":"[$slice]"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -58,6 +62,7 @@
       aspnet_core.route: datarazorpage,
       component: aspnet_core,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.endpoint: datarazorpage,
       http.method: POST,
       http.request.headers.content-length: 34,
@@ -67,8 +72,10 @@
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-length: 36,
       http.response.headers.content-type: text/plain; charset=utf-8,
+      http.route: datarazorpage,
       http.status_code: 200,
       http.url: http://localhost:00000/datarazorpage,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: 127.0.0.1,
       runtime-id: Guid_1,
@@ -76,6 +83,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-942-290","name":"Finds basic MongoDB SQL injection attempts","tags":{"category":"attack_attempt","type":"nosql_injection"}},"rule_matches":[{"operator":"match_regex","operator_value":"(?i:(?:\\[\\$(?:ne|eq|lte?|gte?|n?in|mod|all|size|exists|type|slice|x?or|div|like|between|and)\\]))","parameters":[{"address":"server.request.body","highlight":["[$slice]"],"key_path":["Property"],"value":"[$slice]"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -103,6 +111,7 @@
       aspnet_core.route: datarazorpage,
       component: aspnet_core,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.endpoint: datarazorpage,
       http.method: POST,
       http.request.headers.content-length: 34,
@@ -112,8 +121,10 @@
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-length: 36,
       http.response.headers.content-type: text/plain; charset=utf-8,
+      http.route: datarazorpage,
       http.status_code: 200,
       http.url: http://localhost:00000/datarazorpage,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: 127.0.0.1,
       runtime-id: Guid_1,
@@ -121,6 +132,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-942-290","name":"Finds basic MongoDB SQL injection attempts","tags":{"category":"attack_attempt","type":"nosql_injection"}},"rule_matches":[{"operator":"match_regex","operator_value":"(?i:(?:\\[\\$(?:ne|eq|lte?|gte?|n?in|mod|all|size|exists|type|slice|x?or|div|like|between|and)\\]))","parameters":[{"address":"server.request.body","highlight":["[$slice]"],"key_path":["Property"],"value":"[$slice]"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -148,6 +160,7 @@
       aspnet_core.route: datarazorpage,
       component: aspnet_core,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.endpoint: datarazorpage,
       http.method: POST,
       http.request.headers.content-length: 34,
@@ -157,8 +170,10 @@
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-length: 36,
       http.response.headers.content-type: text/plain; charset=utf-8,
+      http.route: datarazorpage,
       http.status_code: 200,
       http.url: http://localhost:00000/datarazorpage,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: 127.0.0.1,
       runtime-id: Guid_1,
@@ -166,6 +181,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-942-290","name":"Finds basic MongoDB SQL injection attempts","tags":{"category":"attack_attempt","type":"nosql_injection"}},"rule_matches":[{"operator":"match_regex","operator_value":"(?i:(?:\\[\\$(?:ne|eq|lte?|gte?|n?in|mod|all|size|exists|type|slice|x?or|div|like|between|and)\\]))","parameters":[{"address":"server.request.body","highlight":["[$slice]"],"key_path":["Property"],"value":"[$slice]"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -193,6 +209,7 @@
       aspnet_core.route: datarazorpage,
       component: aspnet_core,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.endpoint: datarazorpage,
       http.method: POST,
       http.request.headers.content-length: 34,
@@ -202,8 +219,10 @@
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-length: 36,
       http.response.headers.content-type: text/plain; charset=utf-8,
+      http.route: datarazorpage,
       http.status_code: 200,
       http.url: http://localhost:00000/datarazorpage,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: 127.0.0.1,
       runtime-id: Guid_1,
@@ -211,6 +230,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-942-290","name":"Finds basic MongoDB SQL injection attempts","tags":{"category":"attack_attempt","type":"nosql_injection"}},"rule_matches":[{"operator":"match_regex","operator_value":"(?i:(?:\\[\\$(?:ne|eq|lte?|gte?|n?in|mod|all|size|exists|type|slice|x?or|div|like|between|and)\\]))","parameters":[{"address":"server.request.body","highlight":["[$slice]"],"key_path":["Property"],"value":"[$slice]"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {

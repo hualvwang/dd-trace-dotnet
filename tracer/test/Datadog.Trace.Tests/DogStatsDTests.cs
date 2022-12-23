@@ -102,7 +102,7 @@ namespace Datadog.Trace.Tests
             IImmutableList<MockSpan> spans;
             var agentPort = TcpPortProvider.GetOpenPort();
 
-            using (var agent = new MockTracerAgent(agentPort))
+            using (var agent = MockTracerAgent.Create(null, agentPort))
             {
                 var settings = new TracerSettings
                 {

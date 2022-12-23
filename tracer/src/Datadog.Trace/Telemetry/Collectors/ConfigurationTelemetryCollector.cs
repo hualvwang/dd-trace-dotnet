@@ -9,6 +9,7 @@ using System.Threading;
 using Datadog.Trace.AppSec;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.ContinuousProfiler;
+using Datadog.Trace.Iast.Settings;
 using Datadog.Trace.PlatformHelpers;
 
 namespace Datadog.Trace.Telemetry
@@ -19,15 +20,14 @@ namespace Datadog.Trace.Telemetry
         private int _hasChangesFlag = 0;
         private volatile CurrentSettings _settings;
         private volatile SecuritySettings _securitySettings;
+        private volatile IastSettings _iastSettings;
         private volatile Profiler _profiler;
         private volatile bool _isTracerInitialized = false;
-        private AzureAppServices _azureApServicesMetadata;
         private HostTelemetryData _hostData = null;
 
         public void RecordTracerSettings(
             ImmutableTracerSettings tracerSettings,
-            string defaultServiceName,
-            AzureAppServices appServicesMetadata)
+            string defaultServiceName)
         {
             // Increment number of times this has been called
             var reconfigureCount = Interlocked.Increment(ref _tracerInstanceCount);
@@ -35,7 +35,7 @@ namespace Datadog.Trace.Telemetry
                 serviceName: defaultServiceName,
                 env: tracerSettings.Environment,
                 tracerVersion: TracerConstants.AssemblyVersion,
-                languageName: "dotnet",
+                languageName: TracerConstants.Language,
                 languageVersion: FrameworkDescription.Instance.ProductVersion)
             {
                 ServiceVersion = tracerSettings.ServiceVersion,
@@ -51,7 +51,6 @@ namespace Datadog.Trace.Telemetry
                 return;
             }
 
-            _azureApServicesMetadata = appServicesMetadata;
             var host = HostMetadata.Instance;
             _hostData = new HostTelemetryData
             {
@@ -71,6 +70,12 @@ namespace Datadog.Trace.Telemetry
         public void RecordSecuritySettings(SecuritySettings securitySettings)
         {
             _securitySettings = securitySettings;
+            SetHasChanges();
+        }
+
+        public void RecordIastSettings(IastSettings iastSettings)
+        {
+            _iastSettings = iastSettings;
             SetHasChanges();
         }
 
@@ -116,13 +121,13 @@ namespace Datadog.Trace.Telemetry
 
             var settings = _settings.Settings;
 
-            var data = new List<TelemetryValue>(_azureApServicesMetadata.IsRelevant ? 21 : 17)
+            var data = new List<TelemetryValue>(settings.IsRunningInAzureAppService ? 31 : 26)
             {
                 new(ConfigTelemetryData.Platform, value: FrameworkDescription.Instance.ProcessArchitecture),
                 new(ConfigTelemetryData.Enabled, value: settings.TraceEnabled),
                 new(ConfigTelemetryData.AgentUrl, value: settings.Exporter.AgentUri.ToString()),
                 new(ConfigTelemetryData.AgentTraceTransport, value: settings.Exporter.TracesTransport.ToString()),
-                new(ConfigTelemetryData.Debug, value: GlobalSettings.Source.DebugEnabled),
+                new(ConfigTelemetryData.Debug, value: GlobalSettings.Instance.DebugEnabled),
 #pragma warning disable CS0618
                 new(ConfigTelemetryData.AnalyticsEnabled, value: settings.AnalyticsEnabled),
 #pragma warning restore CS0618
@@ -134,22 +139,27 @@ namespace Datadog.Trace.Telemetry
                 new(ConfigTelemetryData.RoutetemplateExpansionEnabled, value: settings.ExpandRouteTemplatesEnabled),
                 new(ConfigTelemetryData.PartialflushEnabled, value: settings.Exporter.PartialFlushEnabled),
                 new(ConfigTelemetryData.PartialflushMinspans, value: settings.Exporter.PartialFlushMinSpans),
-                new(ConfigTelemetryData.AasConfigurationError, value: _azureApServicesMetadata.IsUnsafeToTrace),
                 new(ConfigTelemetryData.TracerInstanceCount, value: _tracerInstanceCount),
                 new(ConfigTelemetryData.SecurityEnabled, value: _securitySettings?.Enabled),
+                new(ConfigTelemetryData.IastEnabled, value: _iastSettings?.Enabled),
                 new(ConfigTelemetryData.FullTrustAppDomain, value: AppDomain.CurrentDomain.IsFullyTrusted),
                 new(ConfigTelemetryData.TraceMethods, value: settings.TraceMethods),
-                new(ConfigTelemetryData.ActivityListenerEnabled, value: settings.IsActivityListenerEnabled),
+                new(ConfigTelemetryData.OpenTelemetryEnabled, value: settings.IsActivityListenerEnabled),
                 new(ConfigTelemetryData.ProfilerLoaded, value: _profiler?.Status.IsProfilerReady),
                 new(ConfigTelemetryData.CodeHotspotsEnabled, value: _profiler?.ContextTracker.IsEnabled),
+                new(ConfigTelemetryData.StatsComputationEnabled, value: settings.StatsComputationEnabled),
+                new(ConfigTelemetryData.WcfObfuscationEnabled, value: settings.WcfObfuscationEnabled),
+                new(ConfigTelemetryData.DataStreamsMonitoringEnabled, value: settings.IsDataStreamsMonitoringEnabled),
+                new(ConfigTelemetryData.SpanSamplingRules, value: settings.SpanSamplingRules),
             };
 
-            if (_azureApServicesMetadata.IsRelevant)
+            if (settings.IsRunningInAzureAppService)
             {
+                data.Add(new(ConfigTelemetryData.AasConfigurationError, value: settings.AzureAppServiceMetadata.IsUnsafeToTrace));
                 data.Add(new(name: ConfigTelemetryData.CloudHosting, "Azure"));
-                data.Add(new(name: ConfigTelemetryData.AasSiteExtensionVersion, _azureApServicesMetadata.SiteExtensionVersion));
-                data.Add(new(name: ConfigTelemetryData.AasAppType, _azureApServicesMetadata.SiteType));
-                data.Add(new(name: ConfigTelemetryData.AasFunctionsRuntimeVersion, _azureApServicesMetadata.FunctionsExtensionVersion));
+                data.Add(new(name: ConfigTelemetryData.AasSiteExtensionVersion, settings.AzureAppServiceMetadata.SiteExtensionVersion));
+                data.Add(new(name: ConfigTelemetryData.AasAppType, settings.AzureAppServiceMetadata.SiteType));
+                data.Add(new(name: ConfigTelemetryData.AasFunctionsRuntimeVersion, settings.AzureAppServiceMetadata.FunctionsExtensionVersion));
             }
 
             // data.Configuration["agent_reachable"] = agentError == null;

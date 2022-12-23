@@ -5,11 +5,10 @@
 
 using System;
 using System.Reflection;
+using System.Threading;
 using Datadog.Trace.Ci;
-using Datadog.Trace.Ci.Tags;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
-using Datadog.Trace.PDBs;
 
 namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing
 {
@@ -17,14 +16,14 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing
     {
         internal static readonly IDatadogLogger Log = Ci.CIVisibility.Log;
 
-        internal static void FlushSpans(IntegrationId integrationInfo)
+        internal static void Flush(IntegrationId integrationInfo)
         {
             if (!Tracer.Instance.Settings.IsIntegrationEnabled(integrationInfo))
             {
                 return;
             }
 
-            CIVisibility.FlushSpans();
+            CIVisibility.Flush();
         }
 
         internal static string GetParametersValueData(object paramValue)
@@ -32,6 +31,11 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing
             if (paramValue is null)
             {
                 return "(null)";
+            }
+
+            if (paramValue is string strValue)
+            {
+                return strValue;
             }
 
             if (paramValue is Array pValueArray)
@@ -56,23 +60,59 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Testing
             return paramValue.ToString();
         }
 
-        internal static void DecorateSpanWithSourceAndCodeOwners(Span span, MethodInfo testMethod)
+        internal static bool ShouldSkip(string testSuite, string testName, object[] testMethodArguments, ParameterInfo[] methodParameters)
         {
-            if (MethodSymbolResolver.Instance.TryGetMethodSymbol(testMethod, out var methodSymbol))
+            var currentContext = SynchronizationContext.Current;
+            try
             {
-                span.SetTag(TestTags.SourceFile, CIEnvironmentValues.Instance.MakeRelativePathFromSourceRoot(methodSymbol.File));
-                span.SetMetric(TestTags.SourceStart, methodSymbol.StartLine);
-                span.SetMetric(TestTags.SourceEnd, methodSymbol.EndLine);
-
-                if (CIEnvironmentValues.Instance.CodeOwners is { } codeOwners)
+                SynchronizationContext.SetSynchronizationContext(null);
+                var skippableTests = CIVisibility.GetSkippableTestsFromSuiteAndNameAsync(testSuite, testName).GetAwaiter().GetResult();
+                if (skippableTests.Count > 0)
                 {
-                    var match = codeOwners.Match("/" + CIEnvironmentValues.Instance.MakeRelativePathFromSourceRoot(methodSymbol.File, false));
-                    if (match is not null)
+                    foreach (var skippableTest in skippableTests)
                     {
-                        span.SetTag(TestTags.CodeOwners, match.Value.GetOwnersString());
+                        var parameters = skippableTest.GetParameters();
+
+                        // Same test name and no parameters
+                        if ((parameters?.Arguments is null || parameters.Arguments.Count == 0) &&
+                            (testMethodArguments is null || testMethodArguments.Length == 0))
+                        {
+                            return true;
+                        }
+
+                        if (parameters?.Arguments is not null)
+                        {
+                            var matchSignature = true;
+                            for (var i = 0; i < methodParameters.Length; i++)
+                            {
+                                var targetValue = "(default)";
+                                if (i < testMethodArguments.Length)
+                                {
+                                    targetValue = GetParametersValueData(testMethodArguments[i]);
+                                }
+
+                                if (!parameters.Arguments.TryGetValue(methodParameters[i].Name ?? string.Empty, out var argValue) ||
+                                    (string)argValue != targetValue)
+                                {
+                                    matchSignature = false;
+                                    break;
+                                }
+                            }
+
+                            if (matchSignature)
+                            {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(currentContext);
+            }
+
+            return false;
         }
     }
 }

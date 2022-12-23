@@ -10,9 +10,11 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Datadog.Trace.Agent;
+using Datadog.Trace.Agent.DiscoveryService;
 using Datadog.Trace.AppSec;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.ContinuousProfiler;
+using Datadog.Trace.DataStreamsMonitoring;
 using Datadog.Trace.DogStatsd;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Logging.DirectSubmission;
@@ -22,6 +24,8 @@ using Datadog.Trace.RuntimeMetrics;
 using Datadog.Trace.Sampling;
 using Datadog.Trace.Telemetry;
 using Datadog.Trace.Util;
+using Datadog.Trace.Util.Http;
+using Datadog.Trace.Util.Http.QueryStringObfuscation;
 using Datadog.Trace.Vendors.Newtonsoft.Json;
 using Datadog.Trace.Vendors.StatsdClient;
 
@@ -48,12 +52,14 @@ namespace Datadog.Trace
         public TracerManager(
             ImmutableTracerSettings settings,
             IAgentWriter agentWriter,
-            ISampler sampler,
+            ITraceSampler sampler,
             IScopeManager scopeManager,
             IDogStatsd statsd,
             RuntimeMetricsWriter runtimeMetricsWriter,
             DirectLogSubmissionManager directLogSubmission,
             ITelemetryController telemetry,
+            IDiscoveryService discoveryService,
+            DataStreamsManager dataStreamsManager,
             string defaultServiceName,
             ITraceProcessor[] traceProcessors = null)
         {
@@ -64,10 +70,12 @@ namespace Datadog.Trace
             Statsd = statsd;
             RuntimeMetrics = runtimeMetricsWriter;
             DefaultServiceName = defaultServiceName;
+            DataStreamsManager = dataStreamsManager;
             DirectLogSubmission = directLogSubmission;
             Telemetry = telemetry;
+            DiscoveryService = discoveryService;
             TraceProcessors = traceProcessors ?? Array.Empty<ITraceProcessor>();
-
+            QueryStringManager = new(settings?.QueryStringReportingEnabled ?? true, settings?.ObfuscationQueryStringRegexTimeout ?? 100, settings?.ObfuscationQueryStringRegex ?? TracerSettings.DefaultObfuscationQueryStringRegex);
             var lstTagProcessors = new List<ITagProcessor>(TraceProcessors.Length);
             foreach (var traceProcessor in TraceProcessors)
             {
@@ -113,11 +121,14 @@ namespace Datadog.Trace
         public IScopeManager ScopeManager { get; }
 
         /// <summary>
-        /// Gets the <see cref="ISampler"/> instance used by this <see cref="IDatadogTracer"/> instance.
+        /// Gets the <see cref="ITraceSampler"/> instance used by this <see cref="IDatadogTracer"/> instance.
         /// </summary>
-        public ISampler Sampler { get; }
+        public ITraceSampler Sampler { get; }
 
         public DirectLogSubmissionManager DirectLogSubmission { get; }
+
+        /// Gets the global <see cref="QueryStringManager"/> instance.
+        public QueryStringManager QueryStringManager { get; }
 
         public IDogStatsd Statsd { get; }
 
@@ -126,6 +137,10 @@ namespace Datadog.Trace
         public ITagProcessor[] TagProcessors { get; }
 
         public ITelemetryController Telemetry { get; }
+
+        public IDiscoveryService DiscoveryService { get; }
+
+        public DataStreamsManager DataStreamsManager { get; }
 
         private RuntimeMetricsWriter RuntimeMetrics { get; }
 
@@ -179,6 +194,13 @@ namespace Datadog.Trace
             Telemetry?.Start();
         }
 
+        /// <summary>
+        /// Internal for testing only.
+        /// Run all the shutdown tasks for a standalone <see cref="TracerManager"/> instance,
+        /// stopping the background processes.
+        /// </summary>
+        internal Task ShutdownAsync() => RunShutdownTasksAsync(this, null);
+
         private static async Task CleanUpOldTracerManager(TracerManager oldManager, TracerManager newManager)
         {
             try
@@ -211,10 +233,24 @@ namespace Datadog.Trace
                     await oldManager.Telemetry.DisposeAsync(sendAppClosingTelemetry: false).ConfigureAwait(false);
                 }
 
+                var discoveryReplaced = false;
+                if (oldManager.DiscoveryService != newManager.DiscoveryService && oldManager.DiscoveryService is not null)
+                {
+                    discoveryReplaced = true;
+                    await oldManager.DiscoveryService.DisposeAsync().ConfigureAwait(false);
+                }
+
+                var dataStreamsReplaced = false;
+                if (oldManager.DataStreamsManager != newManager.DataStreamsManager && oldManager.DataStreamsManager is not null)
+                {
+                    dataStreamsReplaced = true;
+                    await oldManager.DataStreamsManager.DisposeAsync().ConfigureAwait(false);
+                }
+
                 Log.Information(
                     exception: null,
-                    "Replaced global instances. AgentWriter: {AgentWriterReplaced}, StatsD: {StatsDReplaced}, RuntimeMetricsWriter: {RuntimeMetricsWriterReplaced}, Telemetry: {TelemetryReplaced}",
-                    new object[] { agentWriterReplaced, statsdReplaced, runtimeMetricsWriterReplaced, telemetryReplaced });
+                    "Replaced global instances. AgentWriter: {AgentWriterReplaced}, StatsD: {StatsDReplaced}, RuntimeMetricsWriter: {RuntimeMetricsWriterReplaced}, Telemetry: {TelemetryReplaced}, Discovery: {DiscoveryReplaced}, DataStreamsManager: {DataStreamsManagerReplaced}",
+                    new object[] { agentWriterReplaced, statsdReplaced, runtimeMetricsWriterReplaced, telemetryReplaced, discoveryReplaced, dataStreamsReplaced });
             }
             catch (Exception ex)
             {
@@ -235,7 +271,7 @@ namespace Datadog.Trace
             // In AAS, the trace agent is deployed alongside the tracer and managed by the tracer
             // Disable this check as it may hit the trace agent before it is ready to receive requests and give false negatives
             // Also disable if tracing is not enabled (as likely to be in an environment where agent is not available)
-            if (instanceSettings.TraceEnabled && !AzureAppServices.Metadata.IsRelevant)
+            if (instanceSettings.TraceEnabled && !instanceSettings.IsRunningInAzureAppService)
             {
                 try
                 {
@@ -298,7 +334,7 @@ namespace Datadog.Trace
                     writer.WriteValue(instanceSettings.Exporter.TracesTransport.ToString());
 
                     writer.WritePropertyName("debug");
-                    writer.WriteValue(GlobalSettings.Source.DebugEnabled);
+                    writer.WriteValue(GlobalSettings.Instance.DebugEnabled);
 
                     writer.WritePropertyName("health_checks_enabled");
                     writer.WriteValue(instanceSettings.TracerMetricsEnabled);
@@ -360,6 +396,18 @@ namespace Datadog.Trace
                     writer.WritePropertyName("routetemplate_expansion_enabled");
                     writer.WriteValue(instanceSettings.ExpandRouteTemplatesEnabled);
 
+                    writer.WritePropertyName("querystring_reporting_enabled");
+                    writer.WriteValue(instanceSettings.QueryStringReportingEnabled);
+
+                    writer.WritePropertyName("obfuscation_querystring_regex_timout");
+                    writer.WriteValue(instanceSettings.ObfuscationQueryStringRegexTimeout);
+
+                    if (string.Compare(instanceSettings.ObfuscationQueryStringRegex, TracerSettings.DefaultObfuscationQueryStringRegex, StringComparison.Ordinal) != 0)
+                    {
+                        writer.WritePropertyName("obfuscation_querystring_regex");
+                        writer.WriteValue(instanceSettings.ObfuscationQueryStringRegex);
+                    }
+
                     writer.WritePropertyName("partialflush_enabled");
                     writer.WriteValue(instanceSettings.Exporter.PartialFlushEnabled);
 
@@ -375,17 +423,19 @@ namespace Datadog.Trace
                     writer.WritePropertyName("agent_error");
                     writer.WriteValue(agentError ?? string.Empty);
 
-                    writer.WritePropertyName("appsec_enabled");
-                    writer.WriteValue(Security.Instance.Settings.Enabled);
+                    WriteAsmInfo(writer);
 
-                    writer.WritePropertyName("appsec_trace_rate_limit");
-                    writer.WriteValue(Security.Instance.Settings.TraceRateLimit);
+                    writer.WritePropertyName("iast_enabled");
+                    writer.WriteValue(Datadog.Trace.Iast.Iast.Instance.Settings.Enabled);
 
-                    writer.WritePropertyName("appsec_rules_file_path");
-                    writer.WriteValue(Security.Instance.Settings.Rules ?? "(default)");
+                    writer.WritePropertyName("iast_deduplication_enabled");
+                    writer.WriteValue(Datadog.Trace.Iast.Iast.Instance.Settings.DeduplicationEnabled);
 
-                    writer.WritePropertyName("appsec_libddwaf_version");
-                    writer.WriteValue(Security.Instance.DdlibWafVersion?.ToString() ?? "(none)");
+                    writer.WritePropertyName("iast_weak_hash_algorithms");
+                    writer.WriteValue(Datadog.Trace.Iast.Iast.Instance.Settings.WeakHashAlgorithms);
+
+                    writer.WritePropertyName("iast_weak_cipher_algorithms");
+                    writer.WriteValue(Datadog.Trace.Iast.Iast.Instance.Settings.WeakCipherAlgorithms);
 
                     writer.WritePropertyName("direct_logs_submission_enabled_integrations");
                     writer.WriteStartArray();
@@ -425,6 +475,18 @@ namespace Datadog.Trace
                     writer.WritePropertyName("code_hotspots_enabled");
                     writer.WriteValue(Profiler.Instance.ContextTracker.IsEnabled);
 
+                    writer.WritePropertyName("wcf_obfuscation_enabled");
+                    writer.WriteValue(instanceSettings.WcfObfuscationEnabled);
+
+                    writer.WritePropertyName("data_streams_enabled");
+                    writer.WriteValue(instanceSettings.IsDataStreamsMonitoringEnabled);
+
+                    writer.WritePropertyName("span_sampling_rules");
+                    writer.WriteValue(instanceSettings.SpanSamplingRules);
+
+                    writer.WritePropertyName("stats_computation_enabled");
+                    writer.WriteValue(instanceSettings.StatsComputationEnabled);
+
                     writer.WriteEndObject();
                     // ReSharper restore MethodHasAsyncOverload
                 }
@@ -434,6 +496,28 @@ namespace Datadog.Trace
             catch (Exception ex)
             {
                 Log.Warning(ex, "DATADOG TRACER DIAGNOSTICS - Error fetching configuration");
+            }
+        }
+
+        private static void WriteAsmInfo(JsonTextWriter writer)
+        {
+            var security = Security.Instance;
+            writer.WritePropertyName("appsec_enabled");
+            writer.WriteValue(security.Settings.Enabled);
+
+            writer.WritePropertyName("appsec_trace_rate_limit");
+            writer.WriteValue(security.Settings.TraceRateLimit);
+
+            writer.WritePropertyName("appsec_rules_file_path");
+            writer.WriteValue(security.Settings.Rules ?? "(default)");
+
+            writer.WritePropertyName("appsec_libddwaf_version");
+            writer.WriteValue(security.DdlibWafVersion ?? "(none)");
+
+            if (security.WafExportsErrorHappened)
+            {
+                writer.WritePropertyName("appsec_libddwaf_export_errors");
+                writer.WriteValue(security.WafExportsErrorHappened);
             }
         }
 
@@ -470,11 +554,13 @@ namespace Datadog.Trace
             _heartbeatTimer = new Timer(HeartbeatCallback, state: null, dueTime: TimeSpan.Zero, period: TimeSpan.FromMinutes(1));
         }
 
-        private static async Task RunShutdownTasksAsync()
+        private static Task RunShutdownTasksAsync() => RunShutdownTasksAsync(_instance, _heartbeatTimer);
+
+        private static async Task RunShutdownTasksAsync(TracerManager instance, Timer heartbeatTimer)
         {
             try
             {
-                if (_heartbeatTimer is { } heartbeatTimer)
+                if (heartbeatTimer is not null)
                 {
                     Log.Debug("Disposing Heartbeat timer.");
 #if NETCOREAPP3_1_OR_GREATER
@@ -484,17 +570,25 @@ namespace Datadog.Trace
 #endif
                 }
 
-                if (_instance is { } instance)
+                if (instance is not null)
                 {
                     Log.Debug("Disposing AgentWriter.");
-                    var flushTracesTask = _instance.AgentWriter?.FlushAndCloseAsync() ?? Task.CompletedTask;
+                    var flushTracesTask = instance.AgentWriter?.FlushAndCloseAsync() ?? Task.CompletedTask;
                     Log.Debug("Disposing DirectLogSubmission.");
-                    var logSubmissionTask = _instance.DirectLogSubmission?.DisposeAsync() ?? Task.CompletedTask;
+                    var logSubmissionTask = instance.DirectLogSubmission?.DisposeAsync() ?? Task.CompletedTask;
                     Log.Debug("Disposing Telemetry.");
-                    var telemetryTask = _instance.Telemetry?.DisposeAsync() ?? Task.CompletedTask;
+                    var telemetryTask = instance.Telemetry?.DisposeAsync() ?? Task.CompletedTask;
+                    Log.Debug("Disposing DiscoveryService.");
+                    var discoveryService = instance.DiscoveryService?.DisposeAsync() ?? Task.CompletedTask;
+                    Log.Debug("Disposing Data streams.");
+                    var dataStreamsTask = instance.DataStreamsManager?.DisposeAsync() ?? Task.CompletedTask;
 
                     Log.Debug("Waiting for disposals.");
-                    await Task.WhenAll(flushTracesTask, logSubmissionTask, telemetryTask).ConfigureAwait(false);
+                    await Task.WhenAll(flushTracesTask, logSubmissionTask, telemetryTask, discoveryService, dataStreamsTask).ConfigureAwait(false);
+
+                    instance.RuntimeMetrics?.Dispose();
+
+                    Log.Debug("Finished waiting for disposals.");
                 }
             }
             catch (Exception ex)

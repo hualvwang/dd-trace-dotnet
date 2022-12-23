@@ -11,13 +11,15 @@ using Xunit.Abstractions;
 
 namespace Datadog.Trace.ClrProfiler.IntegrationTests.AdoNet
 {
-    public class FakeCommandTests : TestHelper
+    public class FakeCommandTests : TracingIntegrationTest
     {
         public FakeCommandTests(ITestOutputHelper output)
             : base("FakeDbCommand", output)
         {
             SetServiceVersion("1.0.0");
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsAdoNet();
 
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
@@ -44,14 +46,11 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests.AdoNet
             int actualSpanCount = spans.Count(s => s.ParentId.HasValue); // Remove unexpected DB spans from the calculation
 
             Assert.Equal(expectedSpanCount, actualSpanCount);
+            ValidateIntegrationSpans(spans, expectedServiceName: expectedServiceName);
 
             foreach (var span in spans)
             {
                 Assert.Equal(expectedOperationName, span.Name);
-                Assert.Equal(expectedServiceName, span.Service);
-                Assert.Equal(SpanTypes.Sql, span.Type);
-                Assert.Equal(dbType, span.Tags[Tags.DbType]);
-                Assert.False(span.Tags?.ContainsKey(Tags.Version), "External service span should not have service version tag.");
             }
 
             telemetry.AssertIntegrationEnabled(IntegrationId.AdoNet);

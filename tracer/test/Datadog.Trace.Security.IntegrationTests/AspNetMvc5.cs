@@ -3,7 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
+using System.Net;
 using System.Threading.Tasks;
 using Datadog.Trace.AppSec;
 using Datadog.Trace.TestHelpers;
@@ -61,6 +62,7 @@ namespace Datadog.Trace.Security.IntegrationTests
         {
             SetSecurity(enableSecurity);
             SetEnvironmentVariable(Configuration.ConfigurationKeys.AppSec.Rules, DefaultRuleFile);
+
             _iisFixture = iisFixture;
             _iisFixture.TryStartIis(this, classicMode ? IisAppType.AspNetClassic : IisAppType.AspNetIntegrated);
             _testName = "Security." + nameof(AspNetMvc5)
@@ -87,6 +89,18 @@ namespace Datadog.Trace.Security.IntegrationTests
             var sanitisedUrl = VerifyHelper.SanitisePathsForVerify(url);
             var settings = VerifyHelper.GetSpanVerifierSettings(test, sanitisedUrl, body);
             return TestAppSecRequestWithVerifyAsync(_iisFixture.Agent, url, body, 5, 2, settings, "application/json");
+        }
+
+        [Trait("Category", "EndToEnd")]
+        [Trait("RunOnWindows", "True")]
+        [Trait("LoadFromGAC", "True")]
+        [SkippableTheory]
+        [InlineData("blocking")]
+        public async Task TestBlockedRequest(string test)
+        {
+            var url = "/Health";
+            var settings = VerifyHelper.GetSpanVerifierSettings(test);
+            await TestAppSecRequestWithVerifyAsync(_iisFixture.Agent, url, null, 5, SecurityEnabled ? 1 : 2, settings, userAgent: "Hello/V");
         }
 
         protected override string GetTestName() => _testName;

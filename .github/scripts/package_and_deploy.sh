@@ -6,9 +6,8 @@ ddprof_deploy_folder=$1
 commit_sha=$2
 commit_author=$3
 
-current_profiler_version="2.11.0"
-current_profiler_beta_version="2"
-profiler_version=v${current_profiler_version}.${current_profiler_beta_version}_$(date -u +%G%m%d%H%M%S)
+current_profiler_version="2.21.0"
+profiler_version=v${current_profiler_version}_$(date -u +%G%m%d%H%M%S)
 
 ## Create master.index.txt file
 cat <<- EOF > master.index.txt

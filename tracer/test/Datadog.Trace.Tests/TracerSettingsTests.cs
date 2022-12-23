@@ -10,6 +10,7 @@ using System.Linq;
 using Datadog.Trace.Agent;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Sampling;
+using FluentAssertions;
 using Moq;
 using Xunit;
 
@@ -18,12 +19,12 @@ namespace Datadog.Trace.Tests
     public class TracerSettingsTests
     {
         private readonly Mock<IAgentWriter> _writerMock;
-        private readonly Mock<ISampler> _samplerMock;
+        private readonly Mock<ITraceSampler> _samplerMock;
 
         public TracerSettingsTests()
         {
             _writerMock = new Mock<IAgentWriter>();
-            _samplerMock = new Mock<ISampler>();
+            _samplerMock = new Mock<ITraceSampler>();
         }
 
         [Theory]
@@ -112,8 +113,10 @@ namespace Datadog.Trace.Tests
         [InlineData("", new string[0])]
         public void ParseStringArraySplit(string input, string[] expected)
         {
-            var result = TracerSettings.TrimSplitString(input, ',').ToArray();
-            Assert.Equal(expected: expected, actual: result);
+            var separators = new[] { ',' };
+            var result = TracerSettings.TrimSplitString(input, separators);
+
+            result.Should().BeEquivalentTo(expected);
         }
 
         [Theory]

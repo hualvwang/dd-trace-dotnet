@@ -53,6 +53,11 @@ namespace PrepareRelease
             return Regex.Replace(text, VersionPattern(fourPartVersion: true), FourPartVersionString(), RegexOptions.Singleline);
         }
 
+        private string ThreePartVersionReplace(string text)
+        {
+            return Regex.Replace(text, VersionPattern(), VersionString(), RegexOptions.Singleline);
+        }
+
         private string FullVersionReplace(string text, string split, string prefix = "")
         {
             return Regex.Replace(text, prefix + VersionPattern(split), prefix + VersionString(split), RegexOptions.Singleline);
@@ -240,7 +245,7 @@ namespace PrepareRelease
 
                 // Managed project / NuGet package updates
                 SynchronizeVersion(
-                    "src/Datadog.Monitoring.Distribution/Datadog.Monitoring.Distribution.csproj",
+                    "src/Datadog.Trace.Bundle/Datadog.Trace.Bundle.csproj",
                     NugetVersionReplace);
 
                 SynchronizeVersion(
@@ -273,25 +278,31 @@ namespace PrepareRelease
                     FullAssemblyNameReplace);
 
                 SynchronizeVersion(
-                    "src/Datadog.Trace.ClrProfiler.Native/dd_profiler_constants.h",
+                    "src/Datadog.Tracer.Native/dd_profiler_constants.h",
                     FullAssemblyNameReplace);
 
                 SynchronizeVersion(
-                    "src/Datadog.Trace.ClrProfiler.Native/dd_profiler_constants.h",
+                    "src/Datadog.Tracer.Native/dd_profiler_constants.h",
                     text => FunctionCallReplace(text, "WithVersion"));
 
                 // Four-part AssemblyVersion update
                 SynchronizeVersion(
                     "src/Datadog.Trace/TracerConstants.cs",
-                    FourPartVersionReplace);
+                    // upgrading four part, then three part *seems* safe
+                    text => ThreePartVersionReplace(FourPartVersionReplace(text)));
+
+                // Top-level CMakeLists.txt
+                SynchronizeVersion(
+                    "CMakeLists.txt",
+                    text => FullVersionReplace(text, ".", prefix: "VERSION "));
 
                 // Native clr profiler updates
                 SynchronizeVersion(
-                    "src/Datadog.Trace.ClrProfiler.Native/CMakeLists.txt",
+                    "src/Datadog.Tracer.Native/CMakeLists.txt",
                     text => FullVersionReplace(text, ".", prefix: "VERSION "));
 
                 SynchronizeVersion(
-                    "src/Datadog.Trace.ClrProfiler.Native/Resource.rc",
+                    "src/Datadog.Tracer.Native/Resource.rc",
                     text =>
                     {
                         text = FullVersionReplace(text, ",");
@@ -300,7 +311,7 @@ namespace PrepareRelease
                     });
 
                 SynchronizeVersion(
-                    "src/Datadog.Trace.ClrProfiler.Native/version.h",
+                    "src/Datadog.Tracer.Native/version.h",
                     text => FullVersionReplace(text, "."));
 
                 // .NET profiler
@@ -319,8 +330,29 @@ namespace PrepareRelease
                     text => FullVersionReplace(text, ".", prefix: "VERSION "));
 
                 SynchronizeVersion(
+                    "../profiler/src/ProfilerEngine/Datadog.Linux.ApiWrapper/CMakeLists.txt",
+                    text => FullVersionReplace(text, ".", prefix: "VERSION "));
+
+                SynchronizeVersion(
                     "../profiler/src/ProfilerEngine/Datadog.Profiler.Native/dd_profiler_version.h",
                     text => FullVersionReplace(text, "."));
+
+                // Native loader
+
+                SynchronizeVersion(
+                    "../shared/src/Datadog.Trace.ClrProfiler.Native/Resource.rc",
+                    text =>
+                    {
+                        text = FullVersionReplace(text, ",");
+                        text = FullVersionReplace(text, ".");
+                        return text;
+                    });
+
+                SynchronizeVersion(
+                    "../shared/src/Datadog.Trace.ClrProfiler.Native/CMakeLists.txt",
+                    text => FullVersionReplace(text, ".", prefix: "VERSION "));
+
+                // Misc
 
                 SynchronizeVersion(
                     "../.github/scripts/package_and_deploy.sh",

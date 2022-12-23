@@ -1,4 +1,4 @@
-﻿// <copyright file="TelemetrySettings.cs" company="Datadog">
+// <copyright file="TelemetrySettings.cs" company="Datadog">
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
@@ -6,6 +6,7 @@
 #nullable enable
 
 using System;
+using Datadog.Trace.Ci;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Util;
 
@@ -13,11 +14,18 @@ namespace Datadog.Trace.Telemetry
 {
     internal class TelemetrySettings
     {
-        public TelemetrySettings(bool telemetryEnabled, string? configurationError, AgentlessSettings? agentlessSettings)
+        public TelemetrySettings(
+            bool telemetryEnabled,
+            string? configurationError,
+            AgentlessSettings? agentlessSettings,
+            bool agentProxyEnabled,
+            TimeSpan heartbeatInterval)
         {
             TelemetryEnabled = telemetryEnabled;
             ConfigurationError = configurationError;
             Agentless = agentlessSettings;
+            HeartbeatInterval = heartbeatInterval;
+            AgentProxyEnabled = agentProxyEnabled;
         }
 
         /// <summary>
@@ -30,14 +38,22 @@ namespace Datadog.Trace.Telemetry
 
         public AgentlessSettings? Agentless { get; }
 
-        public static TelemetrySettings FromDefaultSources() => FromSource(GlobalSettings.CreateDefaultConfigurationSource());
+        public TimeSpan HeartbeatInterval { get; }
 
-        public static TelemetrySettings FromSource(IConfigurationSource? source)
+        public bool AgentProxyEnabled { get; }
+
+        public static TelemetrySettings FromDefaultSources()
+            => FromSource(GlobalConfigurationSource.Instance, IsAgentAvailable);
+
+        public static TelemetrySettings FromSource(IConfigurationSource? source, Func<bool?> isAgentAvailable)
         {
             string? configurationError = null;
 
             var apiKey = source?.GetString(ConfigurationKeys.ApiKey);
             var agentlessExplicitlyEnabled = source?.GetBool(ConfigurationKeys.Telemetry.AgentlessEnabled);
+            var agentProxyEnabled = source?.GetBool(ConfigurationKeys.Telemetry.AgentProxyEnabled)
+                                 ?? isAgentAvailable()
+                                 ?? true;
 
             var agentlessEnabled = false;
 
@@ -54,13 +70,13 @@ namespace Datadog.Trace.Telemetry
             }
             else if (agentlessExplicitlyEnabled is null)
             {
-                // if there's an API key, we use agentless mode, otherwise we use the agent
+                // if there's an API key, we can use agentless mode, otherwise we can only use the agent
                 agentlessEnabled = !string.IsNullOrEmpty(apiKey);
             }
 
-            // disabled by default unless using agentless
+            // enabled by default if we have any transports
             var telemetryEnabled = source?.GetBool(ConfigurationKeys.Telemetry.Enabled)
-                                ?? agentlessEnabled;
+                                ?? (agentlessEnabled || agentProxyEnabled);
 
             AgentlessSettings? agentless = null;
             if (telemetryEnabled && agentlessEnabled)
@@ -94,7 +110,21 @@ namespace Datadog.Trace.Telemetry
                 agentless = new AgentlessSettings(agentlessUri, apiKey!);
             }
 
-            return new TelemetrySettings(telemetryEnabled, configurationError, agentless);
+            var rawInterval = source?.GetInt32(ConfigurationKeys.Telemetry.HeartbeatIntervalSeconds);
+            var heartbeatInterval = rawInterval is { } interval and > 0 and <= 3600 ? interval : 60;
+
+            return new TelemetrySettings(telemetryEnabled, configurationError, agentless, agentProxyEnabled, TimeSpan.FromSeconds(heartbeatInterval));
+        }
+
+        private static bool? IsAgentAvailable()
+        {
+            // if CIVisibility is enabled and in agentless mode, we probably don't have an agent available
+            if (CIVisibility.IsRunning || CIVisibility.Enabled)
+            {
+                return !CIVisibility.Settings.Agentless;
+            }
+
+            return null;
         }
 
         public class AgentlessSettings

@@ -3,8 +3,8 @@
 
 #include "FrameStore.h"
 
+#include "COMHelpers.h"
 #include "IConfiguration.h"
-#include "HResultConverter.h"
 #include "Log.h"
 #include "OpSysTools.h"
 
@@ -18,7 +18,7 @@ FrameStore::FrameStore(ICorProfilerInfo4* pCorProfilerInfo, IConfiguration* pCon
 {
 }
 
-std::tuple<bool, std::string, std::string> FrameStore::GetFrame(uintptr_t instructionPointer)
+std::tuple<bool, std::string_view, std::string_view> FrameStore::GetFrame(uintptr_t instructionPointer)
 {
     static const std::string NotResolvedModuleName("NotResolvedModule");
     static const std::string NotResolvedFrame("NotResolvedFrame");
@@ -47,7 +47,7 @@ std::tuple<bool, std::string, std::string> FrameStore::GetFrame(uintptr_t instru
 // to get function name + offset
 // see https://docs.microsoft.com/en-us/windows/win32/api/dbghelp/nf-dbghelp-symfromaddr for more details
 // However, today, no symbol resolution is done; only the module implementing the function is provided
-std::pair<std::string, std::string> FrameStore::GetNativeFrame(uintptr_t instructionPointer)
+std::pair<std::string_view, std::string_view> FrameStore::GetNativeFrame(uintptr_t instructionPointer)
 {
     static const std::string UnknownNativeFrame("|lm:Unknown-Native-Module |ns:NativeCode |ct:Unknown-Native-Module |fn:Function");
     static const std::string UnknowNativeModule = "Unknown-Native-Module";
@@ -77,14 +77,12 @@ std::pair<std::string, std::string> FrameStore::GetNativeFrame(uintptr_t instruc
         std::lock_guard<std::mutex> lock(_nativeLock);
         // emplace returns a pair<iterator, bool>. It returns false if the element was already there
         // we use the iterator (first element of the pair) to get a reference to the key and the value
-        auto it = _framePerNativeModule.emplace(std::move(moduleName), builder.str()).first;
+        auto [it, _] = _framePerNativeModule.emplace(std::move(moduleName), builder.str());
         return {it->first, it->second};
     }
 }
 
-
-
-std::pair<std::string, std::string> FrameStore::GetManagedFrame(FunctionID functionId)
+std::pair<std::string_view, std::string_view> FrameStore::GetManagedFrame(FunctionID functionId)
 {
     {
         std::lock_guard<std::mutex> lock(_methodsLock);
@@ -127,26 +125,21 @@ std::pair<std::string, std::string> FrameStore::GetManagedFrame(FunctionID funct
     // get type related description (assembly, namespace and type name)
     // look into the cache first
     TypeDesc typeDesc;
-    bool typeInCache = false;
-    if (classId != 0) // classId could be 0 in case of generic type with a generic parameter that is a reference type
-    {
-        std::lock_guard<std::mutex> lock(_typesLock);
-
-        auto typeEntry = _types.find(classId);
-        if (typeEntry != _types.end())
-        {
-            typeDesc = typeEntry->second;
-            typeInCache = true;
-        }
-    }
+    bool typeInCache = GetCachedTypeDesc(classId, typeDesc);
     // TODO: would it be interesting to have a (moduleId + mdTokenDef) -> TypeDesc cache for the non cached generic types?
 
     if (!typeInCache)
     {
         // try to get the type description
-        if (!GetTypeDesc(pMetadataImport.Get(), classId, moduleId, mdTokenType, typeDesc))
+        bool isEncoded = true;
+        if (!GetTypeDesc(pMetadataImport.Get(), classId, moduleId, mdTokenType, typeDesc, isEncoded))
         {
-            return {UnknownManagedAssembly, UnknownManagedType + " |fn:" + methodName};
+            // This should never happen but in case it happens, we cache the module/frame value.
+            // It's safe to cache, because there is no reason that the next calls to
+            // GetTypeDesc will succeed.
+            auto& value = _methods[functionId];
+            value = {UnknownManagedAssembly, UnknownManagedType + " |fn:" + std::move(methodName)};
+            return value;
         }
 
         if (classId != 0)
@@ -173,15 +166,95 @@ std::pair<std::string, std::string> FrameStore::GetManagedFrame(FunctionID funct
     {
         std::lock_guard<std::mutex> lock(_methodsLock);
 
-        // store it into the function cache
-        _methods[functionId] = {typeDesc.Assembly, managedFrame};
+        // store it into the function cache and return an iterator to the stored elements
+        auto [it, _] = _methods.emplace(functionId, std::make_pair(typeDesc.Assembly, managedFrame));
+        // first is the key, second is the associated value
+        return it->second;
+    }
+}
+
+bool FrameStore::GetTypeName(ClassID classId, std::string& name)
+{
+    // no backend encoding --> C# like
+    bool isEncoded = false;
+
+    TypeDesc typeDesc;
+    if (!GetTypeDesc(classId, typeDesc, isEncoded))
+    {
+        return false;
     }
 
-    return {typeDesc.Assembly, managedFrame};
+    if (typeDesc.Namespace.empty())
+    {
+        name = typeDesc.Type;
+    }
+    else
+    {
+        name = typeDesc.Namespace + "." + typeDesc.Type;
+    }
+
+    return true;
+}
+
+
+bool FrameStore::GetCachedTypeDesc(ClassID classId, TypeDesc& typeDesc)
+{
+    if (classId != 0)
+    {
+        std::lock_guard<std::mutex> lock(_typesLock);
+
+        auto typeEntry = _types.find(classId);
+        if (typeEntry != _types.end())
+        {
+            typeDesc = typeEntry->second;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FrameStore::GetTypeDesc(ClassID classId, TypeDesc& typeDesc, bool isEncoded)
+{
+    // get type related description (assembly, namespace and type name)
+    // look into the cache first
+    bool typeInCache = GetCachedTypeDesc(classId, typeDesc);
+    // TODO: would it be interesting to have a (moduleId + mdTokenDef) -> TypeDesc cache for the non cached generic types?
+
+    if (!typeInCache)
+    {
+        ModuleID moduleId;
+        mdTypeDef typeDefToken;
+        INVOKE(_pCorProfilerInfo->GetClassIDInfo(classId, &moduleId, &typeDefToken));
+
+        ComPtr<IMetaDataImport2> metadataImport;
+        INVOKE(_pCorProfilerInfo->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport2, reinterpret_cast<IUnknown**>(metadataImport.GetAddressOf())));
+
+        // try to get the type description
+        if (!GetTypeDesc(metadataImport.Get(), classId, moduleId, typeDefToken, typeDesc, isEncoded))
+        {
+            return false;
+        }
+
+        if (classId != 0)
+        {
+            std::lock_guard<std::mutex> lock(_typesLock);
+
+            _types[classId] = typeDesc;
+        }
+    }
+
+    return true;
 }
 
 // More explanations in https://chnasarre.medium.com/dealing-with-modules-assemblies-and-types-with-clr-profiling-apis-a7522a5abaa9?source=friends_link&sk=3e010ab991456db0394d4cca29cb8cb2
-bool FrameStore::GetTypeDesc(IMetaDataImport2* pMetadataImport, ClassID classId, ModuleID moduleId, mdTypeDef mdTokenType, TypeDesc& typeDesc)
+bool FrameStore::GetTypeDesc(
+    IMetaDataImport2* pMetadataImport,
+    ClassID classId,
+    ModuleID moduleId,
+    mdTypeDef mdTokenType,
+    TypeDesc& typeDesc,
+    bool isEncoded)
 {
     // 1. Get the assembly from the module
     if (!GetAssemblyName(_pCorProfilerInfo, moduleId, typeDesc.Assembly))
@@ -190,7 +263,7 @@ bool FrameStore::GetTypeDesc(IMetaDataImport2* pMetadataImport, ClassID classId,
     }
 
     // 2. Look for the type name including namespace (need to take into account nested types and generic types)
-    auto [ns, ct] = GetManagedTypeName(_pCorProfilerInfo, pMetadataImport, moduleId, classId, mdTokenType);
+    auto [ns, ct] = GetManagedTypeName(_pCorProfilerInfo, pMetadataImport, moduleId, classId, mdTokenType, isEncoded);
     typeDesc.Namespace = ns;
     typeDesc.Type = ct;
 
@@ -348,26 +421,14 @@ bool FrameStore::GetAssemblyName(ICorProfilerInfo4* pInfo, ModuleID moduleId, st
     assemblyName = std::string("");
 
     AssemblyID assemblyId;
-    HRESULT hr = pInfo->GetModuleInfo(moduleId, nullptr, 0, nullptr, nullptr, &assemblyId);
-    if (FAILED(hr))
-    {
-        return false;
-    }
+    INVOKE(pInfo->GetModuleInfo(moduleId, nullptr, 0, nullptr, nullptr, &assemblyId));
 
     // 2 steps way to get the assembly name (get the buffer size first and then fill it up with the name)
     ULONG nameCharCount = 0;
-    hr = pInfo->GetAssemblyInfo(assemblyId, nameCharCount, &nameCharCount, nullptr, nullptr, nullptr);
-    if (FAILED(hr))
-    {
-        return false;
-    }
+    INVOKE(pInfo->GetAssemblyInfo(assemblyId, nameCharCount, &nameCharCount, nullptr, nullptr, nullptr));
 
     auto buffer = std::make_unique<WCHAR[]>(nameCharCount);
-    hr = pInfo->GetAssemblyInfo(assemblyId, nameCharCount, &nameCharCount, buffer.get(), nullptr, nullptr);
-    if (FAILED(hr))
-    {
-        return false;
-    }
+    INVOKE(pInfo->GetAssemblyInfo(assemblyId, nameCharCount, &nameCharCount, buffer.get(), nullptr, nullptr));
 
     // convert from UTF16 to UTF8
     assemblyName = shared::ToString(shared::WSTRING(buffer.get()));
@@ -460,7 +521,7 @@ std::pair<std::string, std::string> FrameStore::GetTypeWithNamespace(IMetaDataIm
     }
 }
 
-std::string FrameStore::FormatGenericTypeParameters(IMetaDataImport2* pMetadata, mdTypeDef mdTokenType)
+std::string FrameStore::FormatGenericTypeParameters(IMetaDataImport2* pMetadata, mdTypeDef mdTokenType, bool isEncoded)
 {
     std::stringstream builder;
 
@@ -481,10 +542,14 @@ std::string FrameStore::FormatGenericTypeParameters(IMetaDataImport2* pMetadata,
     {
         WCHAR paramName[64];
         ULONG paramNameLen = 64;
-        builder << "{";
+
+        builder << (isEncoded ? "{" : "<");
         for (size_t currentParam = 0; currentParam < genericParamsCount; currentParam++)
         {
-            builder << "|ns: |ct:";
+            if (isEncoded)
+            {
+                builder << "|ns: |ct:";
+            }
 
             ULONG index;
             DWORD flags;
@@ -505,36 +570,79 @@ std::string FrameStore::FormatGenericTypeParameters(IMetaDataImport2* pMetadata,
                 builder << ", ";
             }
         }
-        builder << "}";
+        builder << (isEncoded ? "}" : ">");
         pMetadata->CloseEnum(hEnum);
     }
 
     return builder.str();
 }
 
-std::string FrameStore::FormatGenericParameters(ICorProfilerInfo4* pInfo, ULONG32 numGenericTypeArgs, ClassID* genericTypeArgs)
+
+void FrameStore::ConcatUnknownGenericType(std::stringstream& builder, bool isEncoded)
+{
+    if (isEncoded)
+    {
+        builder << "|ns: |ct:T";
+    }
+    else
+    {
+        builder << "T";
+    }
+}
+
+std::string FrameStore::FormatGenericParameters(
+    ICorProfilerInfo4* pInfo,
+    ULONG32 numGenericTypeArgs,
+    ClassID* genericTypeArgs,
+    bool isEncoded)
 {
     std::stringstream builder;
-    builder << "{";
+    builder << (isEncoded ? "{" : "<");
 
     for (size_t currentGenericArg = 0; currentGenericArg < numGenericTypeArgs; currentGenericArg++)
     {
-
         ClassID argClassId = genericTypeArgs[currentGenericArg];
-        ModuleID argModuleId;
-        mdTypeDef mdType;
-        pInfo->GetClassIDInfo2(argClassId, &argModuleId, &mdType, nullptr, 0, nullptr, nullptr);
-
-        ComPtr<IMetaDataImport2> pMetadata;
-        HRESULT hr = pInfo->GetModuleMetaData(argModuleId, ofRead, IID_IMetaDataImport2, reinterpret_cast<IUnknown**>(&pMetadata));
-        if (FAILED(hr))
+        if (argClassId == 0)
         {
-            builder << "|ns: |ct:T";
+            ConcatUnknownGenericType(builder, isEncoded);
         }
         else
         {
-            auto [ns, ct] = GetManagedTypeName(pInfo, pMetadata.Get(), argModuleId, argClassId, mdType);
-            builder << "|ns:" << ns << " |ct:" << ct;
+            ModuleID argModuleId;
+            mdTypeDef mdType;
+            HRESULT hr = pInfo->GetClassIDInfo2(argClassId, &argModuleId, &mdType, nullptr, 0, nullptr, nullptr);
+            if (FAILED(hr))
+            {
+                ConcatUnknownGenericType(builder, isEncoded);
+            }
+            else
+            {
+                ComPtr<IMetaDataImport2> pMetadata;
+                hr = pInfo->GetModuleMetaData(argModuleId, ofRead, IID_IMetaDataImport2, reinterpret_cast<IUnknown**>(&pMetadata));
+                if (FAILED(hr))
+                {
+                    ConcatUnknownGenericType(builder, isEncoded);
+                }
+                else
+                {
+                    auto [ns, ct] = GetManagedTypeName(pInfo, pMetadata.Get(), argModuleId, argClassId, mdType, isEncoded);
+                    if (isEncoded)
+                    {
+                        builder << "|ns:" << ns << " |ct:" << ct;
+                    }
+                    else
+                    {
+                        if (ns.empty())
+                        {
+                            builder << ct;
+                        }
+                        else
+                        {
+                            builder << ns << "." << ct;
+                        }
+                    }
+                }
+            }
         }
 
         if (currentGenericArg < numGenericTypeArgs - 1)
@@ -543,7 +651,7 @@ std::string FrameStore::FormatGenericParameters(ICorProfilerInfo4* pInfo, ULONG3
         }
     }
 
-    builder << "}";
+    builder << (isEncoded ? "}" : ">");
 
     return builder.str();
 }
@@ -557,7 +665,8 @@ std::pair<std::string, std::string> FrameStore::GetManagedTypeName(
     IMetaDataImport2* pMetadata,
     ModuleID moduleId,
     ClassID classId,
-    mdTypeDef mdTokenType)
+    mdTypeDef mdTokenType,
+    bool isEncoded)
 {
     auto [ns, typeName] = GetTypeWithNamespace(pMetadata, mdTokenType);
     // we have everything we need if not a generic type
@@ -567,7 +676,7 @@ std::pair<std::string, std::string> FrameStore::GetManagedTypeName(
     if (classId == 0)
     {
         // concat the generic parameter types from metadata based on mdTokenType
-        auto genericParameters = FormatGenericTypeParameters(pMetadata, mdTokenType);
+        auto genericParameters = FormatGenericTypeParameters(pMetadata, mdTokenType, isEncoded);
         return std::make_pair(std::move(ns), typeName + genericParameters);
     }
 
@@ -597,11 +706,10 @@ std::pair<std::string, std::string> FrameStore::GetManagedTypeName(
         // why would it fail?
         assert(SUCCEEDED(hr));
         return std::make_pair(std::move(ns), std::move(typeName));
-        //return std::make_pair(ns, typeName);
     }
 
     // concat the generic parameter types
-    auto genericParameters = FormatGenericParameters(pInfo, numGenericTypeArgs, genericTypeArgs.get());
+    auto genericParameters = FormatGenericParameters(pInfo, numGenericTypeArgs, genericTypeArgs.get(), isEncoded);
     return std::make_pair(std::move(ns), std::move(typeName + genericParameters));
 }
 

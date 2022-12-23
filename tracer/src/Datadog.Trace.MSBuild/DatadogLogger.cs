@@ -15,6 +15,7 @@ using Datadog.Trace.Logging;
 using Datadog.Trace.Logging.DirectSubmission;
 using Datadog.Trace.Logging.DirectSubmission.Formatting;
 using Datadog.Trace.Logging.DirectSubmission.Sink;
+using Datadog.Trace.Sampling;
 using Datadog.Trace.Vendors.Newtonsoft.Json;
 using Microsoft.Build.Framework;
 
@@ -106,10 +107,14 @@ namespace Datadog.Trace.MSBuild
 
                 _buildSpan = _tracer.StartSpan(BuildTags.BuildOperationName);
                 _buildSpan.SetMetric(Tags.Analytics, 1.0d);
-                _buildSpan.SetTraceSamplingPriority(SamplingPriorityValues.AutoKeep);
+
+                if (_buildSpan.Context.TraceContext is { } traceContext)
+                {
+                    traceContext.SetSamplingPriority(SamplingPriorityValues.AutoKeep);
+                    traceContext.Origin = TestTags.CIAppTestOriginName;
+                }
 
                 _buildSpan.Type = SpanTypes.Build;
-                _buildSpan.SetTag(Tags.Origin, TestTags.CIAppTestOriginName);
                 _buildSpan.SetTag(BuildTags.BuildName, e.SenderName);
 
                 _buildSpan.SetTag(BuildTags.BuildCommand, Environment.CommandLine);
@@ -183,7 +188,7 @@ namespace Datadog.Trace.MSBuild
                     projectSpan.ServiceName = projectName;
                 }
 
-                projectSpan.SetTraceSamplingPriority(SamplingPriorityValues.AutoKeep);
+                projectSpan.Context.TraceContext?.SetSamplingPriority(SamplingPriorityValues.AutoKeep);
                 projectSpan.Type = SpanTypes.Build;
 
                 string targetFramework = null;

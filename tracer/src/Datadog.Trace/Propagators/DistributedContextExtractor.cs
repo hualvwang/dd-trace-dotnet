@@ -11,6 +11,8 @@ namespace Datadog.Trace.Propagators
 {
     internal class DistributedContextExtractor : IContextExtractor
     {
+        public static readonly DistributedContextExtractor Instance = new();
+
         public bool TryExtract<TCarrier, TCarrierGetter>(TCarrier carrier, TCarrierGetter carrierGetter, out SpanContext? spanContext)
             where TCarrierGetter : struct, ICarrierGetter<TCarrier>
         {
@@ -33,8 +35,13 @@ namespace Datadog.Trace.Propagators
             var origin = ParseUtility.ParseString(carrier, carrierGetter, SpanContext.Keys.Origin);
             var rawTraceId = ParseUtility.ParseString(carrier, carrierGetter, SpanContext.Keys.RawTraceId);
             var rawSpanId = ParseUtility.ParseString(carrier, carrierGetter, SpanContext.Keys.RawSpanId);
+            var propagatedTraceTags = ParseUtility.ParseString(carrier, carrierGetter, SpanContext.Keys.PropagatedTags);
 
-            spanContext = new SpanContext(traceId, parentId, samplingPriority, serviceName: null, origin, rawTraceId, rawSpanId);
+            spanContext = new SpanContext(traceId, parentId, samplingPriority, serviceName: null, origin, rawTraceId, rawSpanId)
+                          {
+                              PropagatedTags = propagatedTraceTags
+                          };
+
             return true;
         }
     }

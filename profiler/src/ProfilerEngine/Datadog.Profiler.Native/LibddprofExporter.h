@@ -2,13 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
 
 #pragma once
+
 #include "IConfiguration.h"
 #include "IExporter.h"
+#include "Sample.h"
 #include "TagsHelper.h"
+#include <mutex>
 
 extern "C"
 {
-#include "ddprof/ffi.h"
+#include "datadog/profiling.h"
 }
 
 #include <forward_list>
@@ -20,52 +23,70 @@ extern "C"
 class Sample;
 class IMetricsSender;
 class IApplicationStore;
+class IRuntimeInfo;
+class IEnabledProfilers;
 
 class LibddprofExporter : public IExporter
 {
 public:
-    LibddprofExporter(IConfiguration* configuration, IApplicationStore* applicationStore);
+    LibddprofExporter(
+        std::vector<SampleValueType>&& sampleTypeDefinitions,
+        IConfiguration* configuration,
+        IApplicationStore* applicationStore,
+        IRuntimeInfo* runtimeInfo,
+        IEnabledProfilers* enabledProfilers);
     ~LibddprofExporter() override;
     bool Export() override;
-    void Add(Sample const& sample) override;
+    void Add(std::shared_ptr<Sample> const& sample) override;
+    void SetEndpoint(const std::string& runtimeId, uint64_t traceId, const std::string& endpoint) override;
+
 
 private:
     class SerializedProfile
     {
     public:
-        SerializedProfile(struct ddprof_ffi_Profile* profile);
+        SerializedProfile(struct ddog_prof_Profile* profile);
         ~SerializedProfile();
 
-        ddprof_ffi_Buffer GetBuffer() const;
-        ddprof_ffi_Timespec GetStart() const;
-        ddprof_ffi_Timespec GetEnd() const;
+        ddog_prof_Vec_U8 GetBuffer() const;
+        ddog_Timespec GetStart() const;
+        ddog_Timespec GetEnd() const;
+        ddog_prof_ProfiledEndpointsStats* GetEndpointsStats() const;
 
         bool IsValid() const;
 
     private:
-        struct ddprof_ffi_EncodedProfile* _encodedProfile;
+        ddog_prof_Profile_SerializeResult _encodedProfile;
     };
 
     class Tags
     {
     public:
+        Tags();
+        ~Tags() noexcept;
+
+        Tags(const Tags&) = delete;
+        Tags& operator=(const Tags&) = delete;
+
+        Tags(Tags&&) noexcept;
+        Tags& operator=(Tags&&) noexcept;
+
         void Add(std::string const& name, std::string const& value);
 
-        ddprof_ffi_Slice_tag GetFfiTags() const;
+        const ddog_Vec_Tag* GetFfiTags() const;
 
     private:
-        std::forward_list<std::pair<std::string, std::string>> _stringTags;
-        std::vector<ddprof_ffi_Tag> _ffiTags;
+        ddog_Vec_Tag _ffiTags;
     };
 
-    class ProfileAutoReset
+    class ProfileAutoDelete
     {
     public:
-        ProfileAutoReset(struct ddprof_ffi_Profile* profile);
-        ~ProfileAutoReset();
+        ProfileAutoDelete(struct ddog_prof_Profile* profile);
+        ~ProfileAutoDelete();
 
     private:
-        struct ddprof_ffi_Profile* _profile;
+        struct ddog_prof_Profile* _profile;
     };
 
     class ProfileInfo
@@ -73,28 +94,47 @@ private:
     public:
         ProfileInfo();
     public:
-        ddprof_ffi_Profile* profile;
+        ddog_prof_Profile* profile;
         std::int32_t samplesCount;
         std::int32_t exportsCount;
+        std::mutex lock;
     };
 
-    static Tags CreateTags(IConfiguration* configuration);
-    static ddprof_ffi_ProfileExporterV3* CreateExporter(ddprof_ffi_Slice_tag tags, ddprof_ffi_EndpointV3 endpoint);
-    static ddprof_ffi_Profile* CreateProfile();
+    class ProfileInfoScope
+    {
+    public:
+        ProfileInfoScope(ProfileInfo& profileInfo);
 
-    ddprof_ffi_Request* CreateRequest(SerializedProfile const& encodedProfile, ddprof_ffi_ProfileExporterV3* exporter) const;
-    ddprof_ffi_EndpointV3 CreateEndpoint(IConfiguration* configuration);
-    ProfileInfo& GetInfo(std::string_view runtimeId);
+        ProfileInfo& profileInfo;
+
+    private:
+        std::lock_guard<std::mutex> _lockGuard;
+    };
+
+    static Tags CreateTags(
+        IConfiguration* configuration,
+        IRuntimeInfo* runtimeInfo,
+        IEnabledProfilers* enabledProfilers);
+
+    static ddog_prof_Exporter* CreateExporter(const ddog_Vec_Tag* tags, ddog_Endpoint endpoint);
+    ddog_prof_Profile* CreateProfile();
+
+    ddog_prof_Exporter_Request* CreateRequest(SerializedProfile const& encodedProfile, ddog_prof_Exporter* exporter,  const Tags& additionalTags) const;
+    ddog_Endpoint CreateEndpoint(IConfiguration* configuration);
+    ProfileInfoScope GetInfo(std::string_view runtimeId);
 
     void ExportToDisk(const std::string& applicationName, SerializedProfile const& encodedProfile, int idx);
 
-    bool Send(ddprof_ffi_Request* request, ddprof_ffi_ProfileExporterV3* exporter) const;
+    bool Send(ddog_prof_Exporter_Request* request, ddog_prof_Exporter* exporter) const;
     std::string GeneratePprofFilePath(const std::string& applicationName, int idx) const;
     fs::path CreatePprofOutputPath(IConfiguration* configuration) const;
+
 
     static tags CommonTags;
     static std::string const ProcessId;
     static int const RequestTimeOutMs;
+    static std::string const LibraryName;
+    static std::string const LibraryVersion;
     static std::string const LanguageFamily;
 
     // TODO: this should be passed in the constructor to avoid overwriting
@@ -103,16 +143,22 @@ private:
     static std::string const ProfilePeriodType;
     static std::string const ProfilePeriodUnit;
 
+    std::vector<SampleValueType> _sampleTypeDefinitions;
     fs::path _pprofOutputPath;
 
-    std::vector<ddprof_ffi_Location> _locations;
-    std::vector<ddprof_ffi_Line> _lines;
+    std::vector<ddog_prof_Location> _locations;
+    std::vector<ddog_prof_Line> _lines;
     std::string _agentUrl;
     std::size_t _locationsAndLinesSize;
 
     // for each application, keep track of a profile, a samples count since the last export and an export count
     std::unordered_map<std::string_view, ProfileInfo> _perAppInfo;
-    ddprof_ffi_EndpointV3 _endpoint;
+    ddog_Endpoint _endpoint;
     Tags _exporterBaseTags;
     IApplicationStore* const _applicationStore;
+
+    std::mutex _perAppInfoLock;
+
+public:  // for tests
+    static std::string GetEnabledProfilersTag(IEnabledProfilers* enabledProfilers);
 };

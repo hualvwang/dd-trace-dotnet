@@ -23,6 +23,14 @@ std::tuple<std::unique_ptr<IExporter>, MockExporter&> CreateExporter()
     return {std::move(exporter), *exporterPtr};
 }
 
+std::tuple<std::unique_ptr<ISamplesCollector>, MockSamplesCollector&> CreateSamplesCollector()
+{
+    std::unique_ptr<ISamplesCollector> collector = std::make_unique<MockSamplesCollector>();
+    auto collectorPtr = static_cast<MockSamplesCollector*>(collector.get());
+
+    return {std::move(collector), *collectorPtr};
+}
+
 std::vector<std::pair<std::string, std::string>> CreateCallstack(int depth)
 {
     std::vector<std::pair<std::string, std::string>> result;
@@ -35,4 +43,23 @@ std::vector<std::pair<std::string, std::string>> CreateCallstack(int depth)
     }
 
     return result;
+}
+
+std::shared_ptr<Sample> CreateSample(std::string_view runtimeId, const std::vector<std::pair<std::string, std::string>>& callstack, const std::vector<std::pair<std::string, std::string>>& labels, std::int64_t value)
+{
+    auto sample = std::make_shared<Sample>(runtimeId);
+
+    for (auto& [module, frame] : callstack)
+    {
+        sample->AddFrame(module, frame);
+    }
+
+    for (auto const& [name, value] : labels)
+    {
+        sample->AddLabel(Label{name, value});
+    }
+
+    sample->SetValue(value);
+
+    return sample;
 }

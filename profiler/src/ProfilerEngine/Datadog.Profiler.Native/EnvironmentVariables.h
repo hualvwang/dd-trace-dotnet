@@ -21,16 +21,34 @@ public:
     inline static const shared::WSTRING AgentUrl                    = WStr("DD_TRACE_AGENT_URL");
     inline static const shared::WSTRING AgentHost                   = WStr("DD_AGENT_HOST");
     inline static const shared::WSTRING AgentPort                   = WStr("DD_TRACE_AGENT_PORT");
+    inline static const shared::WSTRING NamedPipeName               = WStr("DD_TRACE_PIPE_NAME");
     inline static const shared::WSTRING ApiKey                      = WStr("DD_API_KEY");
     inline static const shared::WSTRING Hostname                    = WStr("DD_HOSTNAME");
     inline static const shared::WSTRING Tags                        = WStr("DD_TAGS");
     inline static const shared::WSTRING NativeFramesEnabled         = WStr("DD_PROFILING_FRAMES_NATIVE_ENABLED");
     inline static const shared::WSTRING CpuProfilingEnabled         = WStr("DD_PROFILING_CPU_ENABLED");
+    inline static const shared::WSTRING WallTimeProfilingEnabled    = WStr("DD_PROFILING_WALLTIME_ENABLED");
     inline static const shared::WSTRING ExceptionProfilingEnabled   = WStr("DD_PROFILING_EXCEPTION_ENABLED");
-    inline static const shared::WSTRING ExceptionSampleLimit        = WStr("DD_PROFILING_EXCEPTION_SAMPLE_LIMIT");
+
+    // only available on .NET 5+
+    inline static const shared::WSTRING AllocationProfilingEnabled = WStr("DD_PROFILING_ALLOCATION_ENABLED");
+    inline static const shared::WSTRING DeprecatedContentionProfilingEnabled = WStr("DD_PROFILING_CONTENTION_ENABLED");  // should be deprecated (only used in 2.18)
+    inline static const shared::WSTRING LockContentionProfilingEnabled = WStr("DD_PROFILING_LOCK_ENABLED");
+    inline static const shared::WSTRING GCProfilingEnabled          = WStr("DD_PROFILING_GC_ENABLED");
+
+    inline static const shared::WSTRING ExceptionSampleLimit        = WStr("DD_INTERNAL_PROFILING_EXCEPTION_SAMPLE_LIMIT");
+    inline static const shared::WSTRING AllocationSampleLimit       = WStr("DD_INTERNAL_PROFILING_ALLOCATION_SAMPLE_LIMIT");
+    inline static const shared::WSTRING ContentionSampleLimit       = WStr("DD_INTERNAL_PROFILING_CONTENTION_SAMPLE_LIMIT");
+    inline static const shared::WSTRING ContentionDurationThreshold = WStr("DD_INTERNAL_PROFILING_CONTENTION_DURATION_THRESHOLD");
+    inline static const shared::WSTRING CpuWallTimeSamplingRate     = WStr("DD_INTERNAL_PROFILING_SAMPLING_RATE");
+    inline static const shared::WSTRING WalltimeThreadsThreshold    = WStr("DD_INTERNAL_PROFILING_WALLTIME_THREADS_THRESHOLD");
+    inline static const shared::WSTRING CpuTimeThreadsThreshold     = WStr("DD_INTERNAL_PROFILING_CPUTIME_THREADS_THRESHOLD");
+    inline static const shared::WSTRING CodeHotspotsThreadsThreshold = WStr("DD_INTERNAL_PROFILING_CODEHOTSPOTS_THREADS_THRESHOLD");
+    inline static const shared::WSTRING TimestampsAsLabelEnabled    = WStr("DD_INTERNAL_PROFILING_TIMESTAMPS_AS_LABEL_ENABLED");
     inline static const shared::WSTRING ProfilesOutputDir           = WStr("DD_INTERNAL_PROFILING_OUTPUT_DIR");
     inline static const shared::WSTRING DevelopmentConfiguration    = WStr("DD_INTERNAL_USE_DEVELOPMENT_CONFIGURATION");
     inline static const shared::WSTRING Agentless                   = WStr("DD_PROFILING_AGENTLESS");
+    inline static const shared::WSTRING CoreMinimumOverride         = WStr("DD_PROFILING_MIN_CORES_THRESHOLD");
 
     // feature flags
     inline static const shared::WSTRING FF_LibddprofEnabled = WStr("DD_INTERNAL_PROFILING_LIBDDPROF_ENABLED");

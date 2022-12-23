@@ -18,12 +18,14 @@ namespace BuggyBits
         private readonly CancellationToken _exitToken;
         private readonly HttpClient _httpClient;
         private readonly Scenario _scenario;
+        private readonly int _nbIdleThreads;
 
-        public SelfInvoker(CancellationToken token, Scenario scenario)
+        public SelfInvoker(CancellationToken token, Scenario scenario, int nbIdleThreds)
         {
             _exitToken = token;
             _httpClient = new HttpClient();
             _scenario = scenario;
+            _nbIdleThreads = nbIdleThreds;
         }
 
         public void Dispose()
@@ -35,29 +37,48 @@ namespace BuggyBits
         {
             Console.WriteLine($"{this.GetType().Name} started.");
 
-            try
+            CreateIdleThreads();
+
+            if (_scenario == Scenario.None)
             {
-                string asyncEndpoint = GetEndpoint(rootUrl);
-
-                // Run for the given number of iterations
-                // 0 means wait for cancellation
-                int current = 0;
-                while (
-                    ((iterations == 0) && !_exitToken.IsCancellationRequested) ||
-                    (iterations > current))
-                {
-                    await Task.Delay(SleepDuration);
-                    await ExecuteIterationAsync(asyncEndpoint);
-
-                    current++;
-                }
+                await Task.Delay(Timeout.Infinite, _exitToken);
             }
-            catch (Exception x)
+            else
             {
-                Console.WriteLine($"{x.GetType().Name} | {x.Message}");
+                try
+                {
+                    string asyncEndpoint = GetEndpoint(rootUrl);
+
+                    // Run for the given number of iterations
+                    // 0 means wait for cancellation
+                    int current = 0;
+                    while (
+                        ((iterations == 0) && !_exitToken.IsCancellationRequested) ||
+                        (iterations > current))
+                    {
+                        await Task.Delay(SleepDuration);
+                        await ExecuteIterationAsync(asyncEndpoint);
+
+                        current++;
+                    }
+                }
+                catch (Exception x)
+                {
+                    Console.WriteLine($"{x.GetType().Name} | {x.Message}");
+                }
             }
 
             Console.WriteLine($"{this.GetType().Name} stopped.");
+        }
+
+        private void CreateIdleThreads()
+        {
+            Console.WriteLine($"----- Creating {_nbIdleThreads} idle threads");
+
+            for (var i = 0; i < _nbIdleThreads; i++)
+            {
+                Task.Factory.StartNew(() => { _exitToken.WaitHandle.WaitOne(); }, TaskCreationOptions.LongRunning);
+            }
         }
 
         private string GetEndpoint(string rootUrl)
@@ -76,6 +97,12 @@ namespace BuggyBits
 
                 case Scenario.Async:
                     return $"{rootUrl}/Products/async";
+
+                case Scenario.FormatExceptions:
+                    return $"{rootUrl}/Products/Sales";
+
+                case Scenario.ParallelLock:
+                    return $"{rootUrl}/Products/ParallelLock";
             }
         }
 

@@ -12,11 +12,14 @@
       env: integration_tests,
       http.method: GET,
       http.request.headers.host: localhost:00000,
+      http.route: health,
       http.status_code: 200,
-      http.url: http://localhost:00000/Health/,
+      http.url: http://localhost:00000/Health/?arg&[$slice],
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -39,11 +42,14 @@
       env: integration_tests,
       http.method: GET,
       http.request.headers.host: localhost:00000,
+      http.route: health,
       http.status_code: 200,
-      http.url: http://localhost:00000/Health/,
+      http.url: http://localhost:00000/Health/?arg&[$slice],
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -66,11 +72,14 @@
       env: integration_tests,
       http.method: GET,
       http.request.headers.host: localhost:00000,
+      http.route: health,
       http.status_code: 200,
-      http.url: http://localhost:00000/Health/,
+      http.url: http://localhost:00000/Health/?arg&[$slice],
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -93,11 +102,14 @@
       env: integration_tests,
       http.method: GET,
       http.request.headers.host: localhost:00000,
+      http.route: health,
       http.status_code: 200,
-      http.url: http://localhost:00000/Health/,
+      http.url: http://localhost:00000/Health/?arg&[$slice],
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -120,11 +132,14 @@
       env: integration_tests,
       http.method: GET,
       http.request.headers.host: localhost:00000,
+      http.route: health,
       http.status_code: 200,
-      http.url: http://localhost:00000/Health/,
+      http.url: http://localhost:00000/Health/?arg&[$slice],
+      http.useragent: Mistake Not...,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,

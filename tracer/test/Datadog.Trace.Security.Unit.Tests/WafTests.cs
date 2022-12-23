@@ -20,24 +20,18 @@ namespace Datadog.Trace.Security.Unit.Tests
     [Collection("WafTests")]
     public class WafTests
     {
+        public const int TimeoutMicroSeconds = 1_000_000;
+
         [Theory]
         [InlineData("[$ne]", "arg", "nosql_injection", "crs-942-290")]
         [InlineData("attack", "appscan_fingerprint", "security_scanner", "crs-913-120")]
-        [InlineData("key", "<script>", "xss", "crs-941-100")]
+        [InlineData("key", "<script>", "xss", "crs-941-110")]
         [InlineData("value", "sleep(10)", "sql_injection", "crs-942-160")]
         public void QueryStringAttack(string key, string attack, string flow, string rule)
         {
             Execute(
                 AddressesConstants.RequestQuery,
-                new Dictionary<string, string[]>
-                {
-                    {
-                        key, new string[]
-                        {
-                            attack
-                        }
-                    }
-                },
+                new Dictionary<string, string[]> { { key, new string[] { attack } } },
                 flow,
                 rule);
         }
@@ -49,15 +43,7 @@ namespace Datadog.Trace.Security.Unit.Tests
         {
             Execute(
                 AddressesConstants.RequestPathParams,
-                new Dictionary<string, string[]>
-                {
-                    {
-                        key, new string[]
-                        {
-                            attack
-                        }
-                    }
-                },
+                new Dictionary<string, string[]> { { key, new string[] { attack } } },
                 flow,
                 rule);
         }
@@ -74,7 +60,7 @@ namespace Datadog.Trace.Security.Unit.Tests
 
         [Theory]
         [InlineData("user-agent", "Arachni/v1", "security_scanner", "ua0-600-12x")]
-        [InlineData("referer", "<script >", "xss", "crs-941-100")]
+        [InlineData("referer", "<script >", "xss", "crs-941-110")]
         [InlineData("x-file-name", "routing.yml", "command_injection", "crs-932-180")]
         [InlineData("x-filename", "routing.yml", "command_injection", "crs-932-180")]
         [InlineData("x_filename", "routing.yml", "command_injection", "crs-932-180")]
@@ -82,12 +68,7 @@ namespace Datadog.Trace.Security.Unit.Tests
         {
             Execute(
                 AddressesConstants.RequestHeaderNoCookies,
-                new Dictionary<string, string>
-                {
-                    {
-                        header, content
-                    }
-                },
+                new Dictionary<string, string> { { header, content } },
                 flow,
                 rule);
         }
@@ -99,17 +80,12 @@ namespace Datadog.Trace.Security.Unit.Tests
         [InlineData("key", ".cookie-;domain=", "http_protocol_violation", "crs-943-100")]
         [InlineData("x-attack", " var_dump ()", "php_code_injection", "crs-933-160")]
         [InlineData("x-attack", "o:4:\"x\":5:{d}", "php_code_injection", "crs-933-170")]
-        [InlineData("key", "<script>", "xss", "crs-941-100")]
+        [InlineData("key", "<script>", "xss", "crs-941-110")]
         public void CookiesAttack(string key, string content, string flow, string rule)
         {
             Execute(
                 AddressesConstants.RequestCookies,
-                new Dictionary<string, List<string>>
-                {
-                    {
-                        key, new List<string> { content }
-                    }
-                },
+                new Dictionary<string, List<string>> { { key, new List<string> { content } } },
                 flow,
                 rule);
         }
@@ -120,12 +96,7 @@ namespace Datadog.Trace.Security.Unit.Tests
 
         private static void Execute(string address, object value, string flow, string rule)
         {
-            var args = new Dictionary<string, object>
-            {
-                {
-                    address, value
-                }
-            };
+            var args = new Dictionary<string, object> { { address, value } };
             if (!args.ContainsKey(AddressesConstants.RequestUriRaw))
             {
                 args.Add(AddressesConstants.RequestUriRaw, "http://localhost:54587/");
@@ -139,9 +110,8 @@ namespace Datadog.Trace.Security.Unit.Tests
             using var waf = Waf.Create(string.Empty, string.Empty);
             waf.Should().NotBeNull();
             using var context = waf.CreateContext();
-            context.AggregateAddresses(args, true);
-            var result = context.Run(1_000_000);
-            result.ReturnCode.Should().Be(ReturnCode.Monitor);
+            var result = context.Run(args, TimeoutMicroSeconds);
+            result.ReturnCode.Should().Be(ReturnCode.Match);
             var resultData = JsonConvert.DeserializeObject<WafMatch[]>(result.Data).FirstOrDefault();
             resultData.Rule.Tags.Type.Should().Be(flow);
             resultData.Rule.Id.Should().Be(rule);

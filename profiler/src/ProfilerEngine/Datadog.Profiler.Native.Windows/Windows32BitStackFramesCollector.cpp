@@ -8,7 +8,7 @@
 
 #include "Log.h"
 #include "ManagedThreadInfo.h"
-#include "StackSnapshotResultReusableBuffer.h"
+#include "StackSnapshotResultBuffer.h"
 
 // This method is called from the CLR so we need to use STDMETHODCALLTYPE macro to match the CLR declaration
 HRESULT STDMETHODCALLTYPE StackSnapshotCallbackHandlerImpl(FunctionID funcId, UINT_PTR ip, COR_PRF_FRAME_INFO frameInfo, ULONG32 contextSize, BYTE context[], void* clientData);
@@ -30,16 +30,26 @@ StackSnapshotResultBuffer* Windows32BitStackFramesCollector::CollectStackSampleI
 {
     // Collect data for TraceContext Tracking:
     bool traceContextDataCollected = this->TryApplyTraceContextDataFromCurrentCollectionThreadToSnapshot();
-    assert(traceContextDataCollected);
 
     // Now walk the stack:
     __try
     {
+        HANDLE osThreadHandle = INVALID_HANDLE_VALUE;
+
+        auto hr = _pCorProfilerInfo->GetHandleFromThread(pThreadInfo->GetClrThreadId(), &osThreadHandle);
+
+        if (FAILED(hr) || osThreadHandle == INVALID_HANDLE_VALUE || osThreadHandle == nullptr)
+        {
+            // Looks like the thread got destroyed, or we don't have its information yet
+            *pHR = E_ABORT;
+            return GetStackSnapshotResult();
+        }
+        
         // Sometimes, we could hit an access violation, so catch it and just return.
         // This can happen if we are in a deadlock situation and resume the target thread
         // while walking its stack.
 
-        HRESULT hr = _pCorProfilerInfo->DoStackSnapshot(
+        hr = _pCorProfilerInfo->DoStackSnapshot(
             selfCollect ? NULL : pThreadInfo->GetClrThreadId(),
             StackSnapshotCallbackHandlerImpl,
             _COR_PRF_SNAPSHOT_INFO::COR_PRF_SNAPSHOT_DEFAULT,

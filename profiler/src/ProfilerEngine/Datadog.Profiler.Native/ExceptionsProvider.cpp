@@ -1,5 +1,9 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
+
 #include "ExceptionsProvider.h"
 
+#include "COMHelpers.h"
 #include "FrameStore.h"
 #include "HResultConverter.h"
 #include "Log.h"
@@ -7,17 +11,14 @@
 #include "shared/src/native-src/com_ptr.h"
 #include "shared/src/native-src/string.h"
 
-#define INVOKE(x)                                                                                             \
-    {                                                                                                         \
-        HRESULT hr = x;                                                                                       \
-        if (FAILED(hr))                                                                                       \
-        {                                                                                                     \
-            Log::Warn("Profiler call failed with result ", HResultConverter::ToStringWithCode(hr), ": ", #x); \
-            return false;                                                                                     \
-        }                                                                                                     \
-    }
+
+std::vector<SampleValueType> ExceptionsProvider::SampleTypeDefinitions(
+    {
+        {"exception", "count"}
+    });
 
 ExceptionsProvider::ExceptionsProvider(
+    uint32_t valueOffset,
     ICorProfilerInfo4* pCorProfilerInfo,
     IManagedThreadList* pManagedThreadList,
     IFrameStore* pFrameStore,
@@ -26,7 +27,7 @@ ExceptionsProvider::ExceptionsProvider(
     IAppDomainStore* pAppDomainStore,
     IRuntimeIdStore* pRuntimeIdStore)
     :
-    CollectorBase<RawExceptionSample>("ExceptionsProvider", pThreadsCpuManager, pFrameStore, pAppDomainStore, pRuntimeIdStore),
+    CollectorBase<RawExceptionSample>("ExceptionsProvider", valueOffset, pThreadsCpuManager, pFrameStore, pAppDomainStore, pRuntimeIdStore, pConfiguration),
     _pCorProfilerInfo(pCorProfilerInfo),
     _pManagedThreadList(pManagedThreadList),
     _pFrameStore(pFrameStore),
@@ -36,7 +37,7 @@ ExceptionsProvider::ExceptionsProvider(
     _mscorlibModuleId(0),
     _exceptionClassId(0),
     _loggedMscorlibError(false),
-    _sampler(pConfiguration)
+    _sampler(pConfiguration->ExceptionSampleLimit(), pConfiguration->GetUploadInterval())
 {
 }
 
@@ -126,15 +127,15 @@ bool ExceptionsProvider::OnExceptionThrown(ObjectID thrownObjectId)
         }
     }
 
-    ManagedThreadInfo* threadInfo;
+    std::shared_ptr<ManagedThreadInfo> threadInfo;
 
-    INVOKE(_pManagedThreadList->TryGetCurrentThreadInfo(&threadInfo))
+    INVOKE(_pManagedThreadList->TryGetCurrentThreadInfo(threadInfo))
 
     uint32_t hrCollectStack = E_FAIL;
     const auto pStackFramesCollector = OsSpecificApi::CreateNewStackFramesCollectorInstance(_pCorProfilerInfo);
 
     pStackFramesCollector->PrepareForNextCollection();
-    const auto result = pStackFramesCollector->CollectStackSample(threadInfo, &hrCollectStack);
+    const auto result = pStackFramesCollector->CollectStackSample(threadInfo.get(), &hrCollectStack);
 
     if (result->GetFramesCount() == 0)
     {
@@ -142,6 +143,7 @@ bool ExceptionsProvider::OnExceptionThrown(ObjectID thrownObjectId)
         return false;
     }
 
+    result->SetUnixTimeUtc(GetCurrentTimestamp());
     result->DetermineAppDomain(threadInfo->GetClrThreadId(), _pCorProfilerInfo);
 
     RawExceptionSample rawSample;
@@ -152,7 +154,6 @@ bool ExceptionsProvider::OnExceptionThrown(ObjectID thrownObjectId)
     rawSample.AppDomainId = result->GetAppDomainId();
     result->CopyInstructionPointers(rawSample.Stack);
     rawSample.ThreadInfo = threadInfo;
-    threadInfo->AddRef();
     rawSample.ExceptionMessage = std::move(message);
     rawSample.ExceptionType = std::move(name);
     Add(std::move(rawSample));
@@ -174,27 +175,10 @@ bool ExceptionsProvider::GetExceptionType(ClassID classId, std::string& exceptio
         }
     }
 
-    ModuleID moduleId;
-    mdTypeDef typeDefToken;
-
-    INVOKE(_pCorProfilerInfo->GetClassIDInfo(classId, &moduleId, &typeDefToken))
-
-    ComPtr<IMetaDataImport2> metadataImport;
-
-    INVOKE(_pCorProfilerInfo->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport2, reinterpret_cast<IUnknown**>(metadataImport.GetAddressOf())))
-
-    ULONG nameCharCount = 0;
-
-    INVOKE(metadataImport->GetTypeDefProps(typeDefToken, nullptr, 0, &nameCharCount, nullptr, nullptr))
-
-    const auto buffer = std::make_unique<WCHAR[]>(nameCharCount);
-
-    INVOKE(metadataImport->GetTypeDefProps(typeDefToken, buffer.get(), nameCharCount, &nameCharCount, nullptr, nullptr))
-
-    const auto pBuffer = buffer.get();
-
-    // Convert from UTF16 to UTF8
-    exceptionType = shared::ToString(pBuffer, nameCharCount - 1);
+    if (!_pFrameStore->GetTypeName(classId, exceptionType))
+    {
+        return false;
+    }
 
     {
         std::lock_guard lock(_exceptionTypesLock);
@@ -202,13 +186,6 @@ bool ExceptionsProvider::GetExceptionType(ClassID classId, std::string& exceptio
     }
 
     return true;
-}
-
-void ExceptionsProvider::OnTransformRawSample(const RawExceptionSample& rawSample, Sample& sample)
-{
-    sample.AddValue(1, SampleValue::ExceptionCount);
-    sample.AddLabel(Label(Sample::ExceptionMessageLabel, rawSample.ExceptionMessage));
-    sample.AddLabel(Label(Sample::ExceptionTypeLabel, rawSample.ExceptionType));
 }
 
 bool ExceptionsProvider::LoadExceptionMetadata()

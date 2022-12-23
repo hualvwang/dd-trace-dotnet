@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props" Condition="Exists('..\..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props')" />
+  <Import Project="..\..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props" Condition="Exists('..\..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -24,7 +24,7 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{0831386b-1a96-443f-b02b-c1d2b65fd845}</ProjectGuid>
     <RootNamespace>DatadogAutoInstrumentationProfilerNative</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup>
@@ -234,9 +234,25 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="AdaptiveSampler.h" />
+    <ClInclude Include="EnabledProfilers.h" />
+    <ClInclude Include="EnumHelpers.h" />
+    <ClInclude Include="COMHelpers.h" />
+    <ClInclude Include="ContentionProvider.h" />
+    <ClInclude Include="GarbageCollection.h" />
+    <ClInclude Include="GCBaseRawSample.h" />
+    <ClInclude Include="GarbageCollectionProvider.h" />
+    <ClInclude Include="IGarbageCollectionsListener.h" />
+    <ClInclude Include="RawGarbageCollectionSample.h" />
+    <ClInclude Include="StopTheWorldGCProvider.h" />
+    <ClInclude Include="GenericSampler.h" />
+    <ClInclude Include="GroupSampler.h" />
+    <ClInclude Include="IAllocationsListener.h" />
+    <ClInclude Include="AllocationsProvider.h" />
     <ClInclude Include="AppDomainStore.h" />
     <ClInclude Include="ApplicationInfo.h" />
     <ClInclude Include="ApplicationStore.h" />
+    <ClInclude Include="ClrEventsParser.h" />
+    <ClInclude Include="cgroup.h" />
     <ClInclude Include="ClrLifetime.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="CorProfilerCallback.h" />
@@ -246,20 +262,24 @@
     <ClInclude Include="DogFood.hpp" />
     <ClInclude Include="DogstatsdService.h" />
     <ClInclude Include="EnvironmentVariables.h" />
-    <ClInclude Include="ExceptionSampler.h" />
     <ClInclude Include="ExceptionsProvider.h" />
     <ClInclude Include="FfiHelper.h" />
     <ClInclude Include="FrameStore.h" />
     <ClInclude Include="IAppDomainStore.h" />
     <ClInclude Include="IApplicationStore.h" />
     <ClInclude Include="ICollector.h" />
+    <ClInclude Include="IEnabledProfilers.h" />
+    <ClInclude Include="IContentionListener.h" />
     <ClInclude Include="IFrameStore.h" />
     <ClInclude Include="HResultConverter.h" />
     <ClInclude Include="IClrLifetime.h" />
+    <ClInclude Include="IGCSuspensionsListener.h" />
     <ClInclude Include="IManagedThreadList.h" />
     <ClInclude Include="IMetricsSender.h" />
     <ClInclude Include="IMetricsSenderFactory.h" />
     <ClInclude Include="IRuntimeIdStore.h" />
+    <ClInclude Include="IRuntimeInfo.h" />
+    <ClInclude Include="ISamplesCollector.h" />
     <ClInclude Include="IService.h" />
     <ClInclude Include="IStackSamplerLoopManager.h" />
     <ClInclude Include="IThreadsCpuManager.h" />
@@ -273,20 +293,23 @@
     <ClInclude Include="PInvoke.h" />
     <ClInclude Include="LibddprofExporter.h" />
     <ClInclude Include="ProfilerEngineStatus.h" />
+    <ClInclude Include="RawAllocationSample.h" />
+    <ClInclude Include="RawContentionSample.h" />
     <ClInclude Include="RawCpuSample.h" />
     <ClInclude Include="RawExceptionSample.h" />
     <ClInclude Include="RawSample.h" />
-    <ClInclude Include="RefCountingObject.h" />
+    <ClInclude Include="RawStopTheWorldSample.h" />
     <ClInclude Include="RuntimeIdStore.h" />
+    <ClInclude Include="RuntimeInfo.h" />
     <ClInclude Include="Sample.h" />
-    <ClInclude Include="SamplesAggregator.h" />
+    <ClInclude Include="SamplesCollector.h" />
     <ClInclude Include="ProviderBase.h" />
     <ClInclude Include="ScopeFinalizer.h" />
     <ClInclude Include="Semaphore.h" />
     <ClInclude Include="StackFramesCollectorBase.h" />
     <ClInclude Include="StackSamplerLoop.h" />
     <ClInclude Include="StackSamplerLoopManager.h" />
-    <ClInclude Include="StackSnapshotResultReusableBuffer.h" />
+    <ClInclude Include="StackSnapshotResultBuffer.h" />
     <ClInclude Include="TagsHelper.h" />
     <ClInclude Include="ThreadCpuInfo.h" />
     <ClInclude Include="ThreadsCpuManager.h" />
@@ -298,19 +321,27 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AdaptiveSampler.cpp" />
+    <ClCompile Include="AllocationsProvider.cpp" />
     <ClCompile Include="AppDomainStore.cpp" />
     <ClCompile Include="ApplicationInfo.cpp" />
     <ClCompile Include="ApplicationStore.cpp" />
+    <ClCompile Include="ClrEventsParser.cpp" />
+    <ClCompile Include="cgroup.cpp" />
     <ClCompile Include="ClrLifetime.cpp" />
     <ClCompile Include="Configuration.cpp" />
+    <ClCompile Include="ContentionProvider.cpp" />
     <ClCompile Include="CorProfilerCallback.cpp" />
     <ClCompile Include="CorProfilerCallbackFactory.cpp" />
     <ClCompile Include="CpuTimeProvider.cpp" />
     <ClCompile Include="DogstatsdService.cpp" />
-    <ClCompile Include="ExceptionSampler.cpp" />
+    <ClCompile Include="EnabledProfilers.cpp" />
     <ClCompile Include="ExceptionsProvider.cpp" />
     <ClCompile Include="FfiHelper.cpp" />
     <ClCompile Include="FrameStore.cpp" />
+    <ClCompile Include="GarbageCollectionProvider.cpp" />
+    <ClCompile Include="RawGarbageCollectionSample.cpp" />
+    <ClCompile Include="StopTheWorldGCProvider.cpp" />
+    <ClCompile Include="GenericSampler.cpp" />
     <ClCompile Include="HResultConverter.cpp" />
     <ClCompile Include="IMetricsSenderFactory.cpp" />
     <ClCompile Include="ManagedThreadInfo.cpp" />
@@ -321,15 +352,15 @@
     <ClCompile Include="ProfilerEngineStatus.cpp" />
     <ClCompile Include="RawExceptionSample.cpp" />
     <ClCompile Include="RawSample.cpp" />
-    <ClCompile Include="RefCountingObject.cpp" />
     <ClCompile Include="RuntimeIdStore.cpp" />
+    <ClCompile Include="RuntimeInfo.cpp" />
     <ClCompile Include="Sample.cpp" />
-    <ClCompile Include="SamplesAggregator.cpp" />
+    <ClCompile Include="SamplesCollector.cpp" />
     <ClCompile Include="ProviderBase.cpp" />
     <ClCompile Include="StackFramesCollectorBase.cpp" />
     <ClCompile Include="StackSamplerLoop.cpp" />
     <ClCompile Include="StackSamplerLoopManager.cpp" />
-    <ClCompile Include="StackSnapshotResultReusableBuffer.cpp" />
+    <ClCompile Include="StackSnapshotResultBuffer.cpp" />
     <ClCompile Include="TagsHelper.cpp" />
     <ClCompile Include="ThreadCpuInfo.cpp" />
     <ClCompile Include="ThreadsCpuManager.cpp" />
@@ -346,6 +377,6 @@
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props'))" />
+    <Error Condition="!Exists('..\..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props'))" />
   </Target>
 </Project>

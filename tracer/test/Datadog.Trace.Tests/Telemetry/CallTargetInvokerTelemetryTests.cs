@@ -14,6 +14,7 @@ using Datadog.Trace.ClrProfiler.CallTarget;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.ContinuousProfiler;
 using Datadog.Trace.DuckTyping;
+using Datadog.Trace.Iast.Settings;
 using Datadog.Trace.PlatformHelpers;
 using Datadog.Trace.Sampling;
 using Datadog.Trace.Telemetry;
@@ -38,7 +39,7 @@ namespace Datadog.Trace.Tests.Telemetry
             var tracer = new Tracer(
                 settings,
                 new Mock<IAgentWriter>().Object,
-                new Mock<ISampler>().Object,
+                new Mock<ITraceSampler>().Object,
                 scopeManager: null,
                 statsd: null,
                 telemetry: telemetry);
@@ -119,7 +120,7 @@ namespace Datadog.Trace.Tests.Telemetry
                 ErrorInvocations.Add((info, error));
             }
 
-            public void RecordTracerSettings(ImmutableTracerSettings settings, string defaultServiceName, AzureAppServices appServicesMetadata)
+            public void RecordTracerSettings(ImmutableTracerSettings settings, string defaultServiceName)
             {
             }
 
@@ -142,6 +143,10 @@ namespace Datadog.Trace.Tests.Telemetry
             }
 
             public void Start()
+            {
+            }
+
+            public void RecordIastSettings(IastSettings settings)
             {
             }
         }

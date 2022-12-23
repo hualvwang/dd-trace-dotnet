@@ -4,6 +4,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
@@ -25,7 +26,6 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
         // take long time to start and to end.
         private readonly TimeSpan _maxTestRunDuration = TimeSpan.FromSeconds(600);
 
-        private readonly int _testDurationInSeconds = 10;
         private readonly int _profilingExportsIntervalInSeconds = 3;
         private string _appListenerPort;
 
@@ -51,6 +51,8 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
 
         public string ServiceName { get; set; }
 
+        public int TestDurationInSeconds { get; set; } = 10;
+
         public static string GetApplicationOutputFolderPath(string appName)
         {
             var configurationAndPlatform = $"{EnvironmentHelper.GetConfiguration()}-{EnvironmentHelper.GetPlatform()}";
@@ -60,7 +62,7 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
 
         public void Run(MockDatadogAgent agent)
         {
-            RunTest(agent.Port);
+            RunTest(agent);
             PrintTestInfo();
         }
 
@@ -104,7 +106,7 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
             // Look for a free open port to pass to the ASP.NET Core applications
             // that accept --urls on their command line
             _appListenerPort = $"http://localhost:{TcpPortProvider.GetOpenPort()}";
-            var arguments = $"--timeout {_testDurationInSeconds} --urls {_appListenerPort}";
+            var arguments = $"--timeout {TestDurationInSeconds} --urls {_appListenerPort}";
             if (!string.IsNullOrEmpty(_commandLine))
             {
                 arguments += $" {_commandLine}";
@@ -124,13 +126,13 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
             return (applicationPath, arguments);
         }
 
-        private void RunTest(int agentPort)
+        private void RunTest(MockDatadogAgent agent)
         {
             (var executor, var arguments) = BuildTestCommandLine();
 
             using var process = new Process();
 
-            SetEnvironmentVariables(process.StartInfo.EnvironmentVariables, agentPort);
+            SetEnvironmentVariables(process.StartInfo.EnvironmentVariables, agent);
 
             process.StartInfo.FileName = executor;
             process.StartInfo.Arguments = arguments;
@@ -189,9 +191,9 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
                 $"Exit code of \"{Path.GetFileName(process.StartInfo?.FileName ?? string.Empty)}\" should be 0 instead of {process.ExitCode} (= 0x{process.ExitCode.ToString("X")})");
         }
 
-        private void SetEnvironmentVariables(StringDictionary environmentVariables, int agentPort)
+        private void SetEnvironmentVariables(StringDictionary environmentVariables, MockDatadogAgent agent)
         {
-            Environment.PopulateEnvironmentVariables(environmentVariables, agentPort, _profilingExportsIntervalInSeconds, ServiceName);
+            Environment.PopulateEnvironmentVariables(environmentVariables, agent, _profilingExportsIntervalInSeconds, ServiceName);
         }
     }
 }

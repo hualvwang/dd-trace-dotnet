@@ -17,6 +17,7 @@ namespace Datadog.Trace.Configuration
         AspNetMvc,
         AspNetWebApi2,
         GraphQL,
+        HotChocolate,
         MongoDb,
         XUnit,
         NUnit,
@@ -47,5 +48,9 @@ namespace Datadog.Trace.Configuration
         NLog,
         TraceAnnotations,
         Grpc,
+        Process,
+        HashAlgorithm,
+        SymmetricAlgorithm,
+        OpenTelemetry,
     }
 }

@@ -2,10 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
 
 #pragma once
-#include <list>
-#include <mutex>
-#include <string>
-#include <thread>
 
 #include "CollectorBase.h"
 #include "RawCpuSample.h"
@@ -22,13 +18,15 @@ class CpuTimeProvider
     public CollectorBase<RawCpuSample> // accepts cputime samples
 {
 public:
+    static std::vector<SampleValueType> SampleTypeDefinitions;
+
+public:
     CpuTimeProvider(
+        uint32_t valueOffset,
         IThreadsCpuManager* pThreadsCpuManager,
         IFrameStore* pFrameStore,
-        IAppDomainStore* pAssemblyStore,
-        IRuntimeIdStore* pRuntimeIdStore
+        IAppDomainStore* pAppDomainStore,
+        IRuntimeIdStore* pRuntimeIdStore,
+        IConfiguration* pConfiguration
         );
-
-protected:
-    virtual void OnTransformRawSample(const RawCpuSample& rawSample, Sample& sample) override;
 };

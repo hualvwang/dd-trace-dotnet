@@ -31,6 +31,7 @@ namespace Datadog.Trace.ClrProfiler
 
         public const string Task = "System.Threading.Tasks.Task";
         public const string CancellationToken = "System.Threading.CancellationToken";
+        public const string Process = "System.Diagnostics.Process";
 
         // ReSharper disable once InconsistentNaming
         public const string IAsyncResult = "System.IAsyncResult";
@@ -49,5 +50,6 @@ namespace Datadog.Trace.ClrProfiler
         public const string Type = "System.Type";
 
         public const string Activity = "System.Diagnostics.Activity";
+        public const string ByteArray = "System.Byte[]";
     }
 }

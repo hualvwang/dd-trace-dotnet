@@ -4,11 +4,15 @@
 #pragma once
 
 #include <stdint.h>
+#include <memory>
 #include <vector>
+
 #include "cor.h"
 #include "corprof.h"
 #include "ManagedThreadInfo.h"
 
+
+class Sample;
 
 class RawSample
 {
@@ -16,12 +20,15 @@ public:
     RawSample();
     virtual ~RawSample() = default;
 
+    // set values and additional labels on target sample
+    virtual void OnTransform(std::shared_ptr<Sample>& sample, uint32_t valueOffset) const = 0;
+
 public:
     std::uint64_t Timestamp;        // _unixTimeUtc;
     AppDomainID AppDomainId;
     std::uint64_t LocalRootSpanId;  // _localRootSpanId;
     std::uint64_t SpanId;           // _spanId;
-    ManagedThreadInfo* ThreadInfo;
+    std::shared_ptr<ManagedThreadInfo> ThreadInfo;
 
     // array of instruction pointers (32 or 64 bit address)
     std::vector<std::uintptr_t> Stack;

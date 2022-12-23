@@ -39,9 +39,6 @@ namespace Datadog.Trace.Tagging
         {
             switch(key)
             {
-                case "db.type": 
-                    DbType = value;
-                    break;
                 case "cosmosdb.container": 
                     ContainerId = value;
                     break;
@@ -50,6 +47,11 @@ namespace Datadog.Trace.Tagging
                     break;
                 case "out.host": 
                     Host = value;
+                    break;
+                case "span.kind": 
+                case "component": 
+                case "db.type": 
+                    Logger.Value.Warning("Attempted to set readonly tag {TagName} on {TagType}. Ignoring.", key, nameof(CosmosDbTags));
                     break;
                 default: 
                     base.SetTag(key, value);

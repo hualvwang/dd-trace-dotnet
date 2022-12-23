@@ -20,7 +20,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [Trait("RequiresDockerDependency", "true")]
     [UsesVerify]
-    public class MongoDbTests : TestHelper
+    public class MongoDbTests : TracingIntegrationTest
     {
         private static readonly Regex OsRegex = new(@"""os"" : \{.*?\} ");
         private static readonly Regex ObjectIdRegex = new(@"ObjectId\("".*?""\)");
@@ -30,6 +30,8 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         {
             SetServiceVersion("1.0.0");
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsMongoDB();
 
         [SkippableTheory]
         [MemberData(nameof(PackageVersions.MongoDB), MemberType = typeof(PackageVersions))]
@@ -44,14 +46,14 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 
                 var version = string.IsNullOrEmpty(packageVersion) ? null : new Version(packageVersion);
                 var snapshotSuffix = version switch
-                    {
-                        null => "2_7", // default is version 2.8.0
-                        { Major: >= 3 } or { Major: 2, Minor: >= 15 } => "2_15", // A bunch of stuff was removed in 2.15.0
-                        { Major: 2, Minor: >= 7 } => "2_7", // default is version 2.8.0
-                        { Major: 2, Minor: >= 5 } => "2_5", // version 2.5 + 2.6 include additional info on queries compared to 2.2
-                        { Major: 2, Minor: >= 2 } => "2_2",
-                        _ => "PRE_2_2"
-                    };
+                {
+                    null => "2_7", // default is version 2.8.0
+                    { Major: >= 3 } or { Major: 2, Minor: >= 15 } => "2_15", // A bunch of stuff was removed in 2.15.0
+                    { Major: 2, Minor: >= 7 } => "2_7", // default is version 2.8.0
+                    { Major: 2, Minor: >= 5 } => "2_5", // version 2.5 + 2.6 include additional info on queries compared to 2.2
+                    { Major: 2, Minor: >= 2 } => "2_2",
+                    _ => "PRE_2_2"
+                };
 
                 var settings = VerifyHelper.GetSpanVerifierSettings();
                 // mongo stamps the current framework version, and OS so normalise those
@@ -71,10 +73,15 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 var nonAdminSpans = spans
                                    .Where(x => !adminSpans.Contains(x))
                                    .ToList();
+                var allMongoSpans = spans
+                                    .Where(x => x.GetTag(Tags.InstrumentationName) == "MongoDb")
+                                    .ToList();
 
                 await VerifyHelper.VerifySpans(nonAdminSpans, settings)
                                   .UseTextForParameters($"packageVersion={snapshotSuffix}")
                                   .DisableRequireUniquePrefix();
+
+                ValidateIntegrationSpans(allMongoSpans, expectedServiceName: "Samples.MongoDB-mongodb");
 
                 telemetry.AssertIntegrationEnabled(IntegrationId.MongoDb);
 
@@ -85,11 +92,9 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 {
                     adminSpan.Tags.Should().IntersectWith(new Dictionary<string, string>
                     {
-                        { "component", "MongoDb" },
                         { "db.name", "admin" },
                         { "env", "integration_tests" },
                         { "mongodb.collection", "1" },
-                        { "span.kind", "client" },
                     });
 
                     if (adminSpan.Resource == "buildInfo admin")

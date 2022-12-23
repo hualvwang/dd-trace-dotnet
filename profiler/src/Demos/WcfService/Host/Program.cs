@@ -1,4 +1,4 @@
-﻿// <copyright file="Program.cs" company="Datadog">
+// <copyright file="Program.cs" company="Datadog">
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
 // </copyright>
@@ -7,8 +7,8 @@ using System;
 using System.Diagnostics;
 using System.ServiceModel;
 using System.ServiceModel.Description;
+using Datadog.Demos.Util;
 using Datadog.Demos.WcfService.Library;
-using Datadog.Util;
 
 namespace Datadog.Demos.WcfService.Host
 {
@@ -86,14 +86,12 @@ namespace Datadog.Demos.WcfService.Host
             Console.WriteLine("        COR_PROFILER_PATH_32:      " + (Environment.GetEnvironmentVariable("COR_PROFILER_PATH_32") ?? "null"));
             Console.WriteLine("        COR_PROFILER_PATH:         " + (Environment.GetEnvironmentVariable("COR_PROFILER_PATH") ?? "null"));
             Console.WriteLine();
-            Console.WriteLine("        DD_DOTNET_PROFILER_HOME:   " + (Environment.GetEnvironmentVariable("DD_DOTNET_PROFILER_HOME") ?? "null"));
-            Console.WriteLine();
             Console.WriteLine("        COMPlus_EnableDiagnostics: " + (Environment.GetEnvironmentVariable("COMPlus_EnableDiagnostics") ?? "null"));
             Console.WriteLine();
 
             Console.WriteLine("    RuntimeEnvironmentInfo:");
             Console.WriteLine();
-            Console.WriteLine("        " + RuntimeEnvironmentInfo.SingeltonInstance.ToString());
+            Console.WriteLine("        " + RuntimeEnvironmentInfo.Instance);
 
             Console.WriteLine();
             Console.WriteLine("    AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName:");

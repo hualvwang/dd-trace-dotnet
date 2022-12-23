@@ -1,13 +1,13 @@
 public static class Projects
 {
-    public const string DatadogMonitoringDistribution = "Datadog.Monitoring.Distribution";
     public const string DatadogTrace = "Datadog.Trace";
     public const string DatadogTraceAnnotations = "Datadog.Trace.Annotations";
     public const string DatadogTraceAspNet = "Datadog.Trace.AspNet";
-    public const string DatadogTraceOpenTracing = "Datadog.Trace.OpenTracing";
+    public const string DatadogTraceBundle = "Datadog.Trace.Bundle";
     public const string DatadogTraceMsBuild = "Datadog.Trace.MSBuild";
-    public const string ClrProfilerNative = "Datadog.Trace.ClrProfiler.Native";
-    public const string NativeLoader = "Datadog.AutoInstrumentation.NativeLoader";
+    public const string DatadogTraceOpenTracing = "Datadog.Trace.OpenTracing";
+    public const string ClrProfilerNative = "Datadog.Tracer.Native";
+    public const string NativeLoader = "Datadog.Trace.ClrProfiler.Native";
 
     public const string BenchmarksTrace = "Benchmarks.Trace";
 
@@ -22,4 +22,22 @@ public static class Projects
     public const string DataDogThreadTest = "DataDogThreadTest";
 
     public const string Tool = "Datadog.Trace.Tools.Runner";
+
+    public const string DebuggerIntegrationTests = "Datadog.Trace.Debugger.IntegrationTests";
+    public const string DebuggerSamples = "Samples.Probes";
+    public const string DebuggerSamplesTestRuns = "Samples.Probes.TestRuns";
+
+}
+
+public static class FileNames
+{
+    public const string NativeLoader = "Datadog.Trace.ClrProfiler.Native";
+    public const string NativeTracer = "Datadog.Tracer.Native";
+    public const string NativeProfiler = "Datadog.Profiler.Native";
+    public const string ProfilerLinuxApiWrapper = "Datadog.Linux.ApiWrapper.x64.so";
+    public const string AppSecLinuxWaf = "libddwaf.so";
+
+    public const string LoaderConf = "loader.conf";
+    public const string CreateLogPathScript = "createLogPath.sh";
+
 }

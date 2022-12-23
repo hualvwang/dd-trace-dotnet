@@ -7,10 +7,14 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Threading.Tasks;
 using Amazon.SimpleSystemsManagement.Model;
+using DiffMatchPatch;
+using GenerateSpanDocumentation;
 using GeneratePackageVersions;
 using Honeypot;
 using Microsoft.TeamFoundation.Build.WebApi;
+using Microsoft.VisualBasic;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.WebApi;
 using Nuke.Common;
@@ -67,7 +71,7 @@ partial class Build
         {
             foreach (var dll in GacProjects)
             {
-                var path = TracerHomeDirectory / Framework / $"{dll}.dll";
+                var path = MonitoringHomeDirectory / Framework / $"{dll}.dll";
                 GacUtil.Value($"/i \"{path}\"");
             }
         });
@@ -103,14 +107,8 @@ partial class Build
         {
             var envVars = new Dictionary<string,string>(new ProcessStartInfo().Environment);
 
-            // Override environment variables
-            envVars["COR_ENABLE_PROFILING"] = "1";
-            envVars["COR_PROFILER"] = "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}";
-            envVars["COR_PROFILER_PATH_64"] = TracerHomeDirectory / "win-x64" / "Datadog.Trace.ClrProfiler.Native.dll";
-            envVars["COR_PROFILER_PATH_32"] = TracerHomeDirectory / "win-x86" / "Datadog.Trace.ClrProfiler.Native.dll";
-            envVars["DD_DOTNET_TRACER_HOME"] = TracerHomeDirectory;
-
-            envVars.AddExtraEnvVariables(ExtraEnvVars);
+            AddTracerEnvironmentVariables(envVars);
+            AddExtraEnvVariables(envVars, ExtraEnvVars);
 
             Logger.Info($"Running sample '{SampleName}' in IIS Express");
             IisExpress.Value(
@@ -125,8 +123,8 @@ partial class Build
         .Executes(() => {
 
             var envVars = new Dictionary<string, string> { { "ASPNETCORE_URLS", "http://*:5003" } };
-            envVars.AddTracerEnvironmentVariables(MonitoringHomeDirectory);
-            envVars.AddExtraEnvVariables(ExtraEnvVars);
+            AddTracerEnvironmentVariables(envVars);
+            AddExtraEnvVariables(envVars, ExtraEnvVars);
 
             string project = Solution.GetProject(SampleName)?.Path;
             if (project is not null)
@@ -165,7 +163,7 @@ partial class Build
 
     Target GeneratePackageVersions => _ => _
        .Description("Regenerate the PackageVersions props and .cs files")
-       .DependsOn(Clean, Restore, CreateRequiredDirectories, CompileManagedSrc, PublishManagedProfiler)
+       .DependsOn(Clean, Restore, CreateRequiredDirectories, CompileManagedSrc, PublishManagedTracer)
        .Executes(async () =>
        {
            var testDir = Solution.GetProject(Projects.ClrProfilerIntegrationTests).Directory;
@@ -173,7 +171,7 @@ partial class Build
            var versionGenerator = new PackageVersionGenerator(TracerDirectory, testDir);
            await versionGenerator.GenerateVersions(Solution);
 
-           var assemblies = TracerHomeDirectory
+           var assemblies = MonitoringHomeDirectory
                            .GlobFiles("**/Datadog.Trace.dll")
                            .Select(x => x.ToString())
                            .ToList();
@@ -183,6 +181,17 @@ partial class Build
            var dependabotProj = TracerDirectory / "dependabot" / "Datadog.Dependabot.Integrations.csproj";
            await DependabotFileManager.UpdateIntegrations(dependabotProj, integrations);
        });
+    
+    Target GenerateSpanDocumentation => _ => _
+        .Description("Regenerate documentation from our code models")
+        .Executes(() =>
+        {
+            var rulesFilePath = TestsDirectory / "Datadog.Trace.TestHelpers" / "SpanMetadataRules.cs";
+            var rulesOutput = RootDirectory / "docs" / "span_metadata.md";
+
+            var generator = new SpanDocumentationGenerator(rulesFilePath, rulesOutput);
+            generator.Run();
+        });
 
     Target UpdateVendoredCode => _ => _
        .Description("Updates the vendored dependency code and dependabot template")
@@ -217,17 +226,48 @@ partial class Build
             new SetAllVersions.Source(TracerDirectory, NewVersion, NewIsPrerelease.Value!).Run();
         });
 
-    Target UpdateMsiContents => _ => _
-       .Description("Update the contents of the MSI")
-       .DependsOn(Clean, BuildTracerHome)
-       .Executes(() =>
-        {
-            SyncMsiContent.Run(SharedDirectory, TracerHomeDirectory);
-        });
-
     Target UpdateSnapshots => _ => _
         .Description("Updates verified snapshots files with received ones")
         .Executes(ReplaceReceivedFilesInSnapshots);
+
+    Target PrintSnapshotsDiff  => _ => _
+      .Description("Prints snapshots differences from the current tests")
+      .AssuredAfterFailure()
+      .Executes(() =>
+      {
+          var snapshotsDirectory = TestsDirectory / "snapshots";
+          var files = snapshotsDirectory.GlobFiles("*.received.*");
+
+          foreach (var source in files)
+          {
+              var fileName = Path.GetFileNameWithoutExtension(source);
+
+              Logger.Info("Difference found in " + fileName);
+              var dmp = new diff_match_patch();
+              var diff = dmp.diff_main(File.ReadAllText(source.ToString().Replace("received", "verified")), File.ReadAllText(source));
+              dmp.diff_cleanupSemantic(diff);
+
+              foreach (var t in diff)
+              {
+                  if (t.operation != Operation.EQUAL)
+                  {
+                      Logger.Info(DiffToString(t));
+                  }
+              }
+          }
+
+          string DiffToString(Diff diff)
+          {
+              var line = diff.operation switch
+              {
+                  Operation.DELETE => $"- {diff.text}",
+                  Operation.INSERT => $"+ {diff.text}",
+                  Operation.EQUAL => string.Empty,
+                  _ => throw new Exception("Unknown value of the Option enum.")
+              };
+              return line.Trim('\n');
+          }
+      });
 
     Target UpdateSnapshotsFromBuild => _ => _
       .Description("Updates verified snapshots downloading them from the CI given a build id")
@@ -251,6 +291,7 @@ partial class Build
                              project: AzureDevopsProjectId,
                              buildId: buildNumber);
 
+            var listTasks = new List<Task>();
             foreach(var artifact in artifacts)
             {
                 if (!artifact.Name.Contains("snapshots"))
@@ -261,17 +302,22 @@ partial class Build
                 var extractLocation = Path.Combine((AbsolutePath)Path.GetTempPath(), artifact.Name);
                 var snapshotsDirectory = TestsDirectory / "snapshots";
 
-                await DownloadAzureArtifact((AbsolutePath)Path.GetTempPath(), artifact, AzureDevopsToken);
+                listTasks.Add(Task.Run(async () =>
+                {
+                    await DownloadAzureArtifact((AbsolutePath)Path.GetTempPath(), artifact, AzureDevopsToken);
 
-                CopyDirectoryRecursively(
-                    source: extractLocation,
-                    target: snapshotsDirectory,
-                    DirectoryExistsPolicy.Merge,
-                    FileExistsPolicy.Skip,
-                    excludeFile: file => !Path.GetFileNameWithoutExtension(file.FullName).EndsWith(".received"));
+                    CopyDirectoryRecursively(
+                        source: extractLocation,
+                        target: snapshotsDirectory,
+                        DirectoryExistsPolicy.Merge,
+                        FileExistsPolicy.Skip,
+                        excludeFile: file => !Path.GetFileNameWithoutExtension(file.FullName).EndsWith(".received"));
 
-                DeleteDirectory(extractLocation);
+                    DeleteDirectory(extractLocation);
+                }));
             }
+
+            Task.WaitAll(listTasks.ToArray());
 
             ReplaceReceivedFilesInSnapshots();
       });
@@ -289,6 +335,11 @@ partial class Build
             {
                 Logger.Warn($"Skipping file '{source}' as filename did not end with 'received'");
                 continue;
+            }
+
+            if (fileName.Contains("VersionMismatchNewerNugetTests"))
+            {
+                Logger.Warn("Updated snapshots contain a version mismatch test. You may need to upgrade your code in the Azure public feed.");
             }
 
             var trimmedName = fileName.Substring(0, fileName.Length - suffixLength);

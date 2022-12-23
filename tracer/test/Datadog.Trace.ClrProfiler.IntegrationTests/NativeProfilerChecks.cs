@@ -14,15 +14,17 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
     public class NativeProfilerChecks : TestHelper
     {
         public NativeProfilerChecks(ITestOutputHelper output)
-            : base(new EnvironmentHelper("Datadog.Trace.ClrProfiler.Native.Checks", typeof(TestHelper), output, samplesDirectory: Path.Combine("test", "test-applications", "instrumentation"), prependSamplesToAppName: false), output)
+            : base(new EnvironmentHelper("Datadog.Tracer.Native.Checks", typeof(TestHelper), output, samplesDirectory: Path.Combine("test", "test-applications", "instrumentation"), prependSamplesToAppName: false), output)
         {
             SetServiceVersion("1.0.0");
             EnableDebugMode();
         }
 
         [SkippableFact]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public void RunChecksProject()
         {
+            SetInstrumentationVerification();
             using (var agent = EnvironmentHelper.GetMockAgent())
             using (var processResult = RunSampleAndWaitForExit(agent))
             {
@@ -33,7 +35,9 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                     throw new SkipException("Unexpected segmentation fault in NativeProfilerChecks");
                 }
 
-                exitCode.Should().Be(0);
+                ExitCodeException.ThrowIfNonZero(processResult.ExitCode, processResult.StandardError);
+
+                VerifyInstrumentation(processResult.Process);
             }
         }
     }

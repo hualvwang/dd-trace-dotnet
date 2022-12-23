@@ -4,34 +4,27 @@
 // </copyright>
 
 using System;
+using Datadog.Trace.Ci.Configuration;
 using Datadog.Trace.Ci.EventModel;
+using Datadog.Trace.Vendors.MessagePack;
 
 namespace Datadog.Trace.Ci.Agent.Payloads
 {
-    internal class CITestCyclePayload : EventsPayload
+    internal class CITestCyclePayload : CIVisibilityProtocolPayload
     {
-        public CITestCyclePayload()
+        public CITestCyclePayload(CIVisibilitySettings settings, IFormatterResolver formatterResolver = null)
+            : base(settings, formatterResolver)
         {
-            if (!string.IsNullOrWhiteSpace(CIVisibility.Settings.AgentlessUrl))
-            {
-                var builder = new UriBuilder(CIVisibility.Settings.AgentlessUrl);
-                builder.Path = "api/v2/citestcycle";
-                Url = builder.Uri;
-            }
-            else
-            {
-                var builder = new UriBuilder("https://datadog.host.com/api/v2/citestcycle");
-                builder.Host = "citestcycle-intake." + CIVisibility.Settings.Site;
-                Url = builder.Uri;
-            }
         }
 
-        public override Uri Url { get; }
+        public override string EventPlatformSubdomain => "citestcycle-intake";
+
+        public override string EventPlatformPath => "api/v2/citestcycle";
 
         public override bool CanProcessEvent(IEvent @event)
         {
             // This intake accepts both Span and Test events
-            if (@event is SpanEvent or TestEvent)
+            if (@event is CIVisibilityEvent<Span>)
             {
                 return true;
             }

@@ -12,7 +12,14 @@ namespace Datadog.Profiler.IntegrationTests.Helpers
         public const string CodeHotSpotsEnable = "DD_PROFILING_CODEHOTSPOTS_ENABLED";
         public const string UseNativeLoader = "USE_NATIVE_LOADER";
         public const string CpuProfilerEnabled = "DD_PROFILING_CPU_ENABLED";
+        public const string WallTimeProfilerEnabled = "DD_PROFILING_WALLTIME_ENABLED";
         public const string ExceptionProfilerEnabled = "DD_PROFILING_EXCEPTION_ENABLED";
-        public const string ExceptionSampleLimit = "DD_PROFILING_EXCEPTION_SAMPLE_LIMIT";
+        public const string ExceptionSampleLimit = "DD_INTERNAL_PROFILING_EXCEPTION_SAMPLE_LIMIT";
+        public const string AllocationProfilerEnabled = "DD_PROFILING_ALLOCATION_ENABLED";
+        public const string ContentionProfilerEnabled = "DD_PROFILING_LOCK_ENABLED";
+        public const string EndpointProfilerEnabled = "DD_PROFILING_ENDPOINT_COLLECTION_ENABLED";
+        public const string NamedPipeName = "DD_TRACE_PIPE_NAME";
+        public const string TimestampsAsLabelEnabled = "DD_INTERNAL_PROFILING_TIMESTAMPS_AS_LABEL_ENABLED";
+        public const string GarbageCollectionProfilerEnabled = "DD_PROFILING_GC_ENABLED";
     }
 }

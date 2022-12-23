@@ -1,4 +1,4 @@
-﻿[
+[
   {
     TraceId: Id_1,
     SpanId: Id_2,
@@ -8,7 +8,8 @@
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -83,11 +84,14 @@
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/streamingbothways,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/StreamingBothWays,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -130,7 +134,8 @@
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -205,11 +210,14 @@
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/streamingfromclient,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/StreamingFromClient,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -252,7 +260,8 @@
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -329,11 +338,14 @@
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -378,7 +390,8 @@
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -455,11 +468,14 @@
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -504,7 +520,8 @@
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -581,11 +598,14 @@
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -630,7 +650,8 @@
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -707,11 +728,14 @@
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -760,7 +784,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -837,11 +862,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -886,7 +914,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -963,11 +992,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1012,7 +1044,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1089,11 +1122,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1138,7 +1174,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1215,11 +1252,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/erroringmethod,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/ErroringMethod,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1268,7 +1308,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1343,11 +1384,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/streamingfromserver,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/StreamingFromServer,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1390,7 +1434,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1465,11 +1510,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/unary,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/Unary,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1512,7 +1560,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1587,11 +1636,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/unary,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/Unary,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1634,7 +1686,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1709,11 +1762,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/veryslow,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/VerySlow,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1758,7 +1814,8 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
     Tags: {
       env: integration_tests,
       language: dotnet,
-      runtime-id: Guid_1
+      runtime-id: Guid_1,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -1833,11 +1890,14 @@ at Samples.GrpcDotNet.Services.GreeterService.ErroringMethod(CreateErrorRequest 
       env: integration_tests,
       http.method: POST,
       http.request.headers.host: localhost:00000,
+      http.route: /greet.tester.greeter/veryslow,
       http.status_code: 200,
       http.url: http://localhost:00000/greet.tester.Greeter/VerySlow,
+      http.useragent: grpc-dotnet/123,
       language: dotnet,
       runtime-id: Guid_1,
-      span.kind: server
+      span.kind: server,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,

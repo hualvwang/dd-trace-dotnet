@@ -18,7 +18,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [Collection(nameof(KafkaTestsCollection))]
     [Trait("RequiresDockerDependency", "true")]
-    public class KafkaTests : TestHelper
+    public class KafkaTests : TracingIntegrationTest
     {
         private const int ExpectedSuccessProducerWithHandlerSpans = 20;
         private const int ExpectedSuccessProducerWithoutHandlerSpans = 10;
@@ -39,7 +39,10 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             : base("Kafka", output)
         {
             SetServiceVersion("1.0.0");
+            EnableDebugMode();
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsKafka();
 
         [SkippableTheory]
         [MemberData(nameof(PackageVersions.Kafka), MemberType = typeof(PackageVersions))]
@@ -58,6 +61,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             // We use HaveCountGreaterOrEqualTo because _both_ consumers may handle the message
             // Due to manual/autocommit behaviour
             allSpans.Should().HaveCountGreaterOrEqualTo(TotalExpectedSpanCount);
+            ValidateIntegrationSpans(allSpans, expectedServiceName: "Samples.Kafka-kafka");
 
             var allProducerSpans = allSpans.Where(x => x.Name == "kafka.produce").ToList();
             var successfulProducerSpans = allProducerSpans.Where(x => x.Error == 0).ToList();
@@ -122,15 +126,25 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                .HaveCountGreaterOrEqualTo(ExpectedTombstoneProducerSpans)
                .And.OnlyContain(tag => tag == "true");
 
+            allConsumerSpans.Should().OnlyContain(x => x.Tags.ContainsKey(Tags.KafkaConsumerGroup));
+
+            successfulConsumerSpans
+               .Should()
+               .OnlyContain(
+                    x => x.Tags[Tags.KafkaConsumerGroup] == "Samples.Kafka.AutoCommitConsumer1"
+                      || x.Tags[Tags.KafkaConsumerGroup] == "Samples.Kafka.ManualCommitConsumer2");
+
             // Error spans are created in 1.5.3 when the broker doesn't exist yet
             // Other package versions don't error, so won't create a span,
             // so no fixed number requirement
             if (errorConsumerSpans.Count > 0)
             {
+                errorConsumerSpans.Should().OnlyContain(x => x.Tags[Tags.KafkaConsumerGroup] == "Samples.Kafka.FailingConsumer1");
+
                 errorConsumerSpans
                    .Should()
                    .OnlyContain(x => x.Tags.ContainsKey(Tags.ErrorType))
-                   .And.OnlyContain(x => x.Tags[Tags.ErrorMsg] == "Broker: Unknown topic or partition")
+                   .And.OnlyContain(x => x.Tags[Tags.ErrorMsg].Contains("Broker: Unknown topic or partition"))
                    .And.OnlyContain(x => x.Tags[Tags.ErrorType] == "Confluent.Kafka.ConsumeException");
             }
 

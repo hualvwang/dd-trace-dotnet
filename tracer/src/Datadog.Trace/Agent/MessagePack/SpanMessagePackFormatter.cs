@@ -5,7 +5,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using Datadog.Trace.Configuration;
 using Datadog.Trace.ExtensionMethods;
+using Datadog.Trace.PlatformHelpers;
 using Datadog.Trace.Processors;
 using Datadog.Trace.Tagging;
 using Datadog.Trace.Util;
@@ -14,10 +16,18 @@ using Datadog.Trace.Vendors.MessagePack.Formatters;
 
 namespace Datadog.Trace.Agent.MessagePack
 {
-    internal class SpanMessagePackFormatter : IMessagePackFormatter<Span>
+    internal class SpanMessagePackFormatter : IMessagePackFormatter<TraceChunkModel>
     {
-        public static readonly IMessagePackFormatter<Span> Instance = new SpanMessagePackFormatter();
+        public static readonly SpanMessagePackFormatter Instance = new();
 
+        // Cache the UTF-8 bytes for string constants (like tag names)
+        // and values that are constant within the lifetime of a service (like process id).
+        //
+        // Don't make these static to avoid the additional redirection when this
+        // assembly is loaded in the shared domain. We only create a single instance of
+        // this class so that's fine.
+
+        // top-level span fields
         private readonly byte[] _traceIdBytes = StringEncoding.UTF8.GetBytes("trace_id");
         private readonly byte[] _spanIdBytes = StringEncoding.UTF8.GetBytes("span_id");
         private readonly byte[] _nameBytes = StringEncoding.UTF8.GetBytes("name");
@@ -29,39 +39,100 @@ namespace Datadog.Trace.Agent.MessagePack
         private readonly byte[] _parentIdBytes = StringEncoding.UTF8.GetBytes("parent_id");
         private readonly byte[] _errorBytes = StringEncoding.UTF8.GetBytes("error");
 
-        // name of string tag dictionary
+        // string tags
         private readonly byte[] _metaBytes = StringEncoding.UTF8.GetBytes("meta");
 
         private readonly byte[] _languageNameBytes = StringEncoding.UTF8.GetBytes(Trace.Tags.Language);
         private readonly byte[] _languageValueBytes = StringEncoding.UTF8.GetBytes(TracerConstants.Language);
+
         private readonly byte[] _runtimeIdNameBytes = StringEncoding.UTF8.GetBytes(Trace.Tags.RuntimeId);
         private readonly byte[] _runtimeIdValueBytes = StringEncoding.UTF8.GetBytes(Tracer.RuntimeId);
+
+        private readonly byte[] _environmentNameBytes = StringEncoding.UTF8.GetBytes(Trace.Tags.Env);
+
+        private readonly byte[] _versionNameBytes = StringEncoding.UTF8.GetBytes(Trace.Tags.Version);
+
         private readonly byte[] _originNameBytes = StringEncoding.UTF8.GetBytes(Trace.Tags.Origin);
 
-        // name of numeric tag dictionary
+        // numeric tags
         private readonly byte[] _metricsBytes = StringEncoding.UTF8.GetBytes("metrics");
 
-        private readonly byte[] _processIdNameBytes = StringEncoding.UTF8.GetBytes(Trace.Metrics.ProcessId);
+        private readonly byte[] _samplingPriorityNameBytes = StringEncoding.UTF8.GetBytes(Metrics.SamplingPriority);
+        private readonly byte[][] _samplingPriorityValueBytes;
+
+        private readonly byte[] _processIdNameBytes = StringEncoding.UTF8.GetBytes(Metrics.ProcessId);
         private readonly byte[] _processIdValueBytes;
+
+        // Azure App Service tag names and values
+        private byte[] _aasSiteNameTagNameBytes;
+        private byte[] _aasSiteKindTagNameBytes;
+        private byte[] _aasSiteTypeTagNameBytes;
+        private byte[] _aasResourceGroupTagNameBytes;
+        private byte[] _aasSubscriptionIdTagNameBytes;
+        private byte[] _aasResourceIdTagNameBytes;
+        private byte[] _aasInstanceIdTagNameBytes;
+        private byte[] _aasInstanceNameTagNameBytes;
+        private byte[] _aasOperatingSystemTagNameBytes;
+        private byte[] _aasRuntimeTagNameBytes;
+        private byte[] _aasExtensionVersionTagNameBytes;
 
         private SpanMessagePackFormatter()
         {
             double processId = DomainMetadata.Instance.ProcessId;
             _processIdValueBytes = processId > 0 ? MessagePackSerializer.Serialize(processId) : null;
+
+            // values begin at -1, so they are shifted by 1 from their array index: [-1, 0, 1, 2]
+            // these must serialized as msgpack float64 (Double in .NET).
+            _samplingPriorityValueBytes = new[]
+                                          {
+                                              MessagePackSerializer.Serialize((double)SamplingPriorityValues.UserReject),
+                                              MessagePackSerializer.Serialize((double)SamplingPriorityValues.AutoReject),
+                                              MessagePackSerializer.Serialize((double)SamplingPriorityValues.AutoKeep),
+                                              MessagePackSerializer.Serialize((double)SamplingPriorityValues.UserKeep),
+                                          };
         }
 
-        public int Serialize(ref byte[] bytes, int offset, Span value, IFormatterResolver formatterResolver)
+        int IMessagePackFormatter<TraceChunkModel>.Serialize(ref byte[] bytes, int offset, TraceChunkModel traceChunk, IFormatterResolver formatterResolver)
         {
+            return Serialize(ref bytes, offset, traceChunk, formatterResolver);
+        }
+
+        // overload of IMessagePackFormatter<TraceChunkModel>.Serialize() with `in` modifier on `TraceChunkModel` parameter
+        public int Serialize(ref byte[] bytes, int offset, in TraceChunkModel traceChunk, IFormatterResolver formatterResolver)
+        {
+            int originalOffset = offset;
+
+            // start writing span[]
+            offset += MessagePackBinary.WriteArrayHeader(ref bytes, offset, traceChunk.SpanCount);
+
+            // serialize each span
+            for (var i = 0; i < traceChunk.SpanCount; i++)
+            {
+                // when serializing each span, we need additional information that is not
+                // available in the span object itself, like its position in the trace chunk
+                // or if its parent can also be found in the same chunk, so we use SpanModel
+                // to pass that information to the serializer
+                var spanModel = traceChunk.GetSpanModel(i);
+                offset += Serialize(ref bytes, offset, in spanModel);
+            }
+
+            return offset - originalOffset;
+        }
+
+        private int Serialize(ref byte[] bytes, int offset, in SpanModel spanModel)
+        {
+            var span = spanModel.Span;
+
             // First, pack array length (or map length).
             // It should be the number of members of the object to be serialized.
             var len = 8;
 
-            if (value.Context.ParentId != null)
+            if (span.Context.ParentId > 0)
             {
                 len++;
             }
 
-            if (value.Error)
+            if (span.Error)
             {
                 len++;
             }
@@ -73,66 +144,58 @@ namespace Datadog.Trace.Agent.MessagePack
             offset += MessagePackBinary.WriteMapHeader(ref bytes, offset, len);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _traceIdBytes);
-            offset += MessagePackBinary.WriteUInt64(ref bytes, offset, value.Context.TraceId);
+            offset += MessagePackBinary.WriteUInt64(ref bytes, offset, span.Context.TraceId);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _spanIdBytes);
-            offset += MessagePackBinary.WriteUInt64(ref bytes, offset, value.Context.SpanId);
+            offset += MessagePackBinary.WriteUInt64(ref bytes, offset, span.Context.SpanId);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _nameBytes);
-            offset += MessagePackBinary.WriteString(ref bytes, offset, value.OperationName);
+            offset += MessagePackBinary.WriteString(ref bytes, offset, span.OperationName);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _resourceBytes);
-            offset += MessagePackBinary.WriteString(ref bytes, offset, value.ResourceName);
+            offset += MessagePackBinary.WriteString(ref bytes, offset, span.ResourceName);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _serviceBytes);
-            offset += MessagePackBinary.WriteString(ref bytes, offset, value.ServiceName);
+            offset += MessagePackBinary.WriteString(ref bytes, offset, span.ServiceName);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _typeBytes);
-            offset += MessagePackBinary.WriteString(ref bytes, offset, value.Type);
+            offset += MessagePackBinary.WriteString(ref bytes, offset, span.Type);
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _startBytes);
-            offset += MessagePackBinary.WriteInt64(ref bytes, offset, value.StartTime.ToUnixTimeNanoseconds());
+            offset += MessagePackBinary.WriteInt64(ref bytes, offset, span.StartTime.ToUnixTimeNanoseconds());
 
             offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _durationBytes);
-            offset += MessagePackBinary.WriteInt64(ref bytes, offset, value.Duration.ToNanoseconds());
+            offset += MessagePackBinary.WriteInt64(ref bytes, offset, span.Duration.ToNanoseconds());
 
-            if (value.Context.ParentId != null)
+            if (span.Context.ParentId > 0)
             {
                 offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _parentIdBytes);
-                offset += MessagePackBinary.WriteUInt64(ref bytes, offset, (ulong)value.Context.ParentId);
+                offset += MessagePackBinary.WriteUInt64(ref bytes, offset, (ulong)span.Context.ParentId);
             }
 
-            if (value.Error)
+            if (span.Error)
             {
                 offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _errorBytes);
                 offset += MessagePackBinary.WriteByte(ref bytes, offset, 1);
             }
 
             ITagProcessor[] tagProcessors = null;
-            if (value.Context.TraceContext?.Tracer is Tracer tracer)
+            if (span.Context.TraceContext?.Tracer is Tracer tracer)
             {
                 tagProcessors = tracer.TracerManager?.TagProcessors;
             }
 
-            offset += SerializeTags(ref bytes, offset, value, value.Tags, tagProcessors);
-
-            return offset - originalOffset;
-        }
-
-        private int SerializeTags(ref byte[] bytes, int offset, Span span, ITags tags, ITagProcessor[] tagProcessors)
-        {
-            int originalOffset = offset;
-
-            offset += WriteTags(ref bytes, offset, span, tags, tagProcessors);
-            offset += WriteMetrics(ref bytes, offset, span, tags, tagProcessors);
+            offset += WriteTags(ref bytes, offset, in spanModel, tagProcessors);
+            offset += WriteMetrics(ref bytes, offset, in spanModel, tagProcessors);
 
             return offset - originalOffset;
         }
 
         // TAGS
 
-        private int WriteTags(ref byte[] bytes, int offset, Span span, ITags tags, ITagProcessor[] tagProcessors)
+        private int WriteTags(ref byte[] bytes, int offset, in SpanModel model, ITagProcessor[] tagProcessors)
         {
+            var span = model.Span;
             int originalOffset = offset;
 
             // Start of "meta" dictionary. Do not add any string tags before this line.
@@ -144,56 +207,176 @@ namespace Datadog.Trace.Agent.MessagePack
             var countOffset = offset;
             offset += MessagePackBinary.WriteMapHeaderForceMap32Block(ref bytes, offset, 0);
 
-            // add "language=dotnet" tag to all spans, except those that
-            // represents a downstream service or external dependency
-            if (tags is not InstrumentationTags { SpanKind: SpanKinds.Client or SpanKinds.Producer })
-            {
-                count++;
-                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _languageNameBytes);
-                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _languageValueBytes);
-            }
-
             // Write span tags
             var tagWriter = new TagWriter(this, tagProcessors, bytes, offset);
-            tags.EnumerateTags(ref tagWriter);
+            span.Tags.EnumerateTags(ref tagWriter);
             bytes = tagWriter.Bytes;
             offset = tagWriter.Offset;
             count += tagWriter.Count;
 
-            if (span.IsRootSpan)
+            // TODO: for each trace tag, determine if it should be added to the local root,
+            // to the first span in the chunk, or to all orphan spans.
+            // For now, we add them to the local root which is correct in most cases.
+            if (model.IsLocalRoot && model.TraceChunk.Tags?.ToArray() is { Length: > 0 } traceTags)
             {
-                // write trace-level string tags
-                var traceTags = span.Context.TraceContext?.Tags;
-                if (traceTags != null)
-                {
-                    lock (traceTags)
-                    {
-                        count += traceTags.Count;
+                count += traceTags.Length;
 
-                        // don't cast to IEnumerable so we can use the struct enumerator from List<T>
-                        foreach (var tag in traceTags)
-                        {
-                            WriteTag(ref bytes, ref offset, tag.Key, tag.Value, tagProcessors);
-                        }
-                    }
+                foreach (var tag in traceTags)
+                {
+                    WriteTag(ref bytes, ref offset, tag.Key, tag.Value, tagProcessors);
                 }
             }
 
+            // add "runtime-id" tag to service-entry (aka top-level) spans
             if (span.IsTopLevel && (!Ci.CIVisibility.IsRunning || !Ci.CIVisibility.Settings.Agentless))
             {
-                // add "runtime-id" tag to service-entry (aka top-level) spans
                 count++;
                 offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _runtimeIdNameBytes);
                 offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _runtimeIdValueBytes);
             }
 
             // add "_dd.origin" tag to all spans
-            string origin = span.Context.Origin;
-            if (!string.IsNullOrEmpty(origin))
+            var originRawBytes = MessagePackStringCache.GetOriginBytes(model.TraceChunk.Origin);
+
+            if (originRawBytes is not null)
             {
                 count++;
                 offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _originNameBytes);
-                offset += MessagePackBinary.WriteString(ref bytes, offset, origin);
+                offset += MessagePackBinary.WriteRaw(ref bytes, offset, originRawBytes);
+            }
+
+            // add "env" to all spans
+            var envRawBytes = MessagePackStringCache.GetEnvironmentBytes(model.TraceChunk.Environment);
+
+            if (envRawBytes is not null)
+            {
+                count++;
+                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _environmentNameBytes);
+                offset += MessagePackBinary.WriteRaw(ref bytes, offset, envRawBytes);
+            }
+
+            // add "language=dotnet" tag to all spans, except those that
+            // represents a downstream service or external dependency
+            if (span.Tags is not InstrumentationTags { SpanKind: SpanKinds.Client or SpanKinds.Producer })
+            {
+                count++;
+                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _languageNameBytes);
+                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _languageValueBytes);
+            }
+
+            // add "version" tags to all spans whose service name is the default service name
+            if (string.Equals(span.Context.ServiceName, model.TraceChunk.DefaultServiceName, StringComparison.OrdinalIgnoreCase))
+            {
+                var versionRawBytes = MessagePackStringCache.GetVersionBytes(model.TraceChunk.ServiceVersion);
+
+                if (versionRawBytes is not null)
+                {
+                    count++;
+                    offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _versionNameBytes);
+                    offset += MessagePackBinary.WriteRaw(ref bytes, offset, versionRawBytes);
+                }
+            }
+
+            // AAS tags need to be set on any span for the backend to properly handle the billing.
+            // That said, it's more intuitive to find it on the local root for the customer.
+            if (model.TraceChunk.IsRunningInAzureAppService && model.TraceChunk.AzureAppServiceSettings is { } azureAppServiceSettings)
+            {
+                // Done here to avoid initializing in most cases
+                InitializeAasTags();
+                byte[] tagBytes;
+
+                if (model.IsLocalRoot || model.IsChunkOrphan)
+                {
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesSiteKind, azureAppServiceSettings.SiteKind);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasSiteKindTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesResourceGroup, azureAppServiceSettings.ResourceGroup);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasResourceGroupTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesSubscriptionId, azureAppServiceSettings.SubscriptionId);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasSubscriptionIdTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesResourceId, azureAppServiceSettings.ResourceId);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasResourceIdTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesInstanceId, azureAppServiceSettings.InstanceId);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasInstanceIdTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesInstanceName, azureAppServiceSettings.InstanceName);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasInstanceNameTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesOperatingSystem, azureAppServiceSettings.OperatingSystem);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasOperatingSystemTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesRuntime, azureAppServiceSettings.Runtime);
+
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasRuntimeTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+
+                    tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesExtensionVersion, azureAppServiceSettings.SiteExtensionVersion);
+                    if (tagBytes is not null)
+                    {
+                        count++;
+                        offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasExtensionVersionTagNameBytes);
+                        offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                    }
+                }
+
+                tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesSiteName, azureAppServiceSettings.SiteName);
+                // the front-end identify AAS spans using aas.site.name and aas.site.type, so we need them on all spans
+                if (tagBytes is not null)
+                {
+                    count++;
+                    offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasSiteNameTagNameBytes);
+                    offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                }
+
+                tagBytes = MessagePackStringCache.GetAzureAppServiceKeyBytes(Datadog.Trace.Tags.AzureAppServicesSiteType, azureAppServiceSettings.SiteType);
+                if (tagBytes is not null)
+                {
+                    count++;
+                    offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _aasSiteTypeTagNameBytes);
+                    offset += MessagePackBinary.WriteRaw(ref bytes, offset, tagBytes);
+                }
             }
 
             if (count > 0)
@@ -238,8 +421,9 @@ namespace Datadog.Trace.Agent.MessagePack
 
         // METRICS
 
-        private int WriteMetrics(ref byte[] bytes, int offset, Span span, ITags tags, ITagProcessor[] tagProcessors)
+        private int WriteMetrics(ref byte[] bytes, int offset, in SpanModel model, ITagProcessor[] tagProcessors)
         {
+            var span = model.Span;
             int originalOffset = offset;
 
             // Start of "metrics" dictionary. Do not add any numeric tags before this line.
@@ -253,19 +437,35 @@ namespace Datadog.Trace.Agent.MessagePack
 
             // Write span metrics
             var tagWriter = new TagWriter(this, tagProcessors, bytes, offset);
-            tags.EnumerateMetrics(ref tagWriter);
+            span.Tags.EnumerateMetrics(ref tagWriter);
             bytes = tagWriter.Bytes;
             offset = tagWriter.Offset;
             count += tagWriter.Count;
 
-            if (span.IsRootSpan)
+            // add "process_id" tag to local root span (if present)
+            if (model.IsLocalRoot && _processIdValueBytes != null)
             {
-                // add "process_id" tag
-                if (_processIdValueBytes != null)
+                count++;
+                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _processIdNameBytes);
+                offset += MessagePackBinary.WriteRaw(ref bytes, offset, _processIdValueBytes);
+            }
+
+            // add "_sampling_priority_v1" tag to all "chunk orphans"
+            // (spans whose parents are not found in the same chunk)
+            if (model.IsChunkOrphan && model.TraceChunk.SamplingPriority is { } samplingPriority)
+            {
+                count++;
+                offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _samplingPriorityNameBytes);
+
+                if (samplingPriority is >= -1 and <= 2)
                 {
-                    count++;
-                    offset += MessagePackBinary.WriteStringBytes(ref bytes, offset, _processIdNameBytes);
-                    offset += MessagePackBinary.WriteRaw(ref bytes, offset, _processIdValueBytes);
+                    // values begin at -1, so they are shifted by 1 from their array index: [-1, 0, 1, 2]
+                    offset += MessagePackBinary.WriteRaw(ref bytes, offset, _samplingPriorityValueBytes[samplingPriority + 1]);
+                }
+                else
+                {
+                    // fallback to support unknown future values that are not cached
+                    offset += MessagePackBinary.WriteDouble(ref bytes, offset, samplingPriority);
                 }
             }
 
@@ -315,9 +515,28 @@ namespace Datadog.Trace.Agent.MessagePack
             offset += MessagePackBinary.WriteDouble(ref bytes, offset, value);
         }
 
-        public Span Deserialize(byte[] bytes, int offset, IFormatterResolver formatterResolver, out int readSize)
+        TraceChunkModel IMessagePackFormatter<TraceChunkModel>.Deserialize(byte[] bytes, int offset, IFormatterResolver formatterResolver, out int readSize)
         {
-            throw new NotImplementedException();
+            throw new NotSupportedException($"{nameof(SpanMessagePackFormatter)} does not support deserialization. For testing purposes, deserialize using the MessagePack NuGet package.");
+        }
+
+        private void InitializeAasTags()
+        {
+            if (_aasSiteNameTagNameBytes == null)
+            {
+                // AAS Tags are all computed from environment variables, they shouldn't change during the life of the process
+                _aasSiteNameTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesSiteName);
+                _aasSiteKindTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesSiteKind);
+                _aasSiteTypeTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesSiteType);
+                _aasResourceGroupTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesResourceGroup);
+                _aasSubscriptionIdTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesSubscriptionId);
+                _aasResourceIdTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesResourceId);
+                _aasInstanceIdTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesInstanceId);
+                _aasInstanceNameTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesInstanceName);
+                _aasOperatingSystemTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesOperatingSystem);
+                _aasRuntimeTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesRuntime);
+                _aasExtensionVersionTagNameBytes = StringEncoding.UTF8.GetBytes(Datadog.Trace.Tags.AzureAppServicesExtensionVersion);
+            }
         }
 
         internal struct TagWriter : IItemProcessor<string>, IItemProcessor<double>

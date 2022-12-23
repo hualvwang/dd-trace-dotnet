@@ -6,12 +6,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Linq;
-using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
-using Datadog.Trace.AppSec;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.PlatformHelpers;
 using Datadog.Trace.Telemetry;
@@ -23,20 +19,22 @@ namespace Datadog.Trace.Tests.Telemetry
 {
     public class TelemetryControllerTests : IDisposable
     {
-        private static readonly AzureAppServices EmptyAasMetadata = new(new Dictionary<string, string>());
         private readonly TimeSpan _refreshInterval = TimeSpan.FromMilliseconds(100);
         private readonly TimeSpan _timeout = TimeSpan.FromMilliseconds(60_000); // definitely should receive telemetry by now
         private readonly TestTelemetryTransport _transport;
+        private readonly TelemetryTransportManager _transportManager;
         private readonly TelemetryController _controller;
 
         public TelemetryControllerTests()
         {
             _transport = new TestTelemetryTransport(pushResult: TelemetryPushResult.Success);
+            _transportManager = new TelemetryTransportManager(new ITelemetryTransport[] { _transport });
             _controller = new TelemetryController(
                 new ConfigurationTelemetryCollector(),
                 new DependencyTelemetryCollector(),
                 new IntegrationTelemetryCollector(),
-                _transport,
+                _transportManager,
+                _refreshInterval,
                 _refreshInterval);
         }
 
@@ -45,7 +43,7 @@ namespace Datadog.Trace.Tests.Telemetry
         [Fact]
         public async Task TelemetryControllerShouldSendTelemetry()
         {
-            _controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName", EmptyAasMetadata);
+            _controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName");
             _controller.Start();
 
             var data = await WaitForRequestStarted(_transport, _timeout);
@@ -62,14 +60,16 @@ namespace Datadog.Trace.Tests.Telemetry
         public async Task TelemetryControllerDisposesOnTwoFatalErrorsFromTelemetry()
         {
             var transport = new TestTelemetryTransport(pushResult: TelemetryPushResult.FatalError); // fail to push telemetry
+            var transportManager = new TelemetryTransportManager(new ITelemetryTransport[] { transport });
             var controller = new TelemetryController(
                 new ConfigurationTelemetryCollector(),
                 new DependencyTelemetryCollector(),
                 new IntegrationTelemetryCollector(),
-                transport,
+                transportManager,
+                _refreshInterval,
                 _refreshInterval);
 
-            controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName", EmptyAasMetadata);
+            controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName");
             controller.Start();
 
             (await WaitForFatalError(controller)).Should().BeTrue("controller should be disposed on failed push");
@@ -77,6 +77,7 @@ namespace Datadog.Trace.Tests.Telemetry
             var previousDataCount = transport.GetData();
 
             previousDataCount
+               .Where(x => x.RequestType != TelemetryRequestTypes.AppHeartbeat)
                .Should()
                .OnlyContain(x => x.RequestType == TelemetryRequestTypes.AppStarted, "Fatal error should mean we try to send app-started twice");
 
@@ -85,6 +86,42 @@ namespace Datadog.Trace.Tests.Telemetry
             // Shouldn't receive any more data,
             await Task.Delay(3_000);
             transport.GetData().Count.Should().Be(previousDataCount.Count, "Should not send more data after disposal");
+        }
+
+        [Fact]
+        public async Task TelemetrySendsHeartbeatsIndependentlyOfData()
+        {
+            var heartBeatInterval = TimeSpan.FromMilliseconds(100);
+            var transport = new TestTelemetryTransport(pushResult: TelemetryPushResult.Success);
+            var transportManager = new TelemetryTransportManager(new ITelemetryTransport[] { transport });
+            var controller = new TelemetryController(
+                new ConfigurationTelemetryCollector(),
+                new DependencyTelemetryCollector(),
+                new IntegrationTelemetryCollector(),
+                transportManager,
+                flushInterval: TimeSpan.FromMinutes(1),
+                heartBeatInterval: heartBeatInterval);
+
+            controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName");
+            controller.Start();
+
+            var requiredHeartbeats = 10;
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(heartBeatInterval.TotalSeconds * 100);
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                var heartBeatCount = transport.GetData().Count(x => x.RequestType == TelemetryRequestTypes.AppHeartbeat);
+                if (heartBeatCount >= requiredHeartbeats)
+                {
+                    break;
+                }
+
+                await Task.Delay(_refreshInterval);
+            }
+
+            transport.GetData()
+                     .Where(x => x.RequestType == TelemetryRequestTypes.AppHeartbeat)
+                     .Should()
+                     .HaveCountGreaterOrEqualTo(requiredHeartbeats);
         }
 
         [Fact]
@@ -101,10 +138,11 @@ namespace Datadog.Trace.Tests.Telemetry
                 new ConfigurationTelemetryCollector(),
                 new DependencyTelemetryCollector(),
                 new IntegrationTelemetryCollector(),
-                _transport,
+                _transportManager,
+                _refreshInterval,
                 _refreshInterval);
 
-            controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName", EmptyAasMetadata);
+            controller.RecordTracerSettings(new ImmutableTracerSettings(new TracerSettings()), "DefaultServiceName");
             controller.Start();
 
             var allData = await WaitForRequestStarted(_transport, _timeout);
@@ -180,6 +218,8 @@ namespace Datadog.Trace.Tests.Telemetry
                 _data.Push(data);
                 return Task.FromResult(_pushResult);
             }
+
+            public string GetTransportInfo() => nameof(TestTelemetryTransport);
         }
     }
 }

@@ -5,9 +5,12 @@
 
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using Datadog.Trace.ClrProfiler;
+using Datadog.Trace.ContinuousProfiler;
+using Datadog.Trace.Iast;
 using Datadog.Trace.Logging;
-using Datadog.Trace.PlatformHelpers;
+using Datadog.Trace.Sampling;
 using Datadog.Trace.Tagging;
 using Datadog.Trace.Util;
 
@@ -19,15 +22,26 @@ namespace Datadog.Trace
 
         private readonly DateTimeOffset _utcStart = DateTimeOffset.UtcNow;
         private readonly long _timestamp = Stopwatch.GetTimestamp();
-        private ArrayBuilder<Span> _spans;
+        private readonly object _syncRoot = new();
+        private IastRequestContext _iastRequestContext;
 
+        private ArrayBuilder<Span> _spans;
         private int _openSpans;
         private int? _samplingPriority;
 
         public TraceContext(IDatadogTracer tracer, TraceTagCollection tags = null)
         {
+            var settings = tracer?.Settings;
+
+            if (settings is not null)
+            {
+                // these could be set from DD_ENV/DD_VERSION or from DD_TAGS
+                Environment = settings.Environment;
+                ServiceVersion = settings.ServiceVersion;
+            }
+
             Tracer = tracer;
-            Tags = tags;
+            Tags = tags ?? new TraceTagCollection(settings?.OutgoingTagPropagationHeaderMaxLength ?? TagPropagation.OutgoingTagPropagationHeaderMaxLength);
         }
 
         public Span RootSpan { get; private set; }
@@ -36,6 +50,9 @@ namespace Datadog.Trace
 
         public IDatadogTracer Tracer { get; }
 
+        /// <summary>
+        /// Gets the collection of trace-level tags.
+        /// </summary>
         public TraceTagCollection Tags { get; }
 
         /// <summary>
@@ -46,33 +63,60 @@ namespace Datadog.Trace
             get => _samplingPriority;
         }
 
+        public string Environment { get; set; }
+
+        public string ServiceVersion { get; set; }
+
+        public string Origin { get; set; }
+
+        /// <summary>
+        /// Gets the IAST context.
+        /// </summary>
+        internal IastRequestContext IastRequestContext => _iastRequestContext;
+
         private TimeSpan Elapsed => StopwatchHelpers.GetElapsed(Stopwatch.GetTimestamp() - _timestamp);
+
+        internal void EnableIastInRequest()
+        {
+            if (_iastRequestContext is null)
+            {
+                lock (_syncRoot)
+                {
+                    _iastRequestContext ??= new();
+                }
+            }
+        }
 
         public void AddSpan(Span span)
         {
-            lock (this)
+            lock (_syncRoot)
             {
                 if (RootSpan == null)
                 {
                     // first span added is the root span
                     RootSpan = span;
-                    DecorateRootSpan(span);
 
                     if (_samplingPriority == null)
                     {
-                        if (span.Context.Parent is SpanContext context && context.SamplingPriority != null)
+                        if (span.Context.Parent is SpanContext { SamplingPriority: { } samplingPriority })
                         {
-                            // this is a root span created from a propagated context that contains a sampling priority.
-                            // lock sampling priority when a span is started from a propagated trace.
-                            _samplingPriority = context.SamplingPriority;
+                            // this is a local root span created from a propagated context that contains a sampling priority.
+                            // any distributed tags were already parsed from SpanContext.PropagatedTags and added to the TraceContext.
+                            SetSamplingPriority(samplingPriority);
                         }
                         else
                         {
-                            // this is a local root span (i.e. not propagated).
-                            // determine an initial sampling priority for this trace, but don't lock it yet
-                            _samplingPriority = Tracer.Sampler?.GetSamplingPriority(RootSpan);
+                            // this is a local root span with no upstream service.
+                            // make a sampling decision early so it's ready if we need it for propagation.
+                            var samplingDecision = Tracer.Sampler?.MakeSamplingDecision(span) ?? SamplingDecision.Default;
+                            SetSamplingPriority(samplingDecision);
                         }
                     }
+
+                    // if the trace's origin is not set and this span has an origin
+                    // (probably propagated from an upstream service),
+                    // copy the span's origin into the trace
+                    Origin ??= span.Context.Origin;
                 }
 
                 if (span.Context.Parent is SpanContext parentContext && parentContext.CustomPropagationHeaders.Count > 0)
@@ -91,23 +135,21 @@ namespace Datadog.Trace
         {
             bool ShouldTriggerPartialFlush() => Tracer.Settings.Exporter.PartialFlushEnabled && _spans.Count >= Tracer.Settings.Exporter.PartialFlushMinSpans;
 
-            if (span == RootSpan)
+            ArraySegment<Span> spansToWrite = default;
+
+            // Propagate the resource name to the profiler for root web spans
+            if (span.IsRootSpan && span.Type == SpanTypes.Web)
             {
-                if (_samplingPriority == null)
+                Profiler.Instance.ContextTracker.SetEndpoint(span.RootSpanId, span.ResourceName);
+
+                if (Iast.Iast.Instance.Settings.Enabled && _iastRequestContext != null)
                 {
-                    Log.Warning("Cannot set span metric for sampling priority before it has been set.");
-                }
-                else
-                {
-                    AddSamplingPriorityTags(span, _samplingPriority.Value);
+                    _iastRequestContext.AddIastVulnerabilitiesToSpan(span);
+                    OverheadController.Instance.ReleaseRequest();
                 }
             }
 
-            ArraySegment<Span> spansToWrite = default;
-
-            bool shouldPropagateMetadata = false;
-
-            lock (this)
+            lock (_syncRoot)
             {
                 _spans.Add(span);
                 _openSpans--;
@@ -125,10 +167,6 @@ namespace Datadog.Trace
                         span.TraceId,
                         _spans.Count);
 
-                    // We may not be sending the root span, so we need to propagate the metadata to other spans of the partial trace
-                    // There's no point in doing that inside of the lock, so we set a flag for later
-                    shouldPropagateMetadata = true;
-
                     spansToWrite = _spans.GetArray();
 
                     // Making the assumption that, if the number of closed spans was big enough to trigger partial flush,
@@ -138,9 +176,21 @@ namespace Datadog.Trace
                 }
             }
 
-            if (shouldPropagateMetadata)
+            if (spansToWrite.Count > 0)
             {
-                PropagateMetadata(spansToWrite);
+                Tracer.Write(spansToWrite);
+            }
+        }
+
+        // called from tests to force partial flush
+        internal void WriteClosedSpans()
+        {
+            ArraySegment<Span> spansToWrite;
+
+            lock (_syncRoot)
+            {
+                spansToWrite = _spans.GetArray();
+                _spans = default;
             }
 
             if (spansToWrite.Count > 0)
@@ -149,68 +199,47 @@ namespace Datadog.Trace
             }
         }
 
-        public void SetSamplingPriority(int? samplingPriority, bool notifyDistributedTracer = true)
+        public void SetSamplingPriority(SamplingDecision decision, bool notifyDistributedTracer = true)
         {
-            _samplingPriority = samplingPriority;
+            SetSamplingPriority(decision.Priority, decision.Mechanism, notifyDistributedTracer);
+        }
+
+        public void SetSamplingPriority(int? priority, int? mechanism = null, bool notifyDistributedTracer = true)
+        {
+            if (priority == null)
+            {
+                return;
+            }
+
+            _samplingPriority = priority;
+
+            const string tagName = Trace.Tags.Propagated.DecisionMaker;
+
+            if (priority > 0 && mechanism != null)
+            {
+                // set the sampling mechanism trace tag
+                // * only set tag if priority is AUTO_KEEP (1) or USER_KEEP (2)
+                // * do not overwrite an existing value
+                // * don't set tag if sampling mechanism is unknown (null)
+                // * the "-" prefix is a left-over separator from a previous iteration of this feature (not a typo or a negative sign)
+                var tagValue = $"-{mechanism.Value.ToString(CultureInfo.InvariantCulture)}";
+                Tags.TryAddTag(tagName, tagValue);
+            }
+            else if (priority <= 0)
+            {
+                // remove tag if priority is AUTO_DROP (0) or USER_DROP (-1)
+                Tags.RemoveTag(tagName);
+            }
 
             if (notifyDistributedTracer)
             {
-                DistributedTracer.Instance.SetSamplingPriority(samplingPriority);
+                DistributedTracer.Instance.SetSamplingPriority(priority);
             }
         }
 
         public TimeSpan ElapsedSince(DateTimeOffset date)
         {
             return Elapsed + (_utcStart - date);
-        }
-
-        private static void AddSamplingPriorityTags(Span span, int samplingPriority)
-        {
-            if (span.Tags is CommonTags tags)
-            {
-                tags.SamplingPriority = samplingPriority;
-            }
-            else
-            {
-                span.Tags.SetMetric(Metrics.SamplingPriority, samplingPriority);
-            }
-        }
-
-        private void PropagateMetadata(ArraySegment<Span> spans)
-        {
-            // The agent looks for the sampling priority on the first span that has no parent
-            // Finding those spans is not trivial, so instead we apply the priority to every span
-
-            var samplingPriority = _samplingPriority;
-
-            if (samplingPriority == null)
-            {
-                return;
-            }
-
-            // Using a for loop to avoid the boxing allocation on ArraySegment.GetEnumerator
-            for (int i = 0; i < spans.Count; i++)
-            {
-                AddSamplingPriorityTags(spans.Array[i + spans.Offset], samplingPriority.Value);
-            }
-        }
-
-        private void DecorateRootSpan(Span span)
-        {
-            if (AzureAppServices.Metadata.IsRelevant)
-            {
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesSiteName, AzureAppServices.Metadata.SiteName);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesSiteKind, AzureAppServices.Metadata.SiteKind);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesSiteType, AzureAppServices.Metadata.SiteType);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesResourceGroup, AzureAppServices.Metadata.ResourceGroup);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesSubscriptionId, AzureAppServices.Metadata.SubscriptionId);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesResourceId, AzureAppServices.Metadata.ResourceId);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesInstanceId, AzureAppServices.Metadata.InstanceId);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesInstanceName, AzureAppServices.Metadata.InstanceName);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesOperatingSystem, AzureAppServices.Metadata.OperatingSystem);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesRuntime, AzureAppServices.Metadata.Runtime);
-                span.SetTag(Datadog.Trace.Tags.AzureAppServicesExtensionVersion, AzureAppServices.Metadata.SiteExtensionVersion);
-            }
         }
     }
 }

@@ -26,15 +26,20 @@ namespace Datadog.Trace.Telemetry
         public const string TracerInstanceCount = "tracer_instance_count";
         public const string AasConfigurationError = "aas_configuration_error";
         public const string SecurityEnabled = "security_enabled";
+        public const string IastEnabled = "iast_enabled";
         public const string FullTrustAppDomain = "environment_fulltrust_appdomain";
         public const string TraceMethods = "trace_methods";
+        public const string StatsComputationEnabled = "stats_computation_enabled";
+        public const string WcfObfuscationEnabled = "wcf_obfuscation_enabled";
+        public const string DataStreamsMonitoringEnabled = "data_streams_enabled";
+        public const string SpanSamplingRules = "span_sampling_rules";
 
         public const string CloudHosting = "cloud_hosting";
         public const string AasSiteExtensionVersion = "aas_siteextensions_version";
         public const string AasAppType = "aas_app_type";
         public const string AasFunctionsRuntimeVersion = "aas_functions_runtime_version";
 
-        public const string ActivityListenerEnabled = "activity_listener_enabled";
+        public const string OpenTelemetryEnabled = "otel_enabled";
 
         public const string ProfilerLoaded = "profiler_loaded";
         public const string CodeHotspotsEnabled = "code_hotspots_enabled";

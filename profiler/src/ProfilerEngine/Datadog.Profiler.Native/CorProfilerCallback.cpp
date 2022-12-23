@@ -13,14 +13,22 @@
 #ifdef _WINDOWS
 #include <VersionHelpers.h>
 #include <windows.h>
+#else
+#include "cgroup.h"
+#include <signal.h>
 #endif
 
+#include "AllocationsProvider.h"
+#include "ContentionProvider.h"
 #include "AppDomainStore.h"
 #include "ApplicationStore.h"
+#include "ClrEventsParser.h"
 #include "ClrLifetime.h"
 #include "Configuration.h"
 #include "CpuTimeProvider.h"
+#include "EnabledProfilers.h"
 #include "EnvironmentVariables.h"
+#include "ExceptionsProvider.h"
 #include "FrameStore.h"
 #include "IMetricsSender.h"
 #include "IMetricsSenderFactory.h"
@@ -31,14 +39,13 @@
 #include "OsSpecificApi.h"
 #include "ProfilerEngineStatus.h"
 #include "RuntimeIdStore.h"
-#include "SamplesAggregator.h"
+#include "RuntimeInfo.h"
+#include "Sample.h"
 #include "StackSamplerLoopManager.h"
 #include "ThreadsCpuManager.h"
 #include "WallTimeProvider.h"
-#include "ExceptionsProvider.h"
 
 #include "shared/src/native-src/environment_variables.h"
-#include "shared/src/native-src/loader.h"
 #include "shared/src/native-src/pal.h"
 #include "shared/src/native-src/string.h"
 
@@ -54,29 +61,15 @@ Error("unknown platform");
 #endif
 
 #ifdef BIT64
-#define PROFILER_LIBRARY_BINARY_FILE_NAME WStr("Datadog.AutoInstrumentation.Profiler.Native.x64" LIBRARY_FILE_EXTENSION)
+#define PROFILER_LIBRARY_BINARY_FILE_NAME WStr("Datadog.Profiler.Native" LIBRARY_FILE_EXTENSION)
 #else
-#define PROFILER_LIBRARY_BINARY_FILE_NAME WStr("Datadog.AutoInstrumentation.Profiler.Native.x86" LIBRARY_FILE_EXTENSION)
+#define PROFILER_LIBRARY_BINARY_FILE_NAME WStr("Datadog.Profiler.Native" LIBRARY_FILE_EXTENSION)
 #endif
 
-const std::vector<shared::WSTRING> CorProfilerCallback::ManagedAssembliesToLoad_AppDomainDefault_ProcNonIIS = {
-    WStr("Datadog.AutoInstrumentation.Profiler.Managed"),
-};
 
-// None for now:
-const std::vector<shared::WSTRING> CorProfilerCallback::ManagedAssembliesToLoad_AppDomainNonDefault_ProcNonIIS;
-
-const std::vector<shared::WSTRING> CorProfilerCallback::ManagedAssembliesToLoad_AppDomainDefault_ProcIIS = {
-    WStr("Datadog.AutoInstrumentation.Profiler.Managed"),
-};
-
-// None for now:
-const std::vector<shared::WSTRING> CorProfilerCallback::ManagedAssembliesToLoad_AppDomainNonDefault_ProcIIS;
-
-// Static helpers
-IClrLifetime* CorProfilerCallback::GetClrLifetime()
+IClrLifetime* CorProfilerCallback::GetClrLifetime() const
 {
-    return _this->_pClrLifetime.get();
+    return _pClrLifetime.get();
 }
 
 // Initialization
@@ -90,6 +83,10 @@ CorProfilerCallback::CorProfilerCallback()
     _this = this;
 
     _pClrLifetime = std::make_unique<ClrLifetime>(&_isInitialized);
+
+#ifndef _WINDOWS
+    CGroup::Initialize();
+#endif
 }
 
 // Cleanup
@@ -98,13 +95,15 @@ CorProfilerCallback::~CorProfilerCallback()
     DisposeInternal();
 
     _this = nullptr;
+
+#ifndef _WINDOWS
+    CGroup::Cleanup();
+#endif
 }
 
 bool CorProfilerCallback::InitializeServices()
 {
     _metricsSender = IMetricsSenderFactory::Create();
-
-    _pConfiguration = std::make_unique<Configuration>();
 
     _pAppDomainStore = std::make_unique<AppDomainStore>(_pCorProfilerInfo);
 
@@ -115,26 +114,131 @@ bool CorProfilerCallback::InitializeServices()
 
     _pManagedThreadList = RegisterService<ManagedThreadList>(_pCorProfilerInfo);
 
+    _pCodeHotspotsThreadList = RegisterService<ManagedThreadList>(_pCorProfilerInfo);
+
     auto* pRuntimeIdStore = RegisterService<RuntimeIdStore>();
-    _pWallTimeProvider = RegisterService<WallTimeProvider>(_pThreadsCpuManager, _pFrameStore.get(), _pAppDomainStore.get(), pRuntimeIdStore);
+
+    // Each sample contains a vector of values.
+    // The list of a provider value definitions is available statically.
+    // Based on previous providers list, an offset in the values vector is computed and passed to the provider constructor.
+    // So a provider knows which value slot can be used to store its value(s).
+    uint32_t valuesOffset = 0;
+    std::vector<SampleValueType> sampleTypeDefinitions;
+
+    if (_pConfiguration->IsWallTimeProfilingEnabled())
+    {
+        auto valueTypes = WallTimeProvider::SampleTypeDefinitions;
+        sampleTypeDefinitions.insert(sampleTypeDefinitions.end(), valueTypes.cbegin(), valueTypes.cend());
+        _pWallTimeProvider = RegisterService<WallTimeProvider>(valuesOffset, _pThreadsCpuManager, _pFrameStore.get(), _pAppDomainStore.get(), pRuntimeIdStore, _pConfiguration.get());
+        valuesOffset += static_cast<uint32_t>(valueTypes.size());
+    }
 
     if (_pConfiguration->IsCpuProfilingEnabled())
     {
-        _pCpuTimeProvider = RegisterService<CpuTimeProvider>(_pThreadsCpuManager, _pFrameStore.get(), _pAppDomainStore.get(), pRuntimeIdStore);
+        auto valueTypes = CpuTimeProvider::SampleTypeDefinitions;
+        sampleTypeDefinitions.insert(sampleTypeDefinitions.end(), valueTypes.cbegin(), valueTypes.cend());
+        _pCpuTimeProvider = RegisterService<CpuTimeProvider>(valuesOffset, _pThreadsCpuManager, _pFrameStore.get(), _pAppDomainStore.get(), pRuntimeIdStore, _pConfiguration.get());
+        valuesOffset += static_cast<uint32_t>(valueTypes.size());
     }
 
     if (_pConfiguration->IsExceptionProfilingEnabled())
     {
+        auto valueTypes = ExceptionsProvider::SampleTypeDefinitions;
+        sampleTypeDefinitions.insert(sampleTypeDefinitions.end(), valueTypes.cbegin(), valueTypes.cend());
         _pExceptionsProvider = RegisterService<ExceptionsProvider>(
+            valuesOffset,
             _pCorProfilerInfo,
             _pManagedThreadList,
             _pFrameStore.get(),
             _pConfiguration.get(),
             _pThreadsCpuManager,
             _pAppDomainStore.get(),
-            pRuntimeIdStore
+            pRuntimeIdStore);
+        valuesOffset += static_cast<uint32_t>(valueTypes.size());
+    }
+
+    // _pCorProfilerInfoEvents must have been set for any CLR events-based profiler to work
+    if (_pCorProfilerInfoEvents != nullptr)
+    {
+        if (_pConfiguration->IsAllocationProfilingEnabled())
+        {
+            auto valueTypes = AllocationsProvider::SampleTypeDefinitions;
+            sampleTypeDefinitions.insert(sampleTypeDefinitions.end(), valueTypes.cbegin(), valueTypes.cend());
+            _pAllocationsProvider = RegisterService<AllocationsProvider>(
+                valuesOffset,
+                _pCorProfilerInfo,
+                _pManagedThreadList,
+                _pFrameStore.get(),
+                _pThreadsCpuManager,
+                _pAppDomainStore.get(),
+                pRuntimeIdStore,
+                _pConfiguration.get()
+                );
+            valuesOffset += static_cast<uint32_t>(valueTypes.size());
+        }
+
+        if (_pConfiguration->IsContentionProfilingEnabled())
+        {
+            auto valueTypes = ContentionProvider::SampleTypeDefinitions;
+            sampleTypeDefinitions.insert(sampleTypeDefinitions.end(), valueTypes.cbegin(), valueTypes.cend());
+            _pContentionProvider = RegisterService<ContentionProvider>(
+                valuesOffset,
+                _pCorProfilerInfo,
+                _pManagedThreadList,
+                _pFrameStore.get(),
+                _pThreadsCpuManager,
+                _pAppDomainStore.get(),
+                pRuntimeIdStore,
+                _pConfiguration.get()
+                );
+            valuesOffset += static_cast<uint32_t>(valueTypes.size());
+        }
+
+        if (_pConfiguration->IsGarbageCollectionProfilingEnabled())
+        {
+            // Use the same value type for timeline
+            auto valueTypes = GarbageCollectionProvider::SampleTypeDefinitions;
+            sampleTypeDefinitions.insert(sampleTypeDefinitions.end(), valueTypes.cbegin(), valueTypes.cend());
+            _pStopTheWorldProvider = RegisterService<StopTheWorldGCProvider>(
+                valuesOffset,
+                _pFrameStore.get(),
+                _pThreadsCpuManager,
+                _pAppDomainStore.get(),
+                pRuntimeIdStore,
+                _pConfiguration.get()
+                );
+            _pGarbageCollectionProvider = RegisterService<GarbageCollectionProvider>(
+                valuesOffset,
+                _pFrameStore.get(),
+                _pThreadsCpuManager,
+                _pAppDomainStore.get(),
+                pRuntimeIdStore,
+                _pConfiguration.get()
+                );
+            valuesOffset += static_cast<uint32_t>(valueTypes.size());
+        }
+        else
+        {
+            _pStopTheWorldProvider = nullptr;
+            _pGarbageCollectionProvider = nullptr;
+        }
+
+        // TODO: add new CLR events-based providers to the event parser
+        _pClrEventsParser = std::make_unique<ClrEventsParser>(
+            _pCorProfilerInfoEvents,
+            _pAllocationsProvider,
+            _pContentionProvider,
+            _pStopTheWorldProvider,
+            _pGarbageCollectionProvider
             );
     }
+
+    // Avoid iterating twice on all providers in order to inject this value in each constructor
+    // and store it in CollectorBase so it can be used in TransformRawSample (where the sample is created)
+    Sample::ValuesCount = sampleTypeDefinitions.size();
+
+    // compute enabled profilers based on configuration and receivable CLR events
+    _pEnabledProfilers = std::make_unique<EnabledProfilers>(_pConfiguration.get(), _pCorProfilerInfoEvents != nullptr);
 
     _pStackSamplerLoopManager = RegisterService<StackSamplerLoopManager>(
         _pCorProfilerInfo,
@@ -143,6 +247,7 @@ bool CorProfilerCallback::InitializeServices()
         _pClrLifetime.get(),
         _pThreadsCpuManager,
         _pManagedThreadList,
+        _pCodeHotspotsThreadList,
         _pWallTimeProvider,
         _pCpuTimeProvider);
 
@@ -150,18 +255,49 @@ bool CorProfilerCallback::InitializeServices()
 
     // The different elements of the libddprof pipeline are created and linked together
     // i.e. the exporter is passed to the aggregator and each provider is added to the aggregator.
-    _pExporter = std::make_unique<LibddprofExporter>(_pConfiguration.get(), _pApplicationStore);
-    _pSamplesAggregator = RegisterService<SamplesAggregator>(_pConfiguration.get(), _pThreadsCpuManager, _pExporter.get(), _metricsSender.get());
-    _pSamplesAggregator->Register(_pWallTimeProvider);
+    _pExporter = std::make_unique<LibddprofExporter>(
+        std::move(sampleTypeDefinitions),
+        _pConfiguration.get(),
+        _pApplicationStore,
+        _pRuntimeInfo.get(),
+        _pEnabledProfilers.get());
+
+    _pSamplesCollector = RegisterService<SamplesCollector>(_pConfiguration.get(), _pThreadsCpuManager, _pExporter.get(), _metricsSender.get());
+
+    if (_pConfiguration->IsWallTimeProfilingEnabled())
+    {
+        _pSamplesCollector->Register(_pWallTimeProvider);
+    }
 
     if (_pConfiguration->IsCpuProfilingEnabled())
     {
-        _pSamplesAggregator->Register(_pCpuTimeProvider);
+        _pSamplesCollector->Register(_pCpuTimeProvider);
     }
 
     if (_pConfiguration->IsExceptionProfilingEnabled())
     {
-        _pSamplesAggregator->Register(_pExceptionsProvider);
+        _pSamplesCollector->Register(_pExceptionsProvider);
+    }
+
+    // CLR events-based providers require ICorProfilerInfo12 (stored in _pCorProfilerInfoEvents).
+    // If not set, no need to even check the configuration
+    if (_pCorProfilerInfoEvents != nullptr)
+    {
+        if (_pConfiguration->IsAllocationProfilingEnabled())
+        {
+            _pSamplesCollector->Register(_pAllocationsProvider);
+        }
+
+        if (_pConfiguration->IsContentionProfilingEnabled())
+        {
+            _pSamplesCollector->Register(_pContentionProvider);
+        }
+
+        if (_pConfiguration->IsGarbageCollectionProfilingEnabled())
+        {
+            _pSamplesCollector->Register(_pStopTheWorldProvider);
+            _pSamplesCollector->Register(_pGarbageCollectionProvider);
+        }
     }
 
     auto started = StartServices();
@@ -204,14 +340,12 @@ bool CorProfilerCallback::DisposeServices()
     // Delete all services instances in reverse order of their creation
     // to avoid using a deleted service...
 
-    // keep loader as static singleton for now
-    shared::Loader::DeleteSingletonInstance();
-
     _services.clear();
 
     _pThreadsCpuManager = nullptr;
     _pStackSamplerLoopManager = nullptr;
     _pManagedThreadList = nullptr;
+    _pCodeHotspotsThreadList = nullptr;
     _pApplicationStore = nullptr;
 
     return result;
@@ -267,7 +401,21 @@ void CorProfilerCallback::DisposeInternal(void)
 
         DisposeServices();
 
-        ICorProfilerInfo4* pCorProfilerInfo = _pCorProfilerInfo;
+        // Don't forget to stop the CLR events session if any
+        auto* pInfo = _pCorProfilerInfoEvents;
+        if (pInfo != nullptr)
+        {
+            if (_session != 0)
+            {
+                pInfo->EventPipeStopSession(_session);
+                _session = 0;
+            }
+
+            pInfo->Release();
+            _pCorProfilerInfoEvents = nullptr;
+        }
+
+        ICorProfilerInfo5* pCorProfilerInfo = _pCorProfilerInfo;
         if (pCorProfilerInfo != nullptr)
         {
             pCorProfilerInfo->Release();
@@ -345,25 +493,39 @@ ULONG STDMETHODCALLTYPE CorProfilerCallback::GetRefCount(void) const
     return refCount;
 }
 
-void CorProfilerCallback::InspectRuntimeCompatibility(IUnknown* corProfilerInfoUnk)
+void CorProfilerCallback::InspectRuntimeCompatibility(IUnknown* corProfilerInfoUnk, uint16_t& runtimeMajor, uint16_t& runtimeMinor)
 {
-    IUnknown* tstVerProfilerInfo;
-    if (S_OK == corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo11), (void**)&tstVerProfilerInfo))
+    runtimeMajor = 0;
+    runtimeMinor = 0;
+    IUnknown* tstVerProfilerInfo;  // ICorProfilerInfo13 will ship with .NET 7
+    if (S_OK == corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo12), (void**)&tstVerProfilerInfo))
     {
         _isNet46OrGreater = true;
-        Log::Info("ICorProfilerInfo11 available. Profiling API compatibility: .NET Core 5.0 or later.");
+        Log::Info("ICorProfilerInfo11 available. Profiling API compatibility: .NET Core 5.0 or later.");  // could be 6 too
+        tstVerProfilerInfo->Release();
+    }
+    else if (S_OK == corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo11), (void**)&tstVerProfilerInfo))
+    {
+        runtimeMajor = 3;
+        runtimeMinor = 1;
+        _isNet46OrGreater = true;
+        Log::Info("ICorProfilerInfo10 available. Profiling API compatibility: .NET Core 3.1 or later.");
         tstVerProfilerInfo->Release();
     }
     else if (S_OK == corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo10), (void**)&tstVerProfilerInfo))
     {
+        runtimeMajor = 3;
+        runtimeMinor = 0;
         _isNet46OrGreater = true;
         Log::Info("ICorProfilerInfo10 available. Profiling API compatibility: .NET Core 3.0 or later.");
         tstVerProfilerInfo->Release();
     }
     else if (S_OK == corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo9), (void**)&tstVerProfilerInfo))
     {
+        runtimeMajor = 2;
+        runtimeMinor = 1;  // could also be 2.2
         _isNet46OrGreater = true;
-        Log::Info("ICorProfilerInfo9 available. Profiling API compatibility: .NET Core 2.2 or later.");
+        Log::Info("ICorProfilerInfo9 available. Profiling API compatibility: .NET Core 2.1 or later.");
         tstVerProfilerInfo->Release();
     }
     else if (S_OK == corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo8), (void**)&tstVerProfilerInfo))
@@ -467,20 +629,17 @@ void CorProfilerCallback::InspectProcessorInfo(void)
 #endif
 }
 
-void CorProfilerCallback::InspectRuntimeVersion(ICorProfilerInfo4* pCorProfilerInfo)
+void CorProfilerCallback::InspectRuntimeVersion(ICorProfilerInfo5* pCorProfilerInfo, USHORT& major, USHORT& minor, COR_PRF_RUNTIME_TYPE& runtimeType)
 {
     USHORT clrInstanceId;
-    COR_PRF_RUNTIME_TYPE runtimeType;
-    USHORT majorVersion;
-    USHORT minorVersion;
     USHORT buildNumber;
     USHORT qfeVersion;
 
     HRESULT hr = pCorProfilerInfo->GetRuntimeInformation(
         &clrInstanceId,
         &runtimeType,
-        &majorVersion,
-        &minorVersion,
+        &major,
+        &minor,
         &buildNumber,
         &qfeVersion,
         0,
@@ -499,8 +658,8 @@ void CorProfilerCallback::InspectRuntimeVersion(ICorProfilerInfo4* pCorProfilerI
                    : (runtimeType == COR_PRF_CORE_CLR)
                        ? "CORE_CLR"
                        : (std::string("unknown(") + std::to_string(runtimeType) + std::string(")"))),
-                  ", majorVersion: ", majorVersion,
-                  ", minorVersion: ", minorVersion,
+                  ", majorVersion: ", major,
+                  ", minorVersion: ", minor,
                   ", buildNumber: ", buildNumber,
                   ", qfeVersion: ", qfeVersion,
                   " }.");
@@ -549,15 +708,30 @@ void CorProfilerCallback::ConfigureDebugLog(void)
     }
 }
 
+// CLR event verbosity definition
+const uint32_t InformationalVerbosity = 4;
+const uint32_t VerboseVerbosity = 5;
+
 HRESULT STDMETHODCALLTYPE CorProfilerCallback::Initialize(IUnknown* corProfilerInfoUnk)
 {
     Log::Info("CorProfilerCallback is initializing.");
 
     ConfigureDebugLog();
 
+    _pConfiguration = std::make_unique<Configuration>();
+
+    double coresThreshold = _pConfiguration->MinimumCores();
+    if (!OpSysTools::IsSafeToStartProfiler(coresThreshold))
+    {
+        Log::Warn("It is not safe to start the profiler. See previous log messages for more info.");
+        return E_FAIL;
+    }
+
     // Log some important environment info:
     CorProfilerCallback::InspectProcessorInfo();
-    CorProfilerCallback::InspectRuntimeCompatibility(corProfilerInfoUnk);
+    uint16_t runtimeMajor;
+    uint16_t runtimeMinor;
+    CorProfilerCallback::InspectRuntimeCompatibility(corProfilerInfoUnk, runtimeMajor, runtimeMinor);
 
     // Initialize _pCorProfilerInfo:
     if (corProfilerInfoUnk == nullptr)
@@ -566,10 +740,10 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::Initialize(IUnknown* corProfilerI
         return E_FAIL;
     }
 
-    HRESULT hr = corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo4), (void**)&_pCorProfilerInfo);
+    HRESULT hr = corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo5), (void**)&_pCorProfilerInfo);
     if (hr == E_NOINTERFACE)
     {
-        Log::Error("This runtime does not support any ICorProfilerInfo4+ interface. .NET Framework 4.5 or later is required.");
+        Log::Error("This runtime does not support any ICorProfilerInfo5+ interface. .NET Framework 4.5 or later is required.");
         return E_FAIL;
     }
     else if (FAILED(hr))
@@ -579,7 +753,57 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::Initialize(IUnknown* corProfilerI
     }
 
     // Log some more important environment info:
-    CorProfilerCallback::InspectRuntimeVersion(_pCorProfilerInfo);
+    USHORT major = 0;
+    USHORT minor = 0;
+    COR_PRF_RUNTIME_TYPE runtimeType;
+    CorProfilerCallback::InspectRuntimeVersion(_pCorProfilerInfo, major, minor, runtimeType);
+
+    // for .NET Core 2.1, 3.0 and 3.1, from https://github.com/dotnet/runtime/issues/11555#issuecomment-727037353,
+    // it is needed to check ICorProfilerInfo11 for 3.1, 10 for 3.0 and 9 for 2.1 since major and minor will be 4.0
+    // from GetRuntimeInformation
+    if ((runtimeType == COR_PRF_CORE_CLR) && (major == 4))
+    {
+        major = runtimeMajor;
+        minor = runtimeMinor;
+    }
+
+    _pRuntimeInfo = std::make_unique<RuntimeInfo>(major, minor, (runtimeType == COR_PRF_DESKTOP_CLR));
+
+    // CLR events-based profilers need ICorProfilerInfo12 (i.e. .NET 5+) to setup the communication.
+    // If no such provider is enabled, no need to trigger it.
+    // TODO: update the test when a new CLR events-based profiler is added (contention, GC, ...)
+    bool AreEventBasedProfilersEnabled =
+        _pConfiguration->IsAllocationProfilingEnabled() ||
+        _pConfiguration->IsContentionProfilingEnabled() ||
+        _pConfiguration->IsGarbageCollectionProfilingEnabled()
+        ;
+    if ((major >= 5) && AreEventBasedProfilersEnabled)
+    {
+        HRESULT hr = corProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo12), (void**)&_pCorProfilerInfoEvents);
+        if (FAILED(hr))
+        {
+            Log::Error("Failed to get ICorProfilerInfo12: 0x", std::hex, hr, std::dec, ".");
+            _pCorProfilerInfoEvents = nullptr;
+
+            // we continue: the CLR events won't be received so no contention/memory profilers...
+        }
+    }
+    else
+    {
+        // TODO: Need to listen to ETW for .NET Framework and EventPipe for .NET Core 3.0/3.1.
+        //       This would be possible for contention but not for AllocationTick_V4 because
+        //       the address received in the payload might not point to a real object. Because
+        //       the events are received asynchronously, a GC might have happened and moved the
+        //       object somewhere else (i.e. the address will point to unknown content in memory;
+        //       even unmapped memory if the segment has been reclaimed).
+        if (major < 5)
+        {
+            if (AreEventBasedProfilersEnabled)
+            {
+                Log::Warn("Event-based profilers (Allocation, Contention) are not supported for .NET", major, ".", minor, " (.NET 5+ is required)");
+            }
+        }
+    }
 
     // Init global state:
     OpSysTools::InitHighPrecisionTimer();
@@ -591,49 +815,81 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::Initialize(IUnknown* corProfilerI
         return E_FAIL;
     }
 
-    shared::LoaderResourceMonikerIDs loaderResourceMonikerIDs;
-    OsSpecificApi::InitializeLoaderResourceMonikerIDs(&loaderResourceMonikerIDs);
-
-    // Loader options
-    const auto loader_rewrite_module_entrypoint_enabled = shared::GetEnvironmentValue(shared::environment::loader_rewrite_module_entrypoint_enabled);
-    const auto loader_rewrite_module_initializer_enabled = shared::GetEnvironmentValue(shared::environment::loader_rewrite_module_initializer_enabled);
-    const auto loader_rewrite_mscorlib_enabled = shared::GetEnvironmentValue(shared::environment::loader_rewrite_mscorlib_enabled);
-    const auto loader_ngen_enabled = shared::GetEnvironmentValue(shared::environment::loader_ngen_enabled);
-
-    shared::LoaderOptions loaderOptions;
-    loaderOptions.IsNet46OrGreater = _isNet46OrGreater;
-    loaderOptions.RewriteModulesEntrypoint = loader_rewrite_module_entrypoint_enabled != WStr("0") && loader_rewrite_module_entrypoint_enabled != WStr("false");
-    loaderOptions.RewriteModulesInitializers = loader_rewrite_module_initializer_enabled != WStr("0") && loader_rewrite_module_initializer_enabled != WStr("false");
-    loaderOptions.RewriteMSCorLibMethods = loader_rewrite_mscorlib_enabled != WStr("0") && loader_rewrite_mscorlib_enabled != WStr("false");
-    loaderOptions.DisableNGENImagesSupport = loader_ngen_enabled == WStr("0") || loader_ngen_enabled == WStr("false");
-    loaderOptions.LogDebugIsEnabled = Log::IsDebugEnabled();
-    loaderOptions.LogDebugCallback = [](const std::string& str) { Log::Debug(str); };
-    loaderOptions.LogInfoCallback = [](const std::string& str) { Log::Info(str); };
-    loaderOptions.LogErrorCallback = [](const std::string& str) { Log::Error(str); };
-
-    shared::Loader::CreateNewSingletonInstance(_pCorProfilerInfo,
-                                               loaderOptions,
-                                               loaderResourceMonikerIDs,
-                                               PROFILER_LIBRARY_BINARY_FILE_NAME,
-                                               ManagedAssembliesToLoad_AppDomainDefault_ProcNonIIS,
-                                               ManagedAssembliesToLoad_AppDomainNonDefault_ProcNonIIS,
-                                               ManagedAssembliesToLoad_AppDomainDefault_ProcIIS,
-                                               ManagedAssembliesToLoad_AppDomainNonDefault_ProcIIS);
-
     // Configure which profiler callbacks we want to receive by setting the event mask:
-    DWORD eventMask =
-        shared::Loader::GetSingletonInstance()->GetLoaderProfilerEventMask() | COR_PRF_MONITOR_THREADS | COR_PRF_ENABLE_STACK_SNAPSHOT;
+    DWORD eventMask = COR_PRF_MONITOR_THREADS | COR_PRF_ENABLE_STACK_SNAPSHOT;
 
     if (_pConfiguration->IsExceptionProfilingEnabled())
     {
-        eventMask |= COR_PRF_MONITOR_EXCEPTIONS;
+        eventMask |= COR_PRF_MONITOR_EXCEPTIONS | COR_PRF_MONITOR_MODULE_LOADS;
     }
 
-    hr = _pCorProfilerInfo->SetEventMask(eventMask);
-    if (FAILED(hr))
+    if (_pCorProfilerInfoEvents != nullptr)
     {
-        Log::Error("SetEventMask(0x", std::hex, eventMask, ") returned an unexpected result: 0x", std::hex, hr, std::dec, ".");
-        return E_FAIL;
+        // listen to CLR events via ICorProfilerCallback
+        DWORD highMask = COR_PRF_HIGH_MONITOR_EVENT_PIPE;
+        hr = _pCorProfilerInfo->SetEventMask2(eventMask, highMask);
+        if (FAILED(hr))
+        {
+            Log::Error("SetEventMask2(0x", std::hex, eventMask, ", ", std::hex, highMask, ") returned an unexpected result: 0x", std::hex, hr, std::dec, ".");
+            return E_FAIL;
+        }
+
+        // Microsoft-Windows-DotNETRuntime is the provider for the runtime events.
+        // Listen to interesting events:
+        //  - AllocationTick_V4
+        //  - ContentionStop_V1
+        //  - GC related events
+
+        UINT64 activatedKeywords = 0;
+        uint32_t verbosity = InformationalVerbosity;
+
+        if (_pConfiguration->IsAllocationProfilingEnabled())
+        {
+            activatedKeywords |= ClrEventsParser::KEYWORD_GC;
+
+            // the documentation states that AllocationTick is Informational but... need Verbose  :^(
+            verbosity = VerboseVerbosity;
+        }
+        if (_pConfiguration->IsGarbageCollectionProfilingEnabled())
+        {
+            activatedKeywords |= ClrEventsParser::KEYWORD_GC;
+        }
+        if (_pConfiguration->IsContentionProfilingEnabled())
+        {
+            activatedKeywords |= ClrEventsParser::KEYWORD_CONTENTION;
+        }
+
+        COR_PRF_EVENTPIPE_PROVIDER_CONFIG providers[] =
+            {
+                {
+                    WStr("Microsoft-Windows-DotNETRuntime"),
+                    activatedKeywords,
+                    verbosity,
+                    NULL
+                }
+            };
+
+        hr = _pCorProfilerInfoEvents->EventPipeStartSession(
+            sizeof(providers) / sizeof(providers[0]),
+            providers,
+            false,
+            &_session);
+
+        if (FAILED(hr))
+        {
+            _session = 0;
+            printf("Failed to start event pipe session with hr=0x%x\n", hr);
+            return hr;
+        }
+    }
+    else
+    {
+        hr = _pCorProfilerInfo->SetEventMask(eventMask);
+        if (FAILED(hr))
+        {
+            Log::Error("SetEventMask(0x", std::hex, eventMask, ") returned an unexpected result: 0x", std::hex, hr, std::dec, ".");
+            return E_FAIL;
+        }
     }
 
     // Initialization complete:
@@ -648,12 +904,16 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::Shutdown(void)
     Log::Info("CorProfilerCallback::Shutdown()");
 
     // A final .pprof should be generated before exiting
-    // All providers should be stopped and flushed before the aggregator
-    // sends the last samples to the exporter
+    // The aggregator must be stopped before the provider, since it will call them to get the last samples
     _pStackSamplerLoopManager->Stop();
 
+    _pSamplesCollector->Stop();
+
     // Calling Stop on providers transforms the last raw samples
-    _pWallTimeProvider->Stop();
+    if (_pWallTimeProvider != nullptr)
+    {
+        _pWallTimeProvider->Stop();
+    }
     if (_pCpuTimeProvider != nullptr)
     {
         _pCpuTimeProvider->Stop();
@@ -662,10 +922,25 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::Shutdown(void)
     {
         _pExceptionsProvider->Stop();
     }
+    if (_pAllocationsProvider != nullptr)
+    {
+        _pAllocationsProvider->Stop();
+    }
 
-    // It is now time to aggregate the remaining samples and export the last .pprof
-    _pSamplesAggregator->Stop();
+    if (_pContentionProvider != nullptr)
+    {
+        _pContentionProvider->Stop();
+    }
 
+    if (_pStopTheWorldProvider != nullptr)
+    {
+        _pStopTheWorldProvider->Stop();
+    }
+
+    if (_pGarbageCollectionProvider != nullptr)
+    {
+        _pGarbageCollectionProvider->Stop();
+    }
 
     // dump all threads time
     _pThreadsCpuManager->LogCpuTimes();
@@ -832,14 +1107,18 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::ThreadDestroyed(ThreadID threadId
         return S_OK;
     }
 
-    ManagedThreadInfo* pThreadInfo;
-    if (_pManagedThreadList->UnregisterThread(threadId, &pThreadInfo))
+    std::shared_ptr<ManagedThreadInfo> pThreadInfo;
+    Log::Debug("Removing thread ", std::hex, threadId, " from the trace context threads list.");
+    if (_pCodeHotspotsThreadList->UnregisterThread(threadId, pThreadInfo))
     {
         // The docs require that we do not allow to destroy a thread while it is being stack-walked.
         // TO ensure this, SetThreadDestroyed(..) acquires the StackWalkLock associated with this ThreadInfo.
         pThreadInfo->SetThreadDestroyed();
-        pThreadInfo->Release();
+        pThreadInfo.reset();
     }
+
+    Log::Debug("Removing thread ", std::hex, threadId, " from the main managed thread list.");
+    _pManagedThreadList->UnregisterThread(threadId, pThreadInfo);
 
     return S_OK;
 }
@@ -876,6 +1155,16 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::ThreadAssignedToOSThread(ThreadID
     dupOsThreadHandle = origOsThreadHandle;
 #endif
 
+#ifdef LINUX
+    // check if SIGUSR1 signal is blocked for current thread
+    sigset_t currentMask;
+    pthread_sigmask(SIG_SETMASK, nullptr, &currentMask);
+    if (sigismember(&currentMask, SIGUSR1) == 1)
+    {
+        Log::Debug("The current thread won't be added to the managed threads list because SIGUSR1 is blocked for that thread (managedThreadId=0x", std::hex, managedThreadId, ", osThreadId=", std::dec, osThreadId, ")");
+        return S_OK;
+    }
+#endif
     _pManagedThreadList->SetThreadOsInfo(managedThreadId, osThreadId, dupOsThreadHandle);
 
     return S_OK;
@@ -890,8 +1179,8 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::ThreadNameChanged(ThreadID thread
     }
 
     auto threadName = (cchName == 0)
-                           ? shared::WSTRING()
-                           : shared::WSTRING(name, cchName);
+                          ? shared::WSTRING()
+                          : shared::WSTRING(name, cchName);
 
     Log::Debug("CorProfilerCallback::ThreadNameChanged(threadId=0x", std::hex, threadId, std::dec, ", name=\"", threadName, "\")");
 
@@ -1236,6 +1525,23 @@ HRESULT STDMETHODCALLTYPE CorProfilerCallback::EventPipeEventDelivered(EVENTPIPE
                                                                        ULONG numStackFrames,
                                                                        UINT_PTR stackFrames[])
 {
+    if (_pClrEventsParser != nullptr)
+    {
+        _pClrEventsParser->ParseEvent(
+            provider,
+            eventId,
+            eventVersion,
+            cbMetadataBlob,
+            metadataBlob,
+            cbEventData,
+            eventData,
+            pActivityId,
+            pRelatedActivityId,
+            eventThread,
+            numStackFrames,
+            stackFrames);
+    }
+
     return S_OK;
 }
 

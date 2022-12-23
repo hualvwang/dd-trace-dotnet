@@ -12,13 +12,15 @@ using Xunit.Abstractions;
 namespace Datadog.Trace.ClrProfiler.IntegrationTests.AdoNet
 {
     [Trait("RequiresDockerDependency", "true")]
-    public class NpgsqlCommandTests : TestHelper
+    public class NpgsqlCommandTests : TracingIntegrationTest
     {
         public NpgsqlCommandTests(ITestOutputHelper output)
             : base("Npgsql", output)
         {
             SetServiceVersion("1.0.0");
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsNpgsql();
 
         [SkippableTheory]
         [MemberData(nameof(PackageVersions.Npgsql), MemberType = typeof(PackageVersions))]
@@ -52,16 +54,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests.AdoNet
 
             // Assert.Equal(expectedSpanCount, spans.Count); // Assert an exact match once we can correctly instrument the generic constraint case
             Assert.Equal(expectedSpanCount, actualSpanCount);
-
-            foreach (var span in spans)
-            {
-                Assert.Equal(expectedOperationName, span.Name);
-                Assert.Equal(expectedServiceName, span.Service);
-                Assert.Equal(SpanTypes.Sql, span.Type);
-                Assert.Equal(dbType, span.Tags[Tags.DbType]);
-                Assert.False(span.Tags?.ContainsKey(Tags.Version), "External service span should not have service version tag.");
-            }
-
+            ValidateIntegrationSpans(spans, expectedServiceName: expectedServiceName);
             telemetry.AssertIntegrationEnabled(IntegrationId.Npgsql);
         }
 

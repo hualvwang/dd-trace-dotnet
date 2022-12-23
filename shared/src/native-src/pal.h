@@ -15,6 +15,7 @@
 
 #if MACOS
 #include <libproc.h>
+#include <crt_externs.h>
 #endif
 
 #include "dd_filesystem.hpp"
@@ -88,6 +89,47 @@ inline WSTRING GetCurrentProcessName()
 #endif
 }
 
+inline WSTRING GetCurrentProcessCommandLine()
+{
+#ifdef _WIN32
+    return WSTRING(GetCommandLine());
+#elif MACOS
+    std::string name;
+    int argCount = *_NSGetArgc();
+    char ** arguments = *_NSGetArgv();
+    for (int i = 0; i < argCount; i++) {
+        char* currentArg = arguments[i];
+        name = name + " " + std::string(currentArg);
+    }
+    return Trim(ToWSTRING(name));
+#else
+    std::string cmdline;
+    char buf[1024];
+    size_t len;
+    FILE* fp = fopen("/proc/self/cmdline", "rb");
+    if (fp)
+    {
+        while ((len = fread(buf, 1, sizeof(buf), fp)) > 0)
+        {
+            cmdline.append(buf, len);
+        }
+    }
+
+    std::string name;
+    std::stringstream tokens(cmdline);
+    std::string tmp;
+    while (getline(tokens, tmp, '\0'))
+    {
+        name = name + " " + tmp;
+    }
+    fclose(fp);
+    
+    return Trim(ToWSTRING(name));
+#endif
+
+    return EmptyWStr;
+}
+
 inline int GetPID()
 {
 #ifdef _WIN32
@@ -129,6 +171,31 @@ inline WSTRING GetCurrentModuleFileName()
 #endif
 
     return EmptyWStr;
+}
+
+inline WSTRING GetProcessStartTime()
+{
+#if _WIN32
+    FILETIME creationTime, exitTime, kernetlTime, userTime;
+    if (GetProcessTimes(GetCurrentProcess(), &creationTime, &exitTime, &kernetlTime, &userTime))
+    {
+        SYSTEMTIME systemTime;
+        if (FileTimeToSystemTime(&creationTime, &systemTime))
+        {
+            std::ostringstream ossMessage;
+
+            ossMessage << std::setw(2) << std::setfill('0') << systemTime.wDay << "-" << std::setw(2)
+                       << std::setfill('0') << systemTime.wMonth << "-" << systemTime.wYear << "_" << std::setw(2)
+                       << std::setfill('0') << systemTime.wHour << "-" << std::setw(2) << std::setfill('0')
+                       << systemTime.wMinute << "-" << std::setw(2) << std::setfill('0') << systemTime.wSecond;
+
+            return ToWSTRING(ossMessage.str());
+        }
+    }
+    return EmptyWStr;
+#else
+    return EmptyWStr;
+#endif
 }
 
 } // namespace shared

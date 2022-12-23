@@ -8,11 +8,11 @@ using Datadog.Trace.Sampling;
 
 namespace Datadog.Trace.Ci.Sampling
 {
-    internal class CISampler : ISampler
+    internal class CISampler : ITraceSampler
     {
-        public int GetSamplingPriority(Span span)
+        public SamplingDecision MakeSamplingDecision(Span span)
         {
-            return SamplingPriorityValues.UserKeep;
+            return new SamplingDecision(SamplingPriorityValues.UserKeep, mechanism: null);
         }
 
         public void RegisterRule(ISamplingRule rule)

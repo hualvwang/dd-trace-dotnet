@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Samples.Security.AspNetCore5.Models;
+using System;
 using System.Diagnostics;
 using System.Linq;
 
@@ -16,7 +17,7 @@ namespace Samples.Security.AspNetCore5.Controllers
         }
 
         public IActionResult Index()
-        {
+        {   
             ViewBag.ProfilerAttached = SampleHelpers.IsProfilerAttached();
             ViewBag.TracerAssemblyLocation = SampleHelpers.GetTracerAssemblyLocation();
 

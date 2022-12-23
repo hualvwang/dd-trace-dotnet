@@ -4,25 +4,27 @@
 #include "CpuTimeProvider.h"
 
 #include "IAppDomainStore.h"
-#include "IConfiguration.h"
 #include "IFrameStore.h"
 #include "IRuntimeIdStore.h"
 #include "RawCpuSample.h"
 
+
+std::vector<SampleValueType> CpuTimeProvider::SampleTypeDefinitions(
+    {
+        {"cpu", "nanoseconds"}
+    }
+    );
+
+
 CpuTimeProvider::CpuTimeProvider(
+    uint32_t valueOffset,
     IThreadsCpuManager* pThreadsCpuManager,
     IFrameStore* pFrameStore,
     IAppDomainStore* pAppDomainStore,
-    IRuntimeIdStore* pRuntimeIdStore
+    IRuntimeIdStore* pRuntimeIdStore,
+    IConfiguration* pConfiguration
     )
     :
-    CollectorBase<RawCpuSample>("CpuTimeProvider", pThreadsCpuManager, pFrameStore, pAppDomainStore, pRuntimeIdStore)
+    CollectorBase<RawCpuSample>("CpuTimeProvider", valueOffset, pThreadsCpuManager, pFrameStore, pAppDomainStore, pRuntimeIdStore, pConfiguration)
 {
-}
-
-
-void CpuTimeProvider::OnTransformRawSample(const RawCpuSample& rawSample, Sample& sample)
-{
-    // from milliseconds to nanoseconds
-    sample.AddValue(rawSample.Duration * 1000000, SampleValue::CpuTimeDuration);
 }

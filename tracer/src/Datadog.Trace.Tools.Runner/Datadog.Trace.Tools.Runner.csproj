@@ -1,16 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>2.11.0</Version>
+    <Version>2.21.0</Version>
     <Title>Datadog APM Auto-instrumentation Runner</Title>
     <Copyright>Copyright 2020 Datadog, Inc.</Copyright>
     <Description>Auto-instrumentation dotnet global tool for Datadog APM</Description>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net6.0;net5.0;netcoreapp3.1;netcoreapp3.0;netcoreapp2.2;netcoreapp2.1;</TargetFrameworks>
+    <TargetFrameworks>net7.0;net6.0;net5.0;netcoreapp3.1;netcoreapp3.0;netcoreapp2.2;netcoreapp2.1;</TargetFrameworks>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <NoWarn>NU5100</NoWarn>
     <RootNamespace>Datadog.Trace.Tools.Runner</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>None</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
 
     <!-- Required for StrongNamer: https://github.com/dsplaisted/strongnamer/issues/61 -->
     <ErrorOnDuplicatePublishOutputFiles>False</ErrorOnDuplicatePublishOutputFiles>
@@ -23,7 +26,7 @@
     <When Condition="'$(BuildStandalone)' == 'true'">
       <PropertyGroup>
         <OutputPath>bin\$(Configuration)\Console</OutputPath>
-        <PublishDir>bin\$(Configuration)\Console\publish\$(RuntimeIdentifier)</PublishDir>
+        <PublishDir Condition="'$(PublishDir)' == '' ">bin\$(Configuration)\Console\publish\$(RuntimeIdentifier)</PublishDir>
         <AssemblyName>dd-trace</AssemblyName>
         <RuntimeIdentifiers>win-x64;win-x86;linux-x64;linux-musl-x64;osx-x64;linux-arm64</RuntimeIdentifiers>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -32,9 +35,58 @@
         <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
       </PropertyGroup>
       <ItemGroup>
-        <Content Include="..\Datadog.Monitoring.Distribution\home\**\*.*" LinkBase="home">
+        <Content Include="..\Datadog.Trace.Bundle\home\**\*.*" LinkBase="home">
           <CopyToOutputDirectory>Always</CopyToOutputDirectory>
           <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        </Content>
+
+        <Content Update="..\Datadog.Trace.Bundle\home\**\readme.txt">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <!-- We actually WANT to include these, but single-file spits them out-->
+        <!-- next to the exe, instead of bundling them inside, so we can't -->
+        <Content Update="..\Datadog.Trace.Bundle\home\**\*.pdb">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <Content Update="..\Datadog.Trace.Bundle\home\**\*.xml">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <!-- Remove the assets for other platforms than the one we're targetting (as they'll never be used anyway) -->
+        <!-- Need to include the win-x86 and win-x64 assets in both versions -->
+        <Content Condition="'$(RuntimeIdentifier)' != 'win-x86' AND '$(RuntimeIdentifier)' != 'win-x64'" Update="..\Datadog.Trace.Bundle\home\win-x86\*.*">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <Content Condition="'$(RuntimeIdentifier)' != 'win-x86' AND '$(RuntimeIdentifier)' != 'win-x64'" Update="..\Datadog.Trace.Bundle\home\win-x64\*.*">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <Content Condition="'$(RuntimeIdentifier)' != 'linux-x64'" Update="..\Datadog.Trace.Bundle\home\linux-x64\*.*">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <Content Condition="'$(RuntimeIdentifier)' != 'linux-musl-x64'" Update="..\Datadog.Trace.Bundle\home\linux-musl-x64\*.*">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <Content Condition="'$(RuntimeIdentifier)' != 'linux-arm64'" Update="..\Datadog.Trace.Bundle\home\linux-arm64\*.*">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </Content>
+
+        <Content Condition="'$(RuntimeIdentifier)' != 'osx-x64'" Update="..\Datadog.Trace.Bundle\home\osx-x64\*.*">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+          <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         </Content>
       </ItemGroup>
     </When>
@@ -45,16 +97,20 @@
         <ToolCommandName>dd-trace</ToolCommandName>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <PackageId>dd-trace</PackageId>
         <OutputPath>bin\$(Configuration)\Tool</OutputPath>
       </PropertyGroup>
       <ItemGroup>
-        <Content Include="..\Datadog.Monitoring.Distribution\home\**\*.*" Pack="true" PackagePath="\home" LinkBase="home">
+        <Content Include="..\Datadog.Trace.Bundle\home\**\*.*" Pack="true" PackagePath="\home" LinkBase="home">
           <CopyToOutputDirectory>Never</CopyToOutputDirectory>
         </Content>
 
-        <Content Update="..\Datadog.Monitoring.Distribution\home\**\readme.txt" Pack="false">
+        <Content Update="..\Datadog.Trace.Bundle\home\**\readme.txt" Pack="false">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        </Content>
+
+        <Content Update="..\Datadog.Trace.Bundle\home\**\*.xml" Pack="false">
           <CopyToOutputDirectory>Never</CopyToOutputDirectory>
         </Content>
       </ItemGroup>
@@ -73,19 +129,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Datadog.InstrumentedAssemblyGenerator\Datadog.InstrumentedAssemblyGenerator.csproj" />
+    <ProjectReference Include="..\Datadog.InstrumentedAssemblyVerification\Datadog.InstrumentedAssemblyVerification.csproj" />
     <ProjectReference Include="..\Datadog.Trace\Datadog.Trace.csproj" />
     <ProjectReference Include="..\Datadog.Trace.Coverage.collector\Datadog.Trace.Coverage.collector.csproj" />
   </ItemGroup>
 
   <Target Name="RemoveDuplicate" AfterTargets="ComputeFilesToPublish" BeforeTargets="_HandleFileConflictsForPublish">
-    <!-- Required for StrongNamer: https://github.com/dsplaisted/strongnamer/issues/61 -->
-    <PropertyGroup>
-      <DuplicateFileToRemove>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\linked\Spectre.Console.dll</DuplicateFileToRemove>
-    </PropertyGroup>
 
+    <!-- Required for StrongNamer: https://github.com/dsplaisted/strongnamer/issues/61 -->
     <Message Text="Removing $(DuplicateFileToRemove) from publish output" Importance="high" />
     <ItemGroup>
-      <ResolvedFileToPublish Remove="$(DuplicateFileToRemove)" />
+      <ResolvedFileToPublish Remove="$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\linked\Spectre.Console.dll" />
+      <ResolvedFileToPublish Remove="$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\linked\ILVerification.dll" />
     </ItemGroup>
   </Target>
 </Project>

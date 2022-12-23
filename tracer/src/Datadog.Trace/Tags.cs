@@ -11,12 +11,16 @@ namespace Datadog.Trace
     public static class Tags
     {
         /// <summary>
-        /// The environment of the profiled service.
+        /// The environment of the instrumented service. It's value is usually constant for the lifetime of a process,
+        /// but can technically change for each trace if the user sets it manually.
+        /// This tag is added during MessagePack serialization using the value from <see cref="TraceContext.Environment"/>.
         /// </summary>
         public const string Env = "env";
 
         /// <summary>
-        /// The version of the profiled service.
+        /// The version of the instrumented service. It's value is usually constant for the lifetime of a process,
+        /// but can technically change for each trace if the user sets it manually.
+        /// This tag is added during MessagePack serialization using the value from <see cref="TraceContext.ServiceVersion"/>.
         /// </summary>
         public const string Version = "version";
 
@@ -58,11 +62,6 @@ namespace Datadog.Trace
         public const string HttpStatusCode = "http.status_code";
 
         /// <summary>
-        /// The end point requested
-        /// </summary>
-        internal const string HttpEndpoint = "http.endpoint";
-
-        /// <summary>
         /// The error message of an exception
         /// </summary>
         public const string ErrorMsg = "error.msg";
@@ -101,6 +100,62 @@ namespace Datadog.Trace
         /// The number of rows returned by a query
         /// </summary>
         public const string SqlRows = "sql.rows";
+
+        /// <summary>
+        /// The hostname of a outgoing server connection.
+        /// </summary>
+        public const string OutHost = "out.host";
+
+        /// <summary>
+        /// The port of a outgoing server connection.
+        /// </summary>
+        public const string OutPort = "out.port";
+
+        /// <summary>
+        /// The size of the message.
+        /// </summary>
+        public const string MessageSize = "message.size";
+
+        /// <summary>
+        /// The sampling priority for the entire trace.
+        /// </summary>
+        public const string SamplingPriority = "sampling.priority";
+
+        /// <summary>
+        /// A user-friendly tag that sets the sampling priority to <see cref="Trace.SamplingPriority.UserKeep"/>.
+        /// </summary>
+        public const string ManualKeep = "manual.keep";
+
+        /// <summary>
+        /// A user-friendly tag that sets the sampling priority to <see cref="Trace.SamplingPriority.UserReject"/>.
+        /// </summary>
+        public const string ManualDrop = "manual.drop";
+
+        /// <summary>
+        /// Language tag, applied to all spans that are .NET runtime (e.g. ASP.NET).
+        /// This tag is added during MessagePack serialization. It's value is always "dotnet".
+        /// </summary>
+        public const string Language = "language";
+
+        /// <summary>
+        /// The end point requested
+        /// </summary>
+        internal const string HttpEndpoint = "http.endpoint";
+
+        /// <summary>
+        /// Only when span.kind: server. The matched route(path template).
+        /// </summary>
+        internal const string HttpRoute = "http.route";
+
+        /// <summary>
+        /// Only when span.kind: server. The user agent header received with the request.
+        /// </summary>
+        internal const string HttpUserAgent = "http.useragent";
+
+        /// <summary>
+        /// The IP address of the original client behind all proxies, if known (e.g. from X-Forwarded-For).
+        /// </summary>
+        internal const string HttpClientIp = "http.client_ip";
 
         /// <summary>
         /// The parameters of query
@@ -156,16 +211,6 @@ namespace Datadog.Trace
         /// The Endpoint name in ASP.NET Core endpoint routing.
         /// </summary>
         internal const string AspNetCoreEndpoint = "aspnet_core.endpoint";
-
-        /// <summary>
-        /// The hostname of a outgoing server connection.
-        /// </summary>
-        public const string OutHost = "out.host";
-
-        /// <summary>
-        /// The port of a outgoing server connection.
-        /// </summary>
-        public const string OutPort = "out.port";
 
         /// <summary>
         /// The raw command sent to Redis.
@@ -233,14 +278,14 @@ namespace Datadog.Trace
         internal const string KafkaOffset = "kafka.offset";
 
         /// <summary>
+        /// The consumer group that consumed the message
+        /// </summary>
+        internal const string KafkaConsumerGroup = "kafka.group";
+
+        /// <summary>
         /// Whether the record was a "tombstone" record
         /// </summary>
         internal const string KafkaTombstone = "kafka.tombstone";
-
-        /// <summary>
-        /// The size of the message.
-        /// </summary>
-        public const string MessageSize = "message.size";
 
         /// <summary>
         /// The agent that instrumented the associated AWS SDK span.
@@ -278,29 +323,9 @@ namespace Datadog.Trace
         internal const string AwsQueueUrl = "aws.queue.url";
 
         /// <summary>
-        /// The sampling priority for the entire trace.
-        /// </summary>
-        public const string SamplingPriority = "sampling.priority";
-
-        /// <summary>
-        /// A user-friendly tag that sets the sampling priority to <see cref="Trace.SamplingPriority.UserKeep"/>.
-        /// </summary>
-        public const string ManualKeep = "manual.keep";
-
-        /// <summary>
-        /// A user-friendly tag that sets the sampling priority to <see cref="Trace.SamplingPriority.UserReject"/>.
-        /// </summary>
-        public const string ManualDrop = "manual.drop";
-
-        /// <summary>
         /// Configures Trace Analytics.
         /// </summary>
         internal const string Analytics = "_dd1.sr.eausr";
-
-        /// <summary>
-        /// Language tag, applied to root spans that are .NET runtime (e.g., ASP.NET)
-        /// </summary>
-        public const string Language = "language";
 
         /// <summary>
         /// The runtime family tag, it will be placed on the service entry span, the first span opened for a
@@ -386,7 +411,8 @@ namespace Datadog.Trace
         internal const string AzureFunctionBindingSource = "aas.function.binding";
 
         /// <summary>
-        /// Configures the origin of the trace
+        /// Configures the origin of the trace. This tag is added during MessagePack serialization
+        /// using the value from <see cref="TraceContext.Origin"/>.
         /// </summary>
         internal const string Origin = "_dd.origin";
 
@@ -431,6 +457,11 @@ namespace Datadog.Trace
         internal const string AppSecEvent = "appsec.event";
 
         /// <summary>
+        /// If a span was involved with an application security event and that the request was blocked
+        /// </summary>
+        internal const string AppSecBlocked = "appsec.blocked";
+
+        /// <summary>
         /// The details of the security event
         /// </summary>
         internal const string AppSecJson = "_dd.appsec.json";
@@ -456,6 +487,16 @@ namespace Datadog.Trace
         /// Should contain the public IP of the host initiating the request.
         /// </summary>
         internal const string ActorIp = "actor.ip";
+
+        /// <summary>
+        /// Should contain the vulnerability json
+        /// </summary>
+        internal const string IastJson = "_dd.iast.json";
+
+        /// <summary>
+        /// Indicates at the end of a request if IAST analisys has been performned
+        /// </summary>
+        internal const string IastEnabled = "_dd.iast.enabled";
 
         /// <summary>
         /// The ip as reported by the framework.
@@ -489,6 +530,10 @@ namespace Datadog.Trace
         internal const string GrpcMethodName = "grpc.method.name";
         internal const string GrpcStatusCode = "grpc.status.code";
 
+        internal const string ProcessEnvironmentVariables = "cmd.environment_variables";
+
+        internal const string TagPropagationError = "_dd.propagation_error";
+
         internal static class User
         {
             internal const string Email = "usr.email";
@@ -497,6 +542,11 @@ namespace Datadog.Trace
             internal const string SessionId = "usr.session_id";
             internal const string Role = "usr.role";
             internal const string Scope = "usr.scope";
+        }
+
+        internal static class Propagated
+        {
+            internal const string DecisionMaker = "_dd.p.dm";
         }
     }
 }

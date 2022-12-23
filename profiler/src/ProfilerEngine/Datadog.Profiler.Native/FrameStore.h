@@ -32,12 +32,13 @@ public:
     FrameStore(ICorProfilerInfo4* pCorProfilerInfo, IConfiguration* pConfiguration);
 
 public :
-    std::tuple<bool, std::string, std::string> GetFrame(uintptr_t instructionPointer) override;
+    std::tuple<bool, std::string_view, std::string_view> GetFrame(uintptr_t instructionPointer) override;
+    bool GetTypeName(ClassID classId, std::string& name) override;
 
 private:
     bool GetFunctionInfo(
         FunctionID functionId,
-        mdToken& functionToken,
+        mdToken& mdTokenFunc,
         ClassID& classId,
         ModuleID& moduleId,
         ULONG32& genericParametersCount,
@@ -50,9 +51,18 @@ private:
         ULONG32 genericParametersCount,
         ClassID* genericParameters
         );
-    bool GetTypeDesc(IMetaDataImport2* pMetadataImport, ClassID classId, ModuleID moduleId, mdTypeDef mdTokenType, TypeDesc& typeDesc);
-    std::pair <std::string, std::string> GetManagedFrame(FunctionID functionId);
-    std::pair <std::string, std::string> GetNativeFrame(uintptr_t instructionPointer);
+    bool GetTypeDesc(
+        IMetaDataImport2* pMetadataImport,
+        ClassID classId,
+        ModuleID moduleId,
+        mdTypeDef mdTokenType,
+        TypeDesc& typeDesc,
+        bool isEncoded
+        );
+    bool GetTypeDesc(ClassID classId, TypeDesc& typeDesc, bool isEncoded);
+    bool GetCachedTypeDesc(ClassID classId, TypeDesc& typeDesc);
+    std::pair <std::string_view, std::string_view> GetManagedFrame(FunctionID functionId);
+    std::pair <std::string_view, std::string_view> GetNativeFrame(uintptr_t instructionPointer);
 
 public:   // global helpers
     static bool GetAssemblyName(ICorProfilerInfo4* pInfo, ModuleID moduleId, std::string& assemblyName);
@@ -61,20 +71,26 @@ private:  // global helpers
     static void FixTrailingGeneric(WCHAR* name);
     static std::string GetTypeNameFromMetadata(IMetaDataImport2* pMetadata, mdTypeDef mdTokenType);
     static std::pair<std::string, std::string> GetTypeWithNamespace(IMetaDataImport2* pMetadata, mdTypeDef mdTokenType);
-    static std::string FormatGenericTypeParameters(IMetaDataImport2* pMetadata, mdTypeDef mdTokenType);
-    static std::string FormatGenericParameters(ICorProfilerInfo4* pInfo, ULONG32 numGenericTypeArgs, ClassID* genericTypeArgs);
+    static std::string FormatGenericTypeParameters(IMetaDataImport2* pMetadata, mdTypeDef mdTokenType, bool isEncoded);
+    static std::string FormatGenericParameters(
+        ICorProfilerInfo4* pInfo,
+        ULONG32 numGenericTypeArgs,
+        ClassID* genericTypeArgs,
+        bool isEncoded);
     static std::pair<std::string, std::string> GetManagedTypeName(
         ICorProfilerInfo4* pInfo,
         IMetaDataImport2* pMetadata,
         ModuleID moduleId,
         ClassID classId,
-        mdTypeDef mdTokenType
+        mdTypeDef mdTokenType,
+        bool isEncoded
         );
     static std::pair<std::string, mdTypeDef> GetMethodNameFromMetadata(
         IMetaDataImport2* pMetadataImport,
         mdMethodDef mdTokenFunc
         );
     static std::pair<std::string, std::string> GetManagedTypeName(ICorProfilerInfo4* pInfo, ClassID classId);
+    static void ConcatUnknownGenericType(std::stringstream& builder, bool isEncoded);
 
 private:
     ICorProfilerInfo4* _pCorProfilerInfo;

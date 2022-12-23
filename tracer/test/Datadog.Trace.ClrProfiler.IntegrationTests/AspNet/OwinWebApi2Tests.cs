@@ -3,13 +3,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
 #pragma warning disable SA1402 // File may only contain a single class
 #pragma warning disable SA1649 // File name must match first type name
 
 using System;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -50,7 +51,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
     }
 
     [UsesVerify]
-    public abstract class OwinWebApi2Tests : TestHelper, IClassFixture<OwinWebApi2Tests.OwinFixture>
+    public abstract class OwinWebApi2Tests : TracingIntegrationTest, IClassFixture<OwinWebApi2Tests.OwinFixture>
     {
         private readonly OwinFixture _fixture;
         private readonly string _testName;
@@ -61,7 +62,6 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         {
             SetServiceVersion("1.0.0");
             SetEnvironmentVariable(ConfigurationKeys.FeatureFlags.RouteTemplateResourceNamesEnabled, enableRouteTemplateResourceNames.ToString());
-            SetEnvironmentVariable(ConfigurationKeys.HeaderTags, HttpHeaderNames.UserAgent + ":http_useragent");
             SetEnvironmentVariable(ConfigurationKeys.ExpandRouteTemplatesEnabled, enableRouteTemplateExpansion.ToString());
 
             _fixture = fixture;
@@ -109,6 +109,13 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             { "/handler-api/api?ps=false&ts=false", 500, 1 },
         };
 
+        public override Result ValidateIntegrationSpan(MockSpan span) =>
+            span.Name switch
+            {
+                "aspnet-webapi.request" => span.IsAspNetWebApi2(),
+                _ => Result.DefaultSuccess,
+            };
+
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
@@ -118,9 +125,9 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             await _fixture.TryStartApp(this, _output);
 
             var spans = await _fixture.WaitForSpans(Output, path, expectedSpanCount);
+            ValidateIntegrationSpans(spans, expectedServiceName: "Samples.Owin.WebApi2", isExternalSpan: false);
 
             var sanitisedPath = VerifyHelper.SanitisePathsForVerify(path);
-
             var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedPath, (int)statusCode);
 
             // Overriding the type name here as we have multiple test classes in the file
@@ -142,7 +149,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 _httpClient.DefaultRequestHeaders.Add(HttpHeaderNames.UserAgent, "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36");
             }
 
-            public MockTracerAgent Agent { get; private set; }
+            public MockTracerAgent.TcpUdpAgent Agent { get; private set; }
 
             public int HttpPort { get; private set; }
 
@@ -160,7 +167,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                         var initialAgentPort = TcpPortProvider.GetOpenPort();
                         HttpPort = TcpPortProvider.GetOpenPort();
 
-                        Agent = new MockTracerAgent(initialAgentPort);
+                        Agent = MockTracerAgent.Create(null, initialAgentPort);
                         Agent.SpanFilters.Add(IsNotServerLifeCheck);
                         output.WriteLine($"Starting OWIN sample, agentPort: {Agent.Port}, samplePort: {HttpPort}");
                         _process = helper.StartSample(Agent, arguments: null, packageVersion: string.Empty, aspNetCorePort: HttpPort);

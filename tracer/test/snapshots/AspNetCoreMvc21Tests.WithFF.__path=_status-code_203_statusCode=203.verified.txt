@@ -35,12 +35,15 @@
       http.request.headers.sample_correlation_identifier: 0000-0000-0000,
       http.response.headers.sample_correlation_identifier: 0000-0000-0000,
       http.response.headers.server: Kestrel,
+      http.route: status-code/{statuscode},
       http.status_code: 203,
       http.url: http://localhost:00000/status-code/203,
+      http.useragent: testhelper,
       language: dotnet,
       runtime-id: Guid_1,
       span.kind: server,
-      version: 1.0.0
+      version: 1.0.0,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,

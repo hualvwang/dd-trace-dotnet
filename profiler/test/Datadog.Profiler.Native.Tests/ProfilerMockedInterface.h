@@ -6,13 +6,16 @@
 // namespace fs is an alias defined in "dd_filesystem.hpp"
 
 #include "Configuration.h"
+#include "IApplicationStore.h"
 #include "IExporter.h"
-#include "ISamplesProvider.h"
 #include "IMetricsSender.h"
+#include "IRuntimeIdStore.h"
+#include "ISamplesCollector.h"
+#include "ISamplesProvider.h"
 #include "Sample.h"
 #include "TagsHelper.h"
-#include "IApplicationStore.h"
-#include "IRuntimeIdStore.h"
+
+#include <memory>
 
 class MockConfiguration : public IConfiguration
 {
@@ -36,22 +39,44 @@ public:
     MOCK_METHOD(std::string const&, GetServiceName, (), (const override));
     MOCK_METHOD(bool, IsFFLibddprofEnabled, (), (const override));
     MOCK_METHOD(bool, IsAgentless, (), (const override));
+    MOCK_METHOD(bool, IsWallTimeProfilingEnabled, (), (const override));
     MOCK_METHOD(bool, IsCpuProfilingEnabled, (), (const override));
     MOCK_METHOD(bool, IsExceptionProfilingEnabled, (), (const override));
     MOCK_METHOD(int, ExceptionSampleLimit, (), (const override));
+    MOCK_METHOD(bool, IsAllocationProfilingEnabled, (), (const override));
+    MOCK_METHOD(bool, IsContentionProfilingEnabled, (), (const override));
+    MOCK_METHOD(double, MinimumCores, (), (const override));
+    MOCK_METHOD(int32_t, AllocationSampleLimit, (), (const override));
+    MOCK_METHOD(int32_t, ContentionSampleLimit, (), (const override));
+    MOCK_METHOD(int32_t, ContentionDurationThreshold, (), (const override));
+    MOCK_METHOD(std::chrono::nanoseconds, CpuWallTimeSamplingRate, (), (const override));
+    MOCK_METHOD(std::string const&, GetNamedPipeName, (), (const override));
+    MOCK_METHOD(bool, IsTimestampsAsLabelEnabled, (), (const override));
+    MOCK_METHOD(int32_t, WalltimeThreadsThreshold, (), (const override));
+    MOCK_METHOD(int32_t, CpuThreadsThreshold, (), (const override));
+    MOCK_METHOD(int32_t, CodeHotspotsThreadsThreshold, (), (const override));
+    MOCK_METHOD(bool, IsGarbageCollectionProfilingEnabled, (), (const override));
 };
 
 class MockExporter : public IExporter
 {
 public:
-    MOCK_METHOD(void, Add, (Sample const& sample), (override));
+    MOCK_METHOD(void, Add, (std::shared_ptr<Sample> const& sample), (override));
     MOCK_METHOD(bool, Export, (), (override));
+    MOCK_METHOD(void, SetEndpoint, (const std::string& runtimeId, uint64_t traceId, const std::string& endpoint), (override));
+};
+
+class MockSamplesCollector : public ISamplesCollector
+{
+public:
+    MOCK_METHOD(void, Register, (ISamplesProvider * sampleProvider), (override));
 };
 
 class MockSampleProvider : public ISamplesProvider
 {
 public:
-    MOCK_METHOD(std::list<Sample>, GetSamples, (), (override));
+    MOCK_METHOD(std::list<std::shared_ptr<Sample>>, GetSamples, (), (override));
+    MOCK_METHOD(const char*, GetName, (), (override));
 };
 
 class MockMetricsSender : public IMetricsSender
@@ -114,25 +139,8 @@ std::tuple<std::unique_ptr<IConfiguration>, MockConfiguration&> CreateConfigurat
 std::tuple<std::shared_ptr<ISamplesProvider>, MockSampleProvider&> CreateSamplesProvider();
 
 std::tuple<std::unique_ptr<IExporter>, MockExporter&> CreateExporter();
+std::tuple<std::unique_ptr<ISamplesCollector>, MockSamplesCollector&> CreateSamplesCollector();
 
-template <typename T>
-Sample CreateSample(std::string_view runtimeId, const T& callstack, std::initializer_list<std::pair<std::string, std::string>> labels, std::int64_t value)
-{
-    Sample sample{runtimeId};
-
-    for (auto frame = callstack.begin(); frame != callstack.end(); ++frame)
-    {
-        sample.AddFrame(frame->first, frame->second);
-    }
-
-    for (auto const& [name, value] : labels)
-    {
-        sample.AddLabel({name, value});
-    }
-
-    sample.SetValue(value);
-
-    return sample;
-}
+std::shared_ptr<Sample> CreateSample(std::string_view runtimeId, const std::vector<std::pair<std::string, std::string>>& callstack, const std::vector<std::pair<std::string, std::string>>& labels, std::int64_t value);
 
 std::vector<std::pair<std::string, std::string>> CreateCallstack(int depth);

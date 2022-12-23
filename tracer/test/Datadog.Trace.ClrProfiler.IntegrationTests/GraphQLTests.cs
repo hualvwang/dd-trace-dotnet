@@ -55,6 +55,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public async Task SubmitsTraces()
             => await RunSubmitsTraces();
     }
@@ -69,12 +70,13 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public async Task SubmitsTraces()
             => await RunSubmitsTraces();
     }
 
     [UsesVerify]
-    public abstract class GraphQLTests : TestHelper
+    public abstract class GraphQLTests : TracingIntegrationTest
     {
         private const string ServiceVersion = "1.0.0";
 
@@ -88,8 +90,16 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             _testName = testName;
         }
 
+        public override Result ValidateIntegrationSpan(MockSpan span) =>
+            span.Type switch
+            {
+                "graphql" => span.IsGraphQL(),
+                _ => Result.DefaultSuccess,
+            };
+
         protected async Task RunSubmitsTraces(string packageVersion = "")
         {
+            SetInstrumentationVerification();
             using var telemetry = this.ConfigureTelemetry();
             int? aspNetCorePort = null;
 
@@ -98,37 +108,28 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             {
                 var wh = new EventWaitHandle(false, EventResetMode.AutoReset);
 
-                process.OutputDataReceived += (sender, args) =>
-                {
-                    if (args.Data != null)
+                using var helper = new ProcessHelper(
+                    process,
+                    onDataReceived: data =>
                     {
-                        if (args.Data.Contains("Now listening on:"))
+                        if (data.Contains("Now listening on:"))
                         {
-                            var splitIndex = args.Data.LastIndexOf(':');
-                            aspNetCorePort = int.Parse(args.Data.Substring(splitIndex + 1));
+                            var splitIndex = data.LastIndexOf(':');
+                            aspNetCorePort = int.Parse(data.Substring(splitIndex + 1));
 
                             wh.Set();
                         }
-                        else if (args.Data.Contains("Unable to start Kestrel"))
+                        else if (data.Contains("Unable to start Kestrel"))
                         {
                             wh.Set();
                         }
 
-                        Output.WriteLine($"[webserver][stdout] {args.Data}");
-                    }
-                };
-                process.BeginOutputReadLine();
-
-                process.ErrorDataReceived += (sender, args) =>
-                {
-                    if (args.Data != null)
-                    {
-                        Output.WriteLine($"[webserver][stderr] {args.Data}");
-                    }
-                };
-                process.BeginErrorReadLine();
+                        Output.WriteLine($"[webserver][stdout] {data}");
+                    },
+                    onErrorReceived: data => Output.WriteLine($"[webserver][stderr] {data}"));
 
                 wh.WaitOne(15_000);
+
                 if (!aspNetCorePort.HasValue)
                 {
                     throw new Exception("Unable to determine port application is listening on");
@@ -144,24 +145,16 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                     var shutdownRequest = new RequestInfo() { HttpMethod = "GET", Url = "/shutdown" };
                     SubmitRequest(aspNetCorePort.Value, shutdownRequest);
 
-                    if (!process.WaitForExit(5000))
-                    {
-                        Output.WriteLine("The process didn't exit in time. Taking proc dump and killing it.");
-                        var memoryDumpCaptured = await TakeMemoryDump(process);
-
-                        process.Kill();
-
-                        if (!memoryDumpCaptured)
-                        {
-                            // if we don't have a memory dump, there's no point continuing.
-                            // We know the test will likely fail (telemetry not sent) but it's
-                            // not useful to know that, as we don't have a memory dump
-                            throw new SkipException("The process didn't exit in time but memory dump couldn't be captured");
-                        }
-                    }
+                    WaitForProcessResult(helper);
                 }
 
                 var spans = agent.WaitForSpans(expectedSpans);
+                foreach (var span in spans)
+                {
+                    // TODO: Refactor to use ValidateIntegrationSpans when the graphql server integration is fixed. It currently produces a service name of {service]-graphql
+                    var result = ValidateIntegrationSpan(span);
+                    Assert.True(result.Success, result.ToString());
+                }
 
                 var settings = VerifyHelper.GetSpanVerifierSettings();
 
@@ -177,6 +170,8 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 await VerifyHelper.VerifySpans(spans, settings)
                                   .UseFileName($"{_testName}.SubmitsTraces{fxSuffix}")
                                   .DisableRequireUniquePrefix(); // all package versions should be the same
+
+                VerifyInstrumentation(process);
             }
 
             telemetry.AssertIntegrationEnabled(IntegrationId.GraphQL);
@@ -236,6 +231,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             {
                 var request = WebRequest.Create($"http://localhost:{aspNetCorePort}{requestInfo.Url}");
                 request.Method = requestInfo.HttpMethod;
+                ((HttpWebRequest)request).UserAgent = "testhelper";
 
                 if (requestInfo.RequestBody != null)
                 {

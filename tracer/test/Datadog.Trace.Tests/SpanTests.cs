@@ -30,7 +30,7 @@ namespace Datadog.Trace.Tests
 
             var settings = new TracerSettings();
             _writerMock = new Mock<IAgentWriter>();
-            var samplerMock = new Mock<ISampler>();
+            var samplerMock = new Mock<ITraceSampler>();
 
             _tracer = new Tracer(settings, _writerMock.Object, samplerMock.Object, scopeManager: null, statsd: null);
         }
@@ -46,7 +46,7 @@ namespace Datadog.Trace.Tests
             span.SetTag(key, value);
 
             _writerMock.Verify(x => x.WriteTrace(It.IsAny<ArraySegment<Span>>()), Times.Never);
-            Assert.Equal(span.GetTag(key), value);
+            span.GetTag(key).Should().Be(value);
         }
 
         [Fact]

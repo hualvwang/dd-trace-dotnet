@@ -13,7 +13,8 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 401,
-      http.url: http://localhost:00000/my-app/api/statuscode/401,
+      http.url: http://localhost/my-app/api/statuscode/401,
+      http.useragent: testhelper,
       language: dotnet,
       span.kind: server,
       version: 1.0.0
@@ -32,7 +33,8 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 401,
-      http.url: /my-app/api/transferrequest/401,
+      http.url: http://localhost/my-app/api/statuscode/401,
+      http.useragent: testhelper,
       language: dotnet,
       span.kind: server,
       version: 1.0.0
@@ -55,12 +57,15 @@ at Samples.AspNetMvc5.Controllers.ApiController.BadRequestWithStatusCodeAndTrans
       error.type: System.Exception,
       http.method: GET,
       http.request.headers.host: localhost:00000,
+      http.route: api/statuscode/{value},
       http.status_code: 401,
-      http.url: /my-app/api/transferrequest/401,
+      http.url: http://localhost/my-app/api/TransferRequest/401,
+      http.useragent: testhelper,
       language: dotnet,
       runtime-id: Guid_1,
       span.kind: server,
-      version: 1.0.0
+      version: 1.0.0,
+      _dd.p.dm: -0
     },
     Metrics: {
       process_id: 0,
@@ -90,7 +95,8 @@ at Samples.AspNetMvc5.Controllers.ApiController.BadRequestWithStatusCodeAndTrans
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 500,
-      http.url: http://localhost:00000/my-app/api/transferrequest/401,
+      http.url: http://localhost/my-app/api/TransferRequest/401,
+      http.useragent: testhelper,
       language: dotnet,
       span.kind: server,
       version: 1.0.0

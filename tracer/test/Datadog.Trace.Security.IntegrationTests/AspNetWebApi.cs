@@ -3,7 +3,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
+using System.Net;
 using System.Threading.Tasks;
 using Datadog.Trace.AppSec;
 using Datadog.Trace.TestHelpers;
@@ -54,16 +55,15 @@ namespace Datadog.Trace.Security.IntegrationTests
     public abstract class AspNetWebApi : AspNetBase, IClassFixture<IisFixture>
     {
         private readonly IisFixture _iisFixture;
-        private readonly bool _enableSecurity;
         private readonly string _testName;
 
         public AspNetWebApi(IisFixture iisFixture, ITestOutputHelper output, bool classicMode, bool enableSecurity)
-            : base("WebApi", output, "/home/shutdown", @"test\test-applications\security\aspnet")
+            : base("WebApi", output, "/api/home/shutdown", @"test\test-applications\security\aspnet")
         {
             SetSecurity(enableSecurity);
             SetEnvironmentVariable(Configuration.ConfigurationKeys.AppSec.Rules, DefaultRuleFile);
+
             _iisFixture = iisFixture;
-            _enableSecurity = enableSecurity;
             _iisFixture.TryStartIis(this, classicMode ? IisAppType.AspNetClassic : IisAppType.AspNetIntegrated);
             _testName = "Security." + nameof(AspNetWebApi)
                      + (classicMode ? ".Classic" : ".Integrated")
@@ -87,6 +87,19 @@ namespace Datadog.Trace.Security.IntegrationTests
             var sanitisedUrl = VerifyHelper.SanitisePathsForVerify(url);
             var settings = VerifyHelper.GetSpanVerifierSettings(test, sanitisedUrl, body);
             return TestAppSecRequestWithVerifyAsync(_iisFixture.Agent, url, body, 5, 2, settings, "application/json");
+        }
+
+        [Trait("Category", "EndToEnd")]
+        [Trait("RunOnWindows", "True")]
+        [Trait("LoadFromGAC", "True")]
+        [SkippableTheory]
+        [InlineData("blocking")]
+        public async Task TestBlockedRequest(string test)
+        {
+            var url = "/api/Health";
+
+            var settings = VerifyHelper.GetSpanVerifierSettings(test);
+            await TestAppSecRequestWithVerifyAsync(_iisFixture.Agent, url, null, 5, 1, settings, userAgent: "Hello/V");
         }
 
         protected override string GetTestName() => _testName;

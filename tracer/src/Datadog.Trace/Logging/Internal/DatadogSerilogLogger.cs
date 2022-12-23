@@ -5,7 +5,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Datadog.Trace.Vendors.Serilog;
+using Datadog.Trace.Vendors.Serilog.Core.Pipeline;
 using Datadog.Trace.Vendors.Serilog.Events;
 
 namespace Datadog.Trace.Logging
@@ -13,14 +15,16 @@ namespace Datadog.Trace.Logging
     internal class DatadogSerilogLogger : IDatadogLogger
     {
         private static readonly object[] NoPropertyValues = Array.Empty<object>();
-        private readonly ILogger _logger;
         private readonly ILogRateLimiter _rateLimiter;
+        private ILogger _logger;
 
         public DatadogSerilogLogger(ILogger logger, ILogRateLimiter rateLimiter)
         {
             _logger = logger;
             _rateLimiter = rateLimiter;
         }
+
+        public static DatadogSerilogLogger NullLogger { get; } = new(SilentLogger.Instance, new NullLogRateLimiter());
 
         public bool IsEnabled(LogEventLevel level) => _logger.IsEnabled(level);
 
@@ -35,6 +39,9 @@ namespace Datadog.Trace.Logging
 
         public void Debug<T0, T1, T2>(string messageTemplate, T0 property0, T1 property1, T2 property2, [CallerLineNumber] int sourceLine = 0, [CallerFilePath] string sourceFile = "")
             => Write(LogEventLevel.Debug, exception: null, messageTemplate, property0, property1, property2, sourceLine, sourceFile);
+
+        public void Debug<T0, T1, T2, T3>(string messageTemplate, T0 property0, T1 property1, T2 property2, T3 property3, [CallerLineNumber] int sourceLine = 0, [CallerFilePath] string sourceFile = "")
+            => Write(LogEventLevel.Debug, exception: null, messageTemplate, property0, property1, property2, property3, sourceLine, sourceFile);
 
         public void Debug(string messageTemplate, object[] args, [CallerLineNumber] int sourceLine = 0, [CallerFilePath] string sourceFile = "")
             => Write(LogEventLevel.Debug, exception: null, messageTemplate, args, sourceLine, sourceFile);
@@ -144,6 +151,13 @@ namespace Datadog.Trace.Logging
         public void Error(Exception exception, string messageTemplate, object[] args, [CallerLineNumber] int sourceLine = 0, [CallerFilePath] string sourceFile = "")
             => Write(LogEventLevel.Error, exception, messageTemplate, args, sourceLine, sourceFile);
 
+        public void CloseAndFlush()
+        {
+            var logger = Interlocked.Exchange(ref _logger, SilentLogger.Instance);
+
+            (logger as IDisposable)?.Dispose();
+        }
+
         private void Write<T>(LogEventLevel level, Exception exception, string messageTemplate, T property, int sourceLine, string sourceFile)
         {
             if (_logger.IsEnabled(level))
@@ -168,6 +182,15 @@ namespace Datadog.Trace.Logging
             {
                 // Avoid boxing + array allocation if disabled
                 WriteIfNotRateLimited(level, exception, messageTemplate, new object[] { property0, property1, property2 }, sourceLine, sourceFile);
+            }
+        }
+
+        private void Write<T0, T1, T2, T3>(LogEventLevel level, Exception exception, string messageTemplate, T0 property0, T1 property1, T2 property2, T3 property3, int sourceLine, string sourceFile)
+        {
+            if (_logger.IsEnabled(level))
+            {
+                // Avoid boxing + array allocation if disabled
+                WriteIfNotRateLimited(level, exception, messageTemplate, new object[] { property0, property1, property2, property3 }, sourceLine, sourceFile);
             }
         }
 

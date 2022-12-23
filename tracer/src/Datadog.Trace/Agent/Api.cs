@@ -13,7 +13,9 @@ using Datadog.Trace.Configuration;
 using Datadog.Trace.DogStatsd;
 using Datadog.Trace.Logging;
 using Datadog.Trace.PlatformHelpers;
+using Datadog.Trace.Util.Http;
 using Datadog.Trace.Vendors.Newtonsoft.Json;
+using Datadog.Trace.Vendors.Serilog.Events;
 using Datadog.Trace.Vendors.StatsdClient;
 
 namespace Datadog.Trace.Agent
@@ -33,7 +35,6 @@ namespace Datadog.Trace.Agent
         private readonly Uri _statsEndpoint;
         private readonly Action<Dictionary<string, float>> _updateSampleRates;
         private readonly bool _partialFlushEnabled;
-        private readonly bool _statsComputationEnabled;
         private readonly SendCallback<SendStatsState> _sendStats;
         private readonly SendCallback<SendTracesState> _sendTraces;
         private string _cachedResponse;
@@ -44,7 +45,6 @@ namespace Datadog.Trace.Agent
             IDogStatsd statsd,
             Action<Dictionary<string, float>> updateSampleRates,
             bool partialFlushEnabled,
-            bool statsComputationEnabled,
             IDatadogLogger log = null)
         {
             // optionally injecting a log instance in here for testing purposes
@@ -61,7 +61,6 @@ namespace Datadog.Trace.Agent
             _log.Debug("Using traces endpoint {TracesEndpoint}", _tracesEndpoint.ToString());
             _statsEndpoint = _apiRequestFactory.GetEndpoint(StatsPath);
             _log.Debug("Using stats endpoint {StatsEndpoint}", _statsEndpoint.ToString());
-            _statsComputationEnabled = statsComputationEnabled;
         }
 
         private delegate Task<bool> SendCallback<T>(IApiRequest request, bool isFinalTry, T state);
@@ -75,11 +74,11 @@ namespace Datadog.Trace.Agent
             return SendWithRetry(_statsEndpoint, _sendStats, state);
         }
 
-        public Task<bool> SendTracesAsync(ArraySegment<byte> traces, int numberOfTraces)
+        public Task<bool> SendTracesAsync(ArraySegment<byte> traces, int numberOfTraces, bool statsComputationEnabled, long numberOfDroppedP0Traces, long numberOfDroppedP0Spans)
         {
             _log.Debug<int>("Sending {Count} traces to the Datadog Agent.", numberOfTraces);
 
-            var state = new SendTracesState(traces, numberOfTraces);
+            var state = new SendTracesState(traces, numberOfTraces, statsComputationEnabled, numberOfDroppedP0Traces, numberOfDroppedP0Spans);
 
             return SendWithRetry(_tracesEndpoint, _sendTraces, state);
         }
@@ -158,26 +157,16 @@ namespace Datadog.Trace.Agent
                     if (isFinalTry)
                     {
                         // stop retrying
-                        _log.Error(exception, "An error occurred while sending data to the agent at {AgentEndpoint}", _apiRequestFactory.Info(endpoint));
+                        _log.Error(exception, "An error occurred while sending data to the agent at {AgentEndpoint}. If the error isn't transient, please check https://docs.datadoghq.com/tracing/troubleshooting/connection_errors/?code-lang=dotnet for guidance.", _apiRequestFactory.Info(endpoint));
                         return false;
+                    }
+                    else if (_log.IsEnabled(LogEventLevel.Debug))
+                    {
+                        _log.Debug(exception, "An error occurred while sending data to the agent at {AgentEndpoint}. Retrying.", _apiRequestFactory.Info(endpoint));
                     }
 
                     // Before retry delay
-                    bool isSocketException = false;
-                    Exception innerException = exception;
-
-                    while (innerException != null)
-                    {
-                        if (innerException is SocketException)
-                        {
-                            isSocketException = true;
-                            break;
-                        }
-
-                        innerException = innerException.InnerException;
-                    }
-
-                    if (isSocketException)
+                    if (exception.IsSocketException())
                     {
                         _log.Debug(exception, "Unable to communicate with the trace agent at {AgentEndpoint}", _apiRequestFactory.Info(endpoint));
                     }
@@ -242,6 +231,9 @@ namespace Datadog.Trace.Agent
 
             var traces = state.Traces;
             var numberOfTraces = state.NumberOfTraces;
+            var statsComputationEnabled = state.StatsComputationEnabled;
+            var numberOfDroppedP0Traces = state.NumberOfDroppedP0Traces;
+            var numberOfDroppedP0Spans = state.NumberOfDroppedP0Spans;
 
             // Set additional headers
             request.AddHeader(AgentHttpHeaderNames.TraceCount, numberOfTraces.ToString());
@@ -251,9 +243,11 @@ namespace Datadog.Trace.Agent
                 request.AddHeader(AgentHttpHeaderNames.ContainerId, _containerId);
             }
 
-            if (_statsComputationEnabled)
+            if (statsComputationEnabled)
             {
                 request.AddHeader(AgentHttpHeaderNames.StatsComputation, "true");
+                request.AddHeader(AgentHttpHeaderNames.DroppedP0Traces, numberOfDroppedP0Traces.ToString());
+                request.AddHeader(AgentHttpHeaderNames.DroppedP0Spans, numberOfDroppedP0Spans.ToString());
             }
 
             try
@@ -346,11 +340,17 @@ namespace Datadog.Trace.Agent
         {
             public readonly ArraySegment<byte> Traces;
             public readonly int NumberOfTraces;
+            public readonly bool StatsComputationEnabled;
+            public readonly long NumberOfDroppedP0Traces;
+            public readonly long NumberOfDroppedP0Spans;
 
-            public SendTracesState(ArraySegment<byte> traces, int numberOfTraces)
+            public SendTracesState(ArraySegment<byte> traces, int numberOfTraces, bool statsComputationEnabled, long numberOfDroppedP0Traces, long numberOfDroppedP0Spans)
             {
                 Traces = traces;
                 NumberOfTraces = numberOfTraces;
+                StatsComputationEnabled = statsComputationEnabled;
+                NumberOfDroppedP0Traces = numberOfDroppedP0Traces;
+                NumberOfDroppedP0Spans = numberOfDroppedP0Spans;
             }
         }
 

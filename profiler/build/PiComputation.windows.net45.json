@@ -4,34 +4,38 @@
   "count": 10,
   "scenarios": [
     {
-      "name": "Baseline",
+      "name": "Baseline_cpu",
       "environmentVariables": {
         "CORECLR_ENABLE_PROFILING": "0",
         "COR_ENABLE_PROFILING": "0"
       }
     },
     {
-      "name": "Profiler",
+      "name": "Profiler_no_cpu",
       "environmentVariables": {
         "DD_CLR_ENABLE_NGEN": "true",
         "DD_PROFILING_ENABLED": "1",
+        "DD_PROFILING_WALLTIME_ENABLED": "0",
+        "DD_PROFILING_CPU_ENABLED": "0",
         "DD_TRACE_ENABLED": "0"
       }
     },
     {
-      "name": "Profiler_exceptions",
+      "name": "Profiler_walltime",
       "environmentVariables": {
         "DD_CLR_ENABLE_NGEN": "true",
         "DD_PROFILING_ENABLED": "1",
-        "DD_PROFILING_EXCEPTION_ENABLED": "1"
+        "DD_PROFILING_CPU_ENABLED": "0",
+        "DD_TRACE_ENABLED": "0"
       }
     },
     {
-      "name": "Profiler_cpu",
+      "name": "Profiler_cpu_walltime",
       "environmentVariables": {
         "DD_CLR_ENABLE_NGEN": "true",
         "DD_PROFILING_ENABLED": "1",
-        "DD_PROFILING_CPU_ENABLED": "1"
+        "DD_PROFILING_CPU_ENABLED": "1",
+        "DD_TRACE_ENABLED" : "0"
       }
     }
   ],
@@ -42,11 +46,10 @@
   "environmentVariables": {
     "COR_ENABLE_PROFILING": "1",
     "COR_PROFILER": "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}",
-    "COR_PROFILER_PATH_64": "$(CWD)\\..\\..\\shared\\bin\\monitoring-home\\Datadog.AutoInstrumentation.NativeLoader.x64.dll",
+    "COR_PROFILER_PATH_64": "$(CWD)\\..\\..\\shared\\bin\\monitoring-home\\win-x64\\Datadog.Trace.ClrProfiler.Native.dll",
     "CORECLR_ENABLE_PROFILING": "1",
     "CORECLR_PROFILER": "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}",
-    "CORECLR_PROFILER_PATH_64": "$(CWD)\\..\\..\\shared\\bin\\monitoring-home\\Datadog.AutoInstrumentation.NativeLoader.x64.dll",
-    "DD_DOTNET_PROFILER_HOME": "$(CWD)\\..\\..\\shared\\bin\\monitoring-home\\continuousprofiler",
+    "CORECLR_PROFILER_PATH_64": "$(CWD)\\..\\..\\shared\\bin\\monitoring-home\\win-x64\\Datadog.Trace.ClrProfiler.Native.dll",
     "DD_PROFILING_METRICS_FILEPATH": "metrics.json"
   },
   "tags": {

@@ -1,4 +1,4 @@
-﻿// <copyright file="AspNetResourceNameHelper.cs" company="Datadog">
+// <copyright file="AspNetResourceNameHelper.cs" company="Datadog">
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
@@ -214,8 +214,9 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNet
                     var keyIndex = 0;
                     while (keyIndex < keyLength)
                     {
-                        // this is a case-sensitive comparison, which is probably ok?
-                        if (sb[startIndex + keyIndex] != key[keyIndex])
+                        // this is a case-sensitive comparison
+                        // which is ok as we convert both key and resource template to lower invariant
+                        if (sb[startIndex + keyIndex] != char.ToLowerInvariant(key[keyIndex]))
                         {
                             // no match
                             return false;

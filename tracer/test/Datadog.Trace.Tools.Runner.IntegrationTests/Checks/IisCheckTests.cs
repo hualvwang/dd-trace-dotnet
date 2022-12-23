@@ -29,6 +29,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableTheory]
+        [Trait("RunOnWindows", "True")]
         [InlineData(true)]
         [InlineData(false)]
         public async Task WorkingApp(bool mixedRuntimes)
@@ -70,6 +71,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task OutOfProcess()
         {
             EnsureWindowsAndX64();
@@ -104,6 +106,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task NoGac()
         {
             EnsureWindowsAndX64();
@@ -124,6 +127,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task ListSites()
         {
             EnsureWindowsAndX64();
@@ -144,6 +148,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task ListApplications()
         {
             EnsureWindowsAndX64();
@@ -178,7 +183,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
             registryService.Setup(r => r.GetLocalMachineValueNames(It.Is(@"SOFTWARE\Microsoft\.NETFramework", StringComparer.Ordinal)))
                 .Returns(Array.Empty<string>());
             registryService.Setup(r => r.GetLocalMachineValue(It.Is<string>(s => s == ProcessBasicChecksTests.ClsidKey || s == ProcessBasicChecksTests.Clsid32Key)))
-                .Returns(EnvironmentHelper.GetTracerNativeDLLPath());
+                .Returns(EnvironmentHelper.GetNativeLoaderPath());
 
             return registryService.Object;
         }

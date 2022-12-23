@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
 
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +18,7 @@ using Xunit.Sdk;
 namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [UsesVerify]
-    public class WcfTests : TestHelper
+    public class WcfTests : TracingIntegrationTest
     {
         private const string ServiceVersion = "1.0.0";
 
@@ -44,30 +44,42 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 // so only test New WCF
                 if (binding == "Custom")
                 {
-                    yield return new object[] { binding, true };
+                    yield return new object[] { binding, true, true };
                     continue;
                 }
 
-                yield return new object[] { binding, false };
-                yield return new object[] { binding, true };
+                yield return new object[] { binding, false, true };
+                yield return new object[] { binding, false, false };
+                yield return new object[] { binding, true,  true };
+                yield return new object[] { binding, true,  false };
             }
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsWcf();
 
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
         [MemberData(nameof(GetData))]
-        public async Task SubmitsTraces(string binding, bool enableNewWcfInstrumentation)
+        public async Task SubmitsTraces(string binding, bool enableNewWcfInstrumentation, bool enableWcfObfuscation)
         {
             if (enableNewWcfInstrumentation)
             {
                 SetEnvironmentVariable("DD_TRACE_DELAY_WCF_INSTRUMENTATION_ENABLED", "true");
             }
 
+            if (enableWcfObfuscation)
+            {
+                SetEnvironmentVariable(ConfigurationKeys.FeatureFlags.WcfObfuscationEnabled, "true");
+            }
+            else
+            {
+                SetEnvironmentVariable(ConfigurationKeys.FeatureFlags.WcfObfuscationEnabled, "false");
+            }
+
             Output.WriteLine("Starting WcfTests.SubmitsTraces. Starting the Samples.Wcf requires ADMIN privileges");
 
             var expectedSpanCount = 6;
-
             const string expectedOperationName = "wcf.request";
 
             using var telemetry = this.ConfigureTelemetry();
@@ -80,10 +92,11 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 // so we can wait on the exact number of spans we expect.
                 agent.SpanFilters.Add(s => !s.Resource.Contains("schemas.xmlsoap.org") && !s.Resource.Contains("www.w3.org"));
                 var spans = agent.WaitForSpans(expectedSpanCount, operationName: expectedOperationName);
+                ValidateIntegrationSpans(spans, expectedServiceName: "Samples.Wcf", isExternalSpan: false);
 
-                var settings = VerifyHelper.GetSpanVerifierSettings(binding, enableNewWcfInstrumentation);
+                var settings = VerifyHelper.GetSpanVerifierSettings(binding, enableNewWcfInstrumentation, enableWcfObfuscation);
 
-                await Verifier.Verify(spans, settings)
+                await VerifyHelper.VerifySpans(spans, settings)
                               .UseMethodName("_");
 
                 // The custom binding doesn't trigger the integration

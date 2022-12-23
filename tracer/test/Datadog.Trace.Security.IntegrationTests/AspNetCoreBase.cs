@@ -6,6 +6,7 @@
 using System.Net;
 using System.Threading.Tasks;
 using Datadog.Trace.AppSec;
+using Datadog.Trace.Configuration;
 using Datadog.Trace.TestHelpers;
 using Xunit;
 using Xunit.Abstractions;
@@ -24,21 +25,31 @@ namespace Datadog.Trace.Security.IntegrationTests
         [InlineData(AddressesConstants.RequestQuery, false, HttpStatusCode.OK, "/Health/?[$slice]=value")]
         [InlineData(AddressesConstants.RequestQuery, true, HttpStatusCode.OK, "/Health/?arg&[$slice]")]
         [InlineData(AddressesConstants.RequestQuery, false, HttpStatusCode.OK, "/Health/?arg&[$slice]")]
-
         [InlineData(AddressesConstants.RequestPathParams, true, HttpStatusCode.OK, "/health/params/appscan_fingerprint")]
         [InlineData(AddressesConstants.RequestPathParams, false, HttpStatusCode.OK, "/health/params/appscan_fingerprint")]
-
         [InlineData("discovery.scans", true, HttpStatusCode.NotFound, "/Health/login.php")]
         [InlineData("discovery.scans", false, HttpStatusCode.OK, "/Health/login.php")]
-
         [Trait("RunOnWindows", "True")]
-        public async Task TestRequest(string test, bool enableSecurity, HttpStatusCode expectedStatusCode, string url = DefaultAttackUrl)
+        public async Task TestRequest(string test, bool enableSecurity, HttpStatusCode expectedStatusCode, string url)
         {
             var agent = await RunOnSelfHosted(enableSecurity);
 
             var sanitisedUrl = VerifyHelper.SanitisePathsForVerify(url);
             var settings = VerifyHelper.GetSpanVerifierSettings(test, enableSecurity, (int)expectedStatusCode, sanitisedUrl);
             await TestAppSecRequestWithVerifyAsync(agent, url, null, 5, 1, settings);
+        }
+
+        [SkippableTheory]
+        [InlineData("blocking", true, HttpStatusCode.Forbidden, "/")]
+        [InlineData("blocking", false, HttpStatusCode.OK, "/")]
+        [Trait("RunOnWindows", "True")]
+        public async Task TestBlockedRequest(string test, bool enableSecurity, HttpStatusCode expectedStatusCode, string url)
+        {
+            var agent = await RunOnSelfHosted(enableSecurity, externalRulesFile: DefaultRuleFile);
+
+            var sanitisedUrl = VerifyHelper.SanitisePathsForVerify(url);
+            var settings = VerifyHelper.GetSpanVerifierSettings(test, enableSecurity, (int)expectedStatusCode, sanitisedUrl);
+            await TestAppSecRequestWithVerifyAsync(agent, url, null, 5, 1, settings, userAgent: "Hello/V");
         }
 
         [SkippableTheory]

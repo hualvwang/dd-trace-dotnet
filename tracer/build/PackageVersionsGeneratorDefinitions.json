@@ -81,20 +81,40 @@
       "5.*.*"
     ],
     "VersionConditions": [{
+      "MinVersion": "5.0.0",
+      "MaxVersionExclusive": "5.1.1",
+      "ExcludeTargetFrameworks": ["net461", "netcoreapp2.1", "netcoreapp3.0", "netcoreapp3.1", "net5.0", "net6.0"]
+    },{
       "MaxVersionExclusive": "6.0.0",
       "ExcludeTargetFrameworks": ["net461", "netcoreapp2.1", "netcoreapp3.0"]
     }]
   },
   {
+    "IntegrationName": "HotChocolate",
+    "SampleProjectName": "Samples.HotChocolate",
+    "NugetPackageSearchName": "HotChocolate.AspNetCore",
+    "MinVersion": "11.0.0",
+    "MaxVersionExclusive": "13.0.0",
+    "SpecificVersions": [
+      "11.*.*",
+      "12.*.*"
+    ],
+    "VersionConditions": [{
+        "MaxVersionExclusive": "13.0.0",
+        "ExcludeTargetFrameworks": [ "net461", "netcoreapp2.1", "netcoreapp3.0" ]
+    }]
+  },  
+  {
     "IntegrationName": "Npgsql",
     "SampleProjectName": "Samples.Npgsql",
     "NugetPackageSearchName": "Npgsql",
     "MinVersion": "4.0.0",
-    "MaxVersionExclusive": "7.0.0",
+    "MaxVersionExclusive": "8.0.0",
     "SpecificVersions": [
       "4.*.*",
       "5.*.*",
-      "6.*.*"
+      "6.*.*",
+      "7.*.*"
     ],
     "VersionConditions": [{
       "MinVersion": "6.0.0",
@@ -131,12 +151,13 @@
     "SampleProjectName": "Samples.Microsoft.Data.SqlClient",
     "NugetPackageSearchName": "Microsoft.Data.SqlClient",
     "MinVersion": "1.0.0",
-    "MaxVersionExclusive": "5.0.0",
+    "MaxVersionExclusive": "6.0.0",
     "SpecificVersions": [
       "1.*.*",
       "2.*.*",
       "3.*.*",
-      "4.*.*"
+      "4.*.*",
+      "5.*.*"
     ]
   },
   {
@@ -172,6 +193,9 @@
     "VersionConditions": [{
       "MaxVersionExclusive": "5.0.0",
       "IncludeOnlyTargetFrameworks": ["net461"]
+    },{
+      "MinVersion": "6.2.0",
+      "ExcludeTargetFrameworks": ["netcoreapp2.1", "netcoreapp3.0"]
     }]
   },
   {
@@ -204,12 +228,13 @@
     "SampleProjectName": "Samples.Microsoft.Data.Sqlite",
     "NugetPackageSearchName": "Microsoft.Data.Sqlite",
     "MinVersion": "2.0.0",
-    "MaxVersionExclusive": "7.0.0",
+    "MaxVersionExclusive": "8.0.0",
     "SpecificVersions": [
       "2.*.*",
       "3.*.*",
       "5.*.*",
-      "6.*.*"
+      "6.*.*",
+      "7.*.*"
     ]
   },
   {
@@ -266,7 +291,11 @@
     "SpecificVersions": [
       "3.6.*",
       "3.*.*"
-    ]
+    ],
+    "VersionConditions": [{
+      "MinVersion": "3.29.0",
+      "ExcludeTargetFrameworks": ["netcoreapp2.1", "netcoreapp3.0"]
+    }]
   },
   {
     "IntegrationName": "Serilog",

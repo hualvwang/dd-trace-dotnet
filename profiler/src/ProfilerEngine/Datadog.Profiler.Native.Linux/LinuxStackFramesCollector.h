@@ -18,11 +18,13 @@
 #include <unordered_map>
 
 class IManagedThreadList;
+class ProfilerSignalManager;
+class ProfilerSignalManager;
 
 class LinuxStackFramesCollector : public StackFramesCollectorBase
 {
 public:
-    explicit LinuxStackFramesCollector(ICorProfilerInfo4* const _pCorProfilerInfo);
+    explicit LinuxStackFramesCollector(ProfilerSignalManager* signalManager);
     ~LinuxStackFramesCollector() override;
     LinuxStackFramesCollector(LinuxStackFramesCollector const&) = delete;
     LinuxStackFramesCollector& operator=(LinuxStackFramesCollector const&) = delete;
@@ -51,11 +53,10 @@ private:
     };
 
 private:
-    void InitializeSignalHandler();
-    bool SetupSignalHandler();
     void NotifyStackWalkCompleted(std::int32_t resultErrorCode);
     void UpdateErrorStats(std::int32_t errorCode);
     bool ShouldLogStats();
+    bool CanCollect(int32_t threadId, pid_t processId) const;
 
     std::int32_t _lastStackWalkErrorCode;
     std::condition_variable _stackWalkInProgressWaiter;
@@ -64,22 +65,19 @@ private:
     // we will block for ever.
     // This flag is used to prevent blocking on successfull (but long) stackwalking
     std::atomic<bool> _stackWalkFinished;
+    pid_t _processId;
+    ProfilerSignalManager* _signalManager;
 
-    ICorProfilerInfo4* const _pCorProfilerInfo;
 
 private:
-    static bool TrySetHandlerForSignal(int signal, struct sigaction& action);
-    static void CollectStackSampleSignalHandler(int signal);
+    static bool CollectStackSampleSignalHandler(int sig, siginfo_t* info, void* ucontext);
 
-    static char const* ErrorCodeToString(int errorCode);
+    static char const* ErrorCodeToString(int32_t errorCode);
     static std::mutex s_stackWalkInProgressMutex;
-    static std::mutex s_signalHandlerInitLock;
-    static bool s_isSignalHandlerSetup;
-    static int s_signalToSend;
 
     static LinuxStackFramesCollector* s_pInstanceCurrentlyStackWalking;
 
-    std::int32_t CollectCallStackCurrentThread();
+    std::int32_t CollectCallStackCurrentThread(void* ucontext);
 
     ErrorStatistics _errorStatistics;
 };

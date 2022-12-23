@@ -1,4 +1,4 @@
-﻿// <copyright file="AspNetResourceNameHelperTests.cs" company="Datadog">
+// <copyright file="AspNetResourceNameHelperTests.cs" company="Datadog">
 // Unless explicitly stated otherwise all files in this repository are licensed under the Apache 2 License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
@@ -20,13 +20,15 @@ namespace Datadog.Trace.Tests.AspNet
             { "action", "Index" },
             { "nonid", "oops" },
             { "idlike", 123 },
+            { "FormValue", "View" },
         };
 
         private static readonly RouteValueDictionary Defaults = new()
         {
             { "controller", "Home" },
             { "action", "Index" },
-            { "id", new object() } // it won't necessarily be a string in here, e.g. for optional values
+            { "id", new object() }, // it won't necessarily be a string in here, e.g. for optional values
+            { "FormValue", "View" }
         };
 
         [Theory]
@@ -46,6 +48,14 @@ namespace Datadog.Trace.Tests.AspNet
         [InlineData("{controller}/{action}/{nonid=2}", "/home/index/oops", true)]
         [InlineData("{controller}/{action}/{nonid:int}", "/home/index/{nonid:int}", false)]
         [InlineData("{controller}/{action}/{nonid:int}", "/home/index/oops", true)]
+        [InlineData("{controller}/{action}/{FormValue}", "/home/index/{formvalue}", false)]
+        [InlineData("{controller}/{action}/{FormValue}", "/home/index/view", true)]
+        [InlineData("{controller}/{action}/{FormValue?}", "/home/index/{formvalue?}", false)]
+        [InlineData("{controller}/{action}/{FormValue?}", "/home/index/view", true)]
+        [InlineData("{controller}/{action}/{FormValue=Edit}", "/home/index/{formvalue=edit}", false)]
+        [InlineData("{controller}/{action}/{FormValue=Edit}", "/home/index/view", true)]
+        [InlineData("{controller}/{action}/{FormValue:int}", "/home/index/{formvalue:int}", false)]
+        [InlineData("{controller}/{action}/{FormValue:int}", "/home/index/view", true)]
         [InlineData("{controller}/{action}/{nonidentity}", "/home/index/{nonidentity}", false)]
         [InlineData("{controller}/{action}/{nonidentity}", "/home/index/{nonidentity}", true)]
         [InlineData("{controller}/{action}/{nonidentity?}", "/home/index/{nonidentity?}", false)]
@@ -91,6 +101,14 @@ namespace Datadog.Trace.Tests.AspNet
         [InlineData("{controller}/{action}/{id=2}", "/home/index", true)]
         [InlineData("{controller}/{action}/{id:int}", "/home/index", false)]
         [InlineData("{controller}/{action}/{id:int}", "/home/index", true)]
+        [InlineData("{controller}/{action}/{FormValue}", "/home/index/{formvalue}", false)]
+        [InlineData("{controller}/{action}/{FormValue}", "/home/index/view", true)]
+        [InlineData("{controller}/{action}/{FormValue?}", "/home/index/{formvalue?}", false)]
+        [InlineData("{controller}/{action}/{FormValue?}", "/home/index/view", true)]
+        [InlineData("{controller}/{action}/{FormValue=2}", "/home/index/{formvalue=2}", false)]
+        [InlineData("{controller}/{action}/{FormValue=2}", "/home/index/view", true)]
+        [InlineData("{controller}/{action}/{FormValue:int}", "/home/index/{formvalue:int}", false)]
+        [InlineData("{controller}/{action}/{FormValue:int}", "/home/index/view", true)]
         [InlineData("{controller}/{action}/{identity}", "/home/index/{identity}", false)]
         [InlineData("{controller}/{action}/{identity}", "/home/index/{identity}", true)]
         [InlineData("{controller}/{action}", "/home/index", false)]

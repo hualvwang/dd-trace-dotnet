@@ -36,6 +36,15 @@
     <Filter Include="Exceptions">
       <UniqueIdentifier>{17ede239-426d-4dba-a5d8-2e7c328d8e78}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Allocations">
+      <UniqueIdentifier>{ebcb3383-0a0b-49fd-a5ad-99ea7b92d783}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Contention">
+      <UniqueIdentifier>{bb4d04f1-ed7e-48db-b2e0-99b56d4f258a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="GarbageCollections">
+      <UniqueIdentifier>{c07c8635-c021-4796-bfac-48f7ee78bf65}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CorProfilerCallback.h">
@@ -80,7 +89,7 @@
     <ClInclude Include="StackSamplerLoopManager.h">
       <Filter>Profiler-Driver</Filter>
     </ClInclude>
-    <ClInclude Include="StackSnapshotResultReusableBuffer.h">
+    <ClInclude Include="StackSnapshotResultBuffer.h">
       <Filter>Profiler-Driver</Filter>
     </ClInclude>
     <ClInclude Include="ThreadCpuInfo.h">
@@ -96,9 +105,6 @@
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="OpSysTools.h">
-      <Filter>Utils</Filter>
-    </ClInclude>
-    <ClInclude Include="RefCountingObject.h">
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="ScopeFinalizer.h">
@@ -141,9 +147,6 @@
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="Sample.h">
-      <Filter>Profiler-Driver</Filter>
-    </ClInclude>
-    <ClInclude Include="SamplesAggregator.h">
       <Filter>Profiler-Driver</Filter>
     </ClInclude>
     <ClInclude Include="ISamplesProvider.h">
@@ -200,18 +203,93 @@
     <ClInclude Include="Timer.h">
       <Filter>Utils</Filter>
     </ClInclude>
-    <ClInclude Include="ExceptionSampler.h">
-      <Filter>Exceptions</Filter>
-    </ClInclude>
     <ClInclude Include="AdaptiveSampler.h">
       <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="ISamplesCollector.h">
+      <Filter>Profiler-Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="cgroup.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="ClrEventsParser.h">
+      <Filter>CorProfiler-Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="AllocationsProvider.h">
+      <Filter>Allocations</Filter>
+    </ClInclude>
+    <ClInclude Include="RawAllocationSample.h">
+      <Filter>Allocations</Filter>
+    </ClInclude>
+    <ClInclude Include="IAllocationsListener.h">
+      <Filter>CorProfiler-Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="IRuntimeInfo.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="RuntimeInfo.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="EnabledProfilers.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="IEnabledProfilers.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="EnumHelpers.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="SamplesCollector.h">
+      <Filter>Profiler-Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="COMHelpers.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="ContentionProvider.h">
+      <Filter>Contention</Filter>
+    </ClInclude>
+    <ClInclude Include="RawContentionSample.h">
+      <Filter>Contention</Filter>
+    </ClInclude>
+    <ClInclude Include="IContentionListener.h">
+      <Filter>Contention</Filter>
+    </ClInclude>
+    <ClInclude Include="SamplesCollector.h">
+      <Filter>Profiler-Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="GenericSampler.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="GroupSampler.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="IGCSuspensionsListener.h">
+      <Filter>CorProfiler-Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="StopTheWorldGCProvider.h">
+      <Filter>GarbageCollections</Filter>
+    </ClInclude>
+    <ClInclude Include="RawStopTheWorldSample.h">
+      <Filter>GarbageCollections</Filter>
+    </ClInclude>
+    <ClInclude Include="IGarbageCollectionsListener.h">
+      <Filter>CorProfiler-Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="GarbageCollection.h">
+      <Filter>CorProfiler-Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="GarbageCollectionProvider.h">
+      <Filter>GarbageCollections</Filter>
+    </ClInclude>
+    <ClInclude Include="RawGarbageCollectionSample.h">
+      <Filter>GarbageCollections</Filter>
+    </ClInclude>
+    <ClInclude Include="GCBaseRawSample.h">
+      <Filter>GarbageCollections</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="OpSysTools.cpp">
-      <Filter>Utils</Filter>
-    </ClCompile>
-    <ClCompile Include="RefCountingObject.cpp">
       <Filter>Utils</Filter>
     </ClCompile>
     <ClCompile Include="HResultConverter.cpp">
@@ -250,7 +328,7 @@
     <ClCompile Include="StackSamplerLoopManager.cpp">
       <Filter>Profiler-Driver</Filter>
     </ClCompile>
-    <ClCompile Include="StackSnapshotResultReusableBuffer.cpp">
+    <ClCompile Include="StackSnapshotResultBuffer.cpp">
       <Filter>Profiler-Driver</Filter>
     </ClCompile>
     <ClCompile Include="ThreadCpuInfo.cpp">
@@ -271,9 +349,6 @@
     </ClCompile>
     <ClCompile Include="TagsHelper.cpp">
       <Filter>Utils</Filter>
-    </ClCompile>
-    <ClCompile Include="SamplesAggregator.cpp">
-      <Filter>Profiler-Driver</Filter>
     </ClCompile>
     <ClCompile Include="Sample.cpp">
       <Filter>Profiler-Driver</Filter>
@@ -310,14 +385,41 @@
     <ClCompile Include="AdaptiveSampler.cpp">
       <Filter>Utils</Filter>
     </ClCompile>
-    <ClCompile Include="ExceptionSampler.cpp">
-      <Filter>Exceptions</Filter>
-    </ClCompile>
     <ClCompile Include="Timer.Linux.cpp">
       <Filter>Utils</Filter>
     </ClCompile>
     <ClCompile Include="Timer.Windows.cpp">
       <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="SamplesCollector.cpp">
+      <Filter>Profiler-Driver</Filter>
+    </ClCompile>
+    <ClCompile Include="ClrEventsParser.cpp">
+      <Filter>CorProfiler-Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="AllocationsProvider.cpp">
+      <Filter>Allocations</Filter>
+    </ClCompile>
+    <ClCompile Include="cgroup.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="RuntimeInfo.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="EnabledProfilers.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="ContentionProvider.cpp">
+      <Filter>Contention</Filter>
+    </ClCompile>
+    <ClCompile Include="GenericSampler.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="StopTheWorldGCProvider.cpp">
+      <Filter>GarbageCollections</Filter>
+    </ClCompile>
+    <ClCompile Include="GarbageCollectionProvider.cpp">
+      <Filter>GarbageCollections</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

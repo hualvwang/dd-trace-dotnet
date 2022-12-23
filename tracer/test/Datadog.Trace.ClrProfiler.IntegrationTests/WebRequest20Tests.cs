@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 
 namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
-    public class WebRequest20Tests : TestHelper
+    public class WebRequest20Tests : TracingIntegrationTest
     {
         public WebRequest20Tests(ITestOutputHelper output)
             : base("WebRequest.NetFramework20", output)
@@ -22,14 +22,16 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             SetServiceVersion("1.0.0");
         }
 
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsWebRequest();
+
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public void SubmitsTraces()
         {
             int expectedSpanCount = 45;
             const string expectedOperationName = "http.request";
-            const string expectedServiceName = "Samples.WebRequest.NetFramework20-http-client";
 
             int httpPort = TcpPortProvider.GetOpenPort();
             Output.WriteLine($"Assigning port {httpPort} for the httpPort.");
@@ -40,15 +42,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             {
                 var spans = agent.WaitForSpans(expectedSpanCount, operationName: expectedOperationName);
                 Assert.Equal(expectedSpanCount, spans.Count);
-
-                foreach (var span in spans)
-                {
-                    Assert.Equal(expectedOperationName, span.Name);
-                    Assert.Equal(expectedServiceName, span.Service);
-                    Assert.Equal(SpanTypes.Http, span.Type);
-                    Assert.Equal("WebRequest", span.Tags[Tags.InstrumentationName]);
-                    Assert.False(span.Tags?.ContainsKey(Tags.Version), "External service span should not have service version tag.");
-                }
+                ValidateIntegrationSpans(spans, expectedServiceName: "Samples.WebRequest.NetFramework20-http-client");
 
                 var firstSpan = spans.First();
                 var traceId = StringUtil.GetHeader(processResult.StandardOutput, HttpHeaderNames.TraceId);
@@ -64,10 +58,11 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public void TracingDisabled_DoesNotSubmitsTraces()
         {
             const string expectedOperationName = "http.request";
-
+            SetInstrumentationVerification();
             int httpPort = TcpPortProvider.GetOpenPort();
 
             using var telemetry = this.ConfigureTelemetry();
@@ -85,6 +80,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 Assert.Null(parentSpanId);
                 Assert.Equal("false", tracingEnabled);
                 telemetry.AssertIntegrationDisabled(IntegrationId.WebRequest);
+                VerifyInstrumentation(processResult.Process);
             }
         }
     }

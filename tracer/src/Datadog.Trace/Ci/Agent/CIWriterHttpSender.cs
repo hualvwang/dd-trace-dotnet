@@ -4,6 +4,8 @@
 // </copyright>
 
 using System;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Datadog.Trace.Agent;
@@ -11,144 +13,57 @@ using Datadog.Trace.Agent.Transports;
 using Datadog.Trace.Ci.Agent.Payloads;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
+using Datadog.Trace.Util.Http;
+using Datadog.Trace.Vendors.Serilog.Events;
 
 namespace Datadog.Trace.Ci.Agent
 {
-    internal sealed class CIWriterHttpSender : ICIAgentlessWriterSender
+    internal sealed class CIWriterHttpSender : ICIVisibilityProtocolWriterSender
     {
         private const string ApiKeyHeader = "dd-api-key";
+        private const string EvpSubdomainHeader = "X-Datadog-EVP-Subdomain";
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor<CIWriterHttpSender>();
 
         private readonly IApiRequestFactory _apiRequestFactory;
-        private readonly GlobalSettings _globalSettings;
+        private readonly bool _isDebugEnabled;
 
         public CIWriterHttpSender(IApiRequestFactory apiRequestFactory)
         {
             _apiRequestFactory = apiRequestFactory;
-            _globalSettings = GlobalSettings.FromDefaultSources();
+            _isDebugEnabled = GlobalSettings.Instance.DebugEnabled;
             Log.Information("CIWriterHttpSender Initialized.");
         }
 
-        public async Task SendPayloadAsync(EventsPayload payload)
+        public Task SendPayloadAsync(EventPlatformPayload payload)
         {
-            var numberOfTraces = payload.Count;
-            var tracesEndpoint = payload.Url;
-
-            // retry up to 5 times with exponential back-off
-            const int retryLimit = 5;
-            var retryCount = 1;
-            var sleepDuration = 100; // in milliseconds
-
-            var payloadMimeType = MimeTypes.MsgPack;
-            var payloadBytes = payload.ToArray();
-
-            Log.Information($"Sending ({numberOfTraces} events) {payloadBytes.Length.ToString("N0")} bytes...");
-
-            while (true)
+            switch (payload)
             {
-                IApiRequest request;
-
-                try
-                {
-                    request = _apiRequestFactory.Create(tracesEndpoint);
-                    request.AddHeader(ApiKeyHeader, CIVisibility.Settings.ApiKey);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "An error occurred while generating http request to send events to {AgentEndpoint}", _apiRequestFactory.Info(tracesEndpoint));
-                    return;
-                }
-
-                bool success = false;
-                Exception exception = null;
-                bool isFinalTry = retryCount >= retryLimit;
-
-                try
-                {
-                    success = await SendPayloadAsync(new ArraySegment<byte>(payloadBytes), payloadMimeType, request, isFinalTry).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    exception = ex;
-
-                    if (_globalSettings.DebugEnabled)
-                    {
-                        if (ex.InnerException is InvalidOperationException ioe)
-                        {
-                            Log.Error<int, string>(ex, "An error occurred while sending {Count} events to {AgentEndpoint}", numberOfTraces, _apiRequestFactory.Info(tracesEndpoint));
-                            return;
-                        }
-                    }
-                }
-
-                // Error handling block
-                if (!success)
-                {
-                    if (isFinalTry)
-                    {
-                        // stop retrying
-                        Log.Error<int, int, string>(exception, "An error occurred while sending {Count} events after {Retries} retries to {AgentEndpoint}", numberOfTraces, retryCount, _apiRequestFactory.Info(tracesEndpoint));
-                        return;
-                    }
-
-                    // Before retry delay
-                    bool isSocketException = false;
-                    Exception innerException = exception;
-
-                    while (innerException != null)
-                    {
-                        if (innerException is SocketException)
-                        {
-                            isSocketException = true;
-                            break;
-                        }
-
-                        innerException = innerException.InnerException;
-                    }
-
-                    if (isSocketException)
-                    {
-                        Log.Debug(exception, "Unable to communicate with {AgentEndpoint}", _apiRequestFactory.Info(tracesEndpoint));
-                    }
-
-                    // Execute retry delay
-                    await Task.Delay(sleepDuration).ConfigureAwait(false);
-                    retryCount++;
-                    sleepDuration *= 2;
-
-                    continue;
-                }
-
-                Log.Debug<int, string>("Successfully sent {Count} events to {AgentEndpoint}", numberOfTraces, _apiRequestFactory.Info(tracesEndpoint));
-                return;
+                case CIVisibilityProtocolPayload ciVisibilityProtocolPayload:
+                    return SendPayloadAsync(ciVisibilityProtocolPayload);
+                case MultipartPayload multipartPayload:
+                    return SendPayloadAsync(multipartPayload);
+                default:
+                    Util.ThrowHelper.ThrowNotSupportedException("Payload is not supported.");
+                    return Task.FromException(new NotSupportedException("Payload is not supported."));
             }
         }
 
-        private async Task<bool> SendPayloadAsync(ArraySegment<byte> payload, string mimeType, IApiRequest request, bool finalTry)
+        private static async Task<bool> SendPayloadAsync<T>(Func<IApiRequest, T, Task<IApiResponse>> senderFunc, IApiRequest request, T state, bool finalTry)
         {
             IApiResponse response = null;
 
             try
             {
-                try
-                {
-                    response = await request.PostAsync(payload, mimeType).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // count only network/infrastructure errors, not valid responses with error status codes
-                    // (which are handled below)
-                    throw;
-                }
+                response = await senderFunc(request, state).ConfigureAwait(false);
 
                 // Attempt a retry if the status code is not SUCCESS
-                if (response.StatusCode < 200 || response.StatusCode >= 300)
+                if (response.StatusCode is < 200 or >= 300)
                 {
                     if (finalTry)
                     {
                         try
                         {
-                            string responseContent = await response.ReadAsStringAsync().ConfigureAwait(false);
+                            var responseContent = await response.ReadAsStringAsync().ConfigureAwait(false);
                             Log.Error<int, string>("Failed to submit events with status code {StatusCode} and message: {ResponseContent}", response.StatusCode, responseContent);
                         }
                         catch (Exception ex)
@@ -166,6 +81,136 @@ namespace Datadog.Trace.Ci.Agent
             }
 
             return true;
+        }
+
+        private async Task SendPayloadAsync<T>(EventPlatformPayload payload, Func<IApiRequest, T, Task<IApiResponse>> senderFunc, T state)
+        {
+            // retry up to 5 times with exponential back-off
+            const int retryLimit = 5;
+            var retryCount = 1;
+            var sleepDuration = 100; // in milliseconds
+            var url = payload.Url;
+
+            while (true)
+            {
+                IApiRequest request;
+
+                try
+                {
+                    request = _apiRequestFactory.Create(url);
+                    if (payload.UseEvpProxy)
+                    {
+                        request.AddHeader(EvpSubdomainHeader, payload.EventPlatformSubdomain);
+                    }
+                    else
+                    {
+                        request.AddHeader(ApiKeyHeader, CIVisibility.Settings.ApiKey);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "An error occurred while generating http request to send events to {AgentEndpoint}", _apiRequestFactory.Info(url));
+                    return;
+                }
+
+                var success = false;
+                var isFinalTry = retryCount >= retryLimit;
+                Exception exception = null;
+
+                try
+                {
+                    success = await SendPayloadAsync(senderFunc, request, state, isFinalTry).ConfigureAwait(false);
+                }
+                catch (MultipartApiRequestNotSupported mReqEx)
+                {
+                    Log.Error(mReqEx, "Error trying to send a multipart request to: {url}", url.ToString());
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    exception = ex;
+
+                    if (_isDebugEnabled)
+                    {
+                        if (ex.InnerException is InvalidOperationException ioe)
+                        {
+                            Log.Error<string>(ex, "An error occurred while sending events to {AgentEndpoint}", _apiRequestFactory.Info(url));
+                            return;
+                        }
+                    }
+                }
+
+                // Error handling block
+                if (!success)
+                {
+                    if (isFinalTry)
+                    {
+                        // stop retrying
+                        Log.Error<int, string>(exception, "An error occurred while sending events after {Retries} retries to {AgentEndpoint}", retryCount, _apiRequestFactory.Info(url));
+                        return;
+                    }
+
+                    // Before retry delay
+                    if (exception.IsSocketException())
+                    {
+                        Log.Debug(exception, "Unable to communicate with {AgentEndpoint}", _apiRequestFactory.Info(url));
+                    }
+
+                    // Execute retry delay
+                    await Task.Delay(sleepDuration).ConfigureAwait(false);
+                    retryCount++;
+                    sleepDuration *= 2;
+
+                    continue;
+                }
+
+                Log.Debug<string>("Successfully sent events to {AgentEndpoint}", _apiRequestFactory.Info(url));
+                return;
+            }
+        }
+
+        private async Task SendPayloadAsync(CIVisibilityProtocolPayload payload)
+        {
+            var payloadArray = payload.ToArray();
+            if (Log.IsEnabled(LogEventLevel.Debug))
+            {
+                Log.Debug<int, string>("Sending ({numberOfTraces} events) {bytesValue} bytes...", payload.Count, payloadArray.Length.ToString("N0"));
+            }
+
+            await SendPayloadAsync(
+                payload,
+                static (request, payloadBytes) => request.PostAsync(new ArraySegment<byte>(payloadBytes), MimeTypes.MsgPack),
+                payloadArray).ConfigureAwait(false);
+        }
+
+        private async Task SendPayloadAsync(MultipartPayload payload)
+        {
+            Log.Debug<int>("Sending {count} multipart items...", payload.Count);
+            await SendPayloadAsync(
+                payload,
+                static (request, payloadArray) =>
+                {
+                    if (request is IMultipartApiRequest multipartRequest)
+                    {
+                        return multipartRequest.PostAsync(payloadArray);
+                    }
+
+                    MultipartApiRequestNotSupported.Throw();
+                    return Task.FromResult<IApiResponse>(null);
+                },
+                payload.ToArray()).ConfigureAwait(false);
+        }
+
+        internal class MultipartApiRequestNotSupported : NotSupportedException
+        {
+            public MultipartApiRequestNotSupported()
+                : base("Sender doesn't support IMultipartApiRequest.")
+            {
+            }
+
+            [DebuggerHidden]
+            [DoesNotReturn]
+            public static void Throw() => throw new MultipartApiRequestNotSupported();
         }
     }
 }

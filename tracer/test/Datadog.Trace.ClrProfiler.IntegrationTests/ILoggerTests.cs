@@ -42,6 +42,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         [InlineData(true)]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public void InjectsLogs(bool enableLogShipping)
         {
             // One of the traces starts by manual opening a span when the background service starts,
@@ -59,6 +60,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             var expectedCorrelatedSpanCount = 4;
 #endif
 
+            SetInstrumentationVerification();
             using var logsIntake = new MockLogsIntake();
             if (enableLogShipping)
             {
@@ -66,36 +68,46 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             }
 
             using (var agent = EnvironmentHelper.GetMockAgent())
-            using (RunSampleAndWaitForExit(agent, aspNetCorePort: 0))
+            using (var processResult = RunSampleAndWaitForExit(agent, aspNetCorePort: 0))
             {
                 var spans = agent.WaitForSpans(1, 2500);
                 spans.Should().HaveCountGreaterOrEqualTo(1);
 
                 ValidateLogCorrelation(spans, _logFiles, expectedCorrelatedTraceCount, expectedCorrelatedSpanCount);
+                VerifyInstrumentation(processResult.Process);
             }
         }
 
-        [SkippableFact]
+        [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
-        public void DirectlyShipsLogs()
+        [Trait("SupportsInstrumentationVerification", "True")]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void DirectlyShipsLogs(bool filterStartupLogs)
         {
+            SetInstrumentationVerification();
             var hostName = "integration_ilogger_tests";
             using var logsIntake = new MockLogsIntake();
 
             EnableDirectLogSubmission(logsIntake.Port, nameof(IntegrationId.ILogger), hostName);
+            if (filterStartupLogs)
+            {
+                SetEnvironmentVariable("Logging__Datadog__LogLevel__LogsInjection.ILogger.Startup", "Warning");
+            }
 
             var agentPort = TcpPortProvider.GetOpenPort();
-            using var agent = new MockTracerAgent(agentPort);
+            using var agent = MockTracerAgent.Create(Output, agentPort);
             using var processResult = RunSampleAndWaitForExit(agent, aspNetCorePort: 0);
 
-            Assert.True(processResult.ExitCode >= 0, $"Process exited with code {processResult.ExitCode} and exception: {processResult.StandardError}");
+            ExitCodeException.ThrowIfNonZero(processResult.ExitCode, processResult.StandardError);
 
             var logs = logsIntake.Logs;
 
+            var expectedLogCount = filterStartupLogs ? 7 : 12;
             using var scope = new AssertionScope();
             logs.Should().NotBeNull();
-            logs.Should().HaveCountGreaterOrEqualTo(12); // have an unknown number of "Waiting for app started handling requests"
+            logs.Should().HaveCountGreaterOrEqualTo(expectedLogCount); // have an unknown number of "Waiting for app started handling requests"
             logs.Should()
                 .OnlyContain(x => x.Service == "LogsInjection.ILogger")
                 .And.OnlyContain(x => x.Host == hostName)
@@ -104,6 +116,17 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 .And.OnlyContain(x => x.Version == "1.0.0")
                 .And.OnlyContain(x => x.Exception == null)
                 .And.OnlyContain(x => x.LogLevel == DirectSubmissionLogLevel.Information);
+
+            if (filterStartupLogs)
+            {
+                logs.Should().NotContain(x => x.Message.Contains("Building pipeline")); // these are filtered out
+            }
+            else
+            {
+                logs.Should().Contain(x => x.Message.Contains("Building pipeline")); // these should not be filtered out
+            }
+
+            VerifyInstrumentation(processResult.Process);
         }
     }
 }

@@ -149,5 +149,30 @@ namespace Datadog.Trace.Ci.Tags
         /// Library Version
         /// </summary>
         public const string LibraryVersion = "library_version";
+
+        /// <summary>
+        /// Environment variables from CI
+        /// </summary>
+        public const string CiEnvVars = "_dd.ci.env_vars";
+
+        /// <summary>
+        /// Intelligent Test Runner tests skipped flag
+        /// </summary>
+        public const string TestsSkipped = "_dd.ci.itr.tests_skipped";
+
+        /// <summary>
+        /// Intelligent Test Runner tests skipping is enabled flag
+        /// </summary>
+        public const string TestsSkippingEnabled = "itr.tests_skipping.enabled";
+
+        /// <summary>
+        /// Code Coverage is enabled flag
+        /// </summary>
+        public const string CodeCoverageEnabled = "code_coverage.enabled";
+
+        /// <summary>
+        /// Code coverage global percentage value
+        /// </summary>
+        public const string CodeCoverageTotalLines = "test.codecov_lines_total";
     }
 }

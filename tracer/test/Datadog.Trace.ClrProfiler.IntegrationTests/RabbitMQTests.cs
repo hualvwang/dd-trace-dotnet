@@ -16,7 +16,7 @@ using Xunit.Abstractions;
 namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [Trait("RequiresDockerDependency", "true")]
-    public class RabbitMQTests : TestHelper
+    public class RabbitMQTests : TracingIntegrationTest
     {
         private const string ExpectedServiceName = "Samples.RabbitMQ-rabbitmq";
 
@@ -25,6 +25,8 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
         {
             SetServiceVersion("1.0.0");
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsRabbitMQ();
 
         [SkippableTheory]
         [MemberData(nameof(PackageVersions.RabbitMQ), MemberType = typeof(PackageVersions))]
@@ -62,14 +64,10 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 var rabbitmqSpans = spans.Where(span => string.Equals(span.Service, ExpectedServiceName, StringComparison.OrdinalIgnoreCase));
                 var manualSpans = spans.Where(span => !string.Equals(span.Service, ExpectedServiceName, StringComparison.OrdinalIgnoreCase));
 
+                ValidateIntegrationSpans(rabbitmqSpans, expectedServiceName: "Samples.RabbitMQ-rabbitmq");
+
                 foreach (var span in rabbitmqSpans)
                 {
-                    Assert.Equal(SpanTypes.Queue, span.Type);
-                    Assert.Equal("RabbitMQ", span.Tags[Tags.InstrumentationName]);
-                    Assert.False(span.Tags?.ContainsKey(Tags.Version), "External service span should not have service version tag.");
-                    Assert.NotNull(span.Tags[Tags.AmqpCommand]);
-                    Assert.Equal("amqp.command", span.Name);
-
                     var command = span.Tags[Tags.AmqpCommand];
 
                     if (command.StartsWith("basic.", StringComparison.OrdinalIgnoreCase))
@@ -206,19 +204,20 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             }
 
             // Assert that all empty get results are expected
-            Assert.Equal(4, emptyBasicGetCount);
+            const int routineCount = 4;
+            Assert.Equal(routineCount * 2, emptyBasicGetCount);
 
             // Assert that each span that started a distributed trace (basic.publish)
             // has only one child span (basic.deliver or basic.get)
             Assert.All(distributedParentSpans, kvp => Assert.Equal(1, kvp.Value));
 
-            Assert.Equal(10, basicPublishCount);
-            Assert.Equal(8, basicGetCount);
-            Assert.Equal(6, basicDeliverCount);
+            Assert.Equal(routineCount * 5, basicPublishCount);
+            Assert.Equal(routineCount * 4, basicGetCount);
+            Assert.Equal(routineCount * 3, basicDeliverCount);
 
-            Assert.Equal(2, exchangeDeclareCount);
-            Assert.Equal(2, queueBindCount);
-            Assert.Equal(8, queueDeclareCount);
+            Assert.Equal(routineCount, exchangeDeclareCount);
+            Assert.Equal(routineCount, queueBindCount);
+            Assert.Equal(routineCount * 4, queueDeclareCount);
             telemetry.AssertIntegrationEnabled(IntegrationId.RabbitMQ);
         }
     }

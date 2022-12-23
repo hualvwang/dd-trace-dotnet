@@ -14,9 +14,11 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 200,
-      http.url: http://localhost:00000/api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
-      span.kind: server
+      span.kind: server,
+      _dd.origin: appsec
     }
   },
   {
@@ -30,13 +32,16 @@
       actor.ip: 86.242.244.246,
       appsec.event: true,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.request.headers.user-agent: Mistake Not...,
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-type: application/json; charset=utf-8,
+      http.route: api/{controller}/{id},
       http.status_code: 200,
-      http.url: /api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: ::1,
       runtime-id: Guid_1,
@@ -44,6 +49,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-913-120","name":"Known security scanner filename/argument","tags":{"category":"attack_attempt","type":"security_scanner"}},"rule_matches":[{"operator":"phrase_match","operator_value":"","parameters":[{"address":"server.request.path_params","highlight":["appscan_fingerprint"],"key_path":["id"],"value":"appscan_fingerprint"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -72,9 +78,11 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 200,
-      http.url: http://localhost:00000/api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
-      span.kind: server
+      span.kind: server,
+      _dd.origin: appsec
     }
   },
   {
@@ -88,13 +96,16 @@
       actor.ip: 86.242.244.246,
       appsec.event: true,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.request.headers.user-agent: Mistake Not...,
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-type: application/json; charset=utf-8,
+      http.route: api/{controller}/{id},
       http.status_code: 200,
-      http.url: /api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: ::1,
       runtime-id: Guid_1,
@@ -102,6 +113,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-913-120","name":"Known security scanner filename/argument","tags":{"category":"attack_attempt","type":"security_scanner"}},"rule_matches":[{"operator":"phrase_match","operator_value":"","parameters":[{"address":"server.request.path_params","highlight":["appscan_fingerprint"],"key_path":["id"],"value":"appscan_fingerprint"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -130,9 +142,11 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 200,
-      http.url: http://localhost:00000/api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
-      span.kind: server
+      span.kind: server,
+      _dd.origin: appsec
     }
   },
   {
@@ -146,13 +160,16 @@
       actor.ip: 86.242.244.246,
       appsec.event: true,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.request.headers.user-agent: Mistake Not...,
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-type: application/json; charset=utf-8,
+      http.route: api/{controller}/{id},
       http.status_code: 200,
-      http.url: /api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: ::1,
       runtime-id: Guid_1,
@@ -160,6 +177,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-913-120","name":"Known security scanner filename/argument","tags":{"category":"attack_attempt","type":"security_scanner"}},"rule_matches":[{"operator":"phrase_match","operator_value":"","parameters":[{"address":"server.request.path_params","highlight":["appscan_fingerprint"],"key_path":["id"],"value":"appscan_fingerprint"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -188,9 +206,11 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 200,
-      http.url: http://localhost:00000/api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
-      span.kind: server
+      span.kind: server,
+      _dd.origin: appsec
     }
   },
   {
@@ -204,13 +224,16 @@
       actor.ip: 86.242.244.246,
       appsec.event: true,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.request.headers.user-agent: Mistake Not...,
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-type: application/json; charset=utf-8,
+      http.route: api/{controller}/{id},
       http.status_code: 200,
-      http.url: /api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: ::1,
       runtime-id: Guid_1,
@@ -218,6 +241,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-913-120","name":"Known security scanner filename/argument","tags":{"category":"attack_attempt","type":"security_scanner"}},"rule_matches":[{"operator":"phrase_match","operator_value":"","parameters":[{"address":"server.request.path_params","highlight":["appscan_fingerprint"],"key_path":["id"],"value":"appscan_fingerprint"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {
@@ -246,9 +270,11 @@
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.status_code: 200,
-      http.url: http://localhost:00000/api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
-      span.kind: server
+      span.kind: server,
+      _dd.origin: appsec
     }
   },
   {
@@ -262,13 +288,16 @@
       actor.ip: 86.242.244.246,
       appsec.event: true,
       env: integration_tests,
+      http.client_ip: 127.0.0.1,
       http.method: GET,
       http.request.headers.host: localhost:00000,
       http.request.headers.user-agent: Mistake Not...,
       http.request.headers.x-forwarded: 86.242.244.246,
       http.response.headers.content-type: application/json; charset=utf-8,
+      http.route: api/{controller}/{id},
       http.status_code: 200,
-      http.url: /api/health/appscan_fingerprint,
+      http.url: http://localhost/api/Health/appscan_fingerprint,
+      http.useragent: Mistake Not...,
       language: dotnet,
       network.client.ip: ::1,
       runtime-id: Guid_1,
@@ -276,6 +305,7 @@
       _dd.appsec.event_rules.version: 1.3.0,
       _dd.appsec.json: {"triggers":[{"rule":{"id":"crs-913-120","name":"Known security scanner filename/argument","tags":{"category":"attack_attempt","type":"security_scanner"}},"rule_matches":[{"operator":"phrase_match","operator_value":"","parameters":[{"address":"server.request.path_params","highlight":["appscan_fingerprint"],"key_path":["id"],"value":"appscan_fingerprint"}]}]}]},
       _dd.origin: appsec,
+      _dd.p.dm: -0,
       _dd.runtime_family: dotnet
     },
     Metrics: {

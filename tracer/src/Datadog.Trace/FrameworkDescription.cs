@@ -22,6 +22,7 @@ namespace Datadog.Trace
         private static readonly Tuple<int, string>[] DotNetFrameworkVersionMapping =
         {
             // known min value for each framework version
+            Tuple.Create(533325, "4.8.1"),
             Tuple.Create(528040, "4.8"),
             Tuple.Create(461808, "4.7.2"),
             Tuple.Create(461308, "4.7.1"),
@@ -61,6 +62,11 @@ namespace Datadog.Trace
         public static bool IsNet5()
         {
             return Environment.Version.Major >= 5;
+        }
+
+        public bool IsWindows()
+        {
+            return string.Equals(OSPlatform, OSPlatformName.Windows, StringComparison.OrdinalIgnoreCase);
         }
 
         public override string ToString()

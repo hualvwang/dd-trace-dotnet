@@ -11,6 +11,8 @@ namespace Datadog.Trace.Propagators
 {
     internal class DatadogContextPropagator : IContextInjector, IContextExtractor
     {
+        public static readonly DatadogContextPropagator Instance = new();
+
         public void Inject<TCarrier, TCarrierSetter>(SpanContext context, TCarrier carrier, TCarrierSetter carrierSetter)
             where TCarrierSetter : struct, ICarrierSetter<TCarrier>
         {
@@ -25,21 +27,26 @@ namespace Datadog.Trace.Propagators
             }
 
             var samplingPriority = context.TraceContext?.SamplingPriority ?? context.SamplingPriority;
+
             if (samplingPriority != null)
             {
-#pragma warning disable SA1118 // Parameter should not span multiple lines
-                carrierSetter.Set(
-                    carrier,
-                    HttpHeaderNames.SamplingPriority,
-                    samplingPriority.Value switch
-                    {
-                        -1 => "-1",
-                        0 => "0",
-                        1 => "1",
-                        2 => "2",
-                        _ => samplingPriority.Value.ToString(invariantCulture)
-                    });
-#pragma warning restore SA1118 // Parameter should not span multiple lines
+                var samplingPriorityString = samplingPriority.Value switch
+                                             {
+                                                 -1 => "-1",
+                                                 0 => "0",
+                                                 1 => "1",
+                                                 2 => "2",
+                                                 _ => samplingPriority.Value.ToString(invariantCulture)
+                                             };
+
+                carrierSetter.Set(carrier, HttpHeaderNames.SamplingPriority, samplingPriorityString);
+            }
+
+            var propagatedTraceTags = context.TraceContext?.Tags.ToPropagationHeader() ?? context.PropagatedTags;
+
+            if (!string.IsNullOrEmpty(propagatedTraceTags))
+            {
+                carrierSetter.Set(carrier, HttpHeaderNames.PropagatedTags, propagatedTraceTags);
             }
         }
 
@@ -58,8 +65,12 @@ namespace Datadog.Trace.Propagators
             var parentId = ParseUtility.ParseUInt64(carrier, carrierGetter, HttpHeaderNames.ParentId) ?? 0;
             var samplingPriority = ParseUtility.ParseInt32(carrier, carrierGetter, HttpHeaderNames.SamplingPriority);
             var origin = ParseUtility.ParseString(carrier, carrierGetter, HttpHeaderNames.Origin);
+            var propagatedTraceTags = ParseUtility.ParseString(carrier, carrierGetter, HttpHeaderNames.PropagatedTags);
 
-            spanContext = new SpanContext(traceId, parentId, samplingPriority, serviceName: null, origin);
+            spanContext = new SpanContext(traceId, parentId, samplingPriority, serviceName: null, origin)
+                          {
+                              PropagatedTags = propagatedTraceTags
+                          };
             return true;
         }
     }

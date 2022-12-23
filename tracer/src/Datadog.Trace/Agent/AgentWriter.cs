@@ -5,11 +5,13 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Datadog.Trace.Agent.MessagePack;
 using Datadog.Trace.DogStatsd;
 using Datadog.Trace.Logging;
+using Datadog.Trace.Sampling;
 using Datadog.Trace.Tagging;
 using Datadog.Trace.Vendors.StatsdClient;
 
@@ -41,6 +43,8 @@ namespace Datadog.Trace.Agent
 
         private readonly IStatsAggregator _statsAggregator;
 
+        private readonly ISpanSampler _spanSampler;
+
         /// <summary>
         /// The currently active buffer.
         /// Note: Thread-safetiness in this class relies on the fact that only the serialization thread can change the active buffer
@@ -54,18 +58,23 @@ namespace Datadog.Trace.Agent
         private Task _frontBufferFlushTask;
         private Task _backBufferFlushTask;
 
+        private long _droppedP0Traces;
+        private long _droppedP0Spans;
+
+        private long _droppedSpans;
+
         static AgentWriter()
         {
             var data = Vendors.MessagePack.MessagePackSerializer.Serialize(Array.Empty<Span[]>());
             EmptyPayload = new ArraySegment<byte>(data);
         }
 
-        public AgentWriter(IApi api, IStatsAggregator statsAggregator, IDogStatsd statsd, bool automaticFlush = true, int maxBufferSize = 1024 * 1024 * 10, int batchInterval = 100)
-        : this(api, statsAggregator, statsd, MovingAverageKeepRateCalculator.CreateDefaultKeepRateCalculator(), automaticFlush, maxBufferSize, batchInterval)
+        public AgentWriter(IApi api, IStatsAggregator statsAggregator, IDogStatsd statsd, ISpanSampler spanSampler, bool automaticFlush = true, int maxBufferSize = 1024 * 1024 * 10, int batchInterval = 100)
+        : this(api, statsAggregator, statsd, spanSampler, MovingAverageKeepRateCalculator.CreateDefaultKeepRateCalculator(), automaticFlush, maxBufferSize, batchInterval)
         {
         }
 
-        internal AgentWriter(IApi api, IStatsAggregator statsAggregator, IDogStatsd statsd, IKeepRateCalculator traceKeepRateCalculator, bool automaticFlush, int maxBufferSize, int batchInterval)
+        internal AgentWriter(IApi api, IStatsAggregator statsAggregator, IDogStatsd statsd, ISpanSampler spanSampler, IKeepRateCalculator traceKeepRateCalculator, bool automaticFlush, int maxBufferSize, int batchInterval)
         {
             _statsAggregator = statsAggregator;
 
@@ -73,6 +82,8 @@ namespace Datadog.Trace.Agent
             _statsd = statsd;
             _batchInterval = batchInterval;
             _traceKeepRateCalculator = traceKeepRateCalculator;
+
+            _spanSampler = spanSampler;
 
             var formatterResolver = SpanFormatterResolver.Instance;
 
@@ -99,9 +110,11 @@ namespace Datadog.Trace.Agent
 
         internal SpanBuffer BackBuffer => _backBuffer;
 
+        public bool CanComputeStats => _statsAggregator?.CanComputeStats == true;
+
         public Task<bool> Ping()
         {
-            return _api.SendTracesAsync(EmptyPayload, 0);
+            return _api.SendTracesAsync(EmptyPayload, 0, false, 0, 0);
         }
 
         public void WriteTrace(ArraySegment<Span> trace)
@@ -304,11 +317,30 @@ namespace Datadog.Trace.Agent
                         _statsd.Increment(TracerMetricNames.Queue.DequeuedSpans, buffer.SpanCount);
                     }
 
+                    var droppedSpans = Interlocked.Exchange(ref _droppedSpans, 0);
+
+                    if (droppedSpans > 0)
+                    {
+                        Log.Warning("{count} traces were dropped since the last flush operation.", droppedSpans);
+                    }
+
                     if (buffer.TraceCount > 0)
                     {
-                        Log.Debug<int, int>("Flushing {spans} spans across {traces} traces", buffer.SpanCount, buffer.TraceCount);
+                        long droppedP0Traces = 0;
+                        long droppedP0Spans = 0;
 
-                        var success = await _api.SendTracesAsync(buffer.Data, buffer.TraceCount).ConfigureAwait(false);
+                        if (CanComputeStats)
+                        {
+                            droppedP0Traces = Interlocked.Exchange(ref _droppedP0Traces, 0);
+                            droppedP0Spans = Interlocked.Exchange(ref _droppedP0Spans, 0);
+                            Log.Debug<int, int, long, long>("Flushing {spans} spans across {traces} traces. CanComputeStats is enabled with {droppedP0Traces} droppedP0Traces and {droppedP0Spans} droppedP0Spans", buffer.SpanCount, buffer.TraceCount, droppedP0Traces, droppedP0Spans);
+                        }
+                        else
+                        {
+                            Log.Debug<int, int>("Flushing {spans} spans across {traces} traces. CanComputeStats is disabled.", buffer.SpanCount, buffer.TraceCount);
+                        }
+
+                        var success = await _api.SendTracesAsync(buffer.Data, buffer.TraceCount, CanComputeStats, droppedP0Traces, droppedP0Spans).ConfigureAwait(false);
 
                         if (success)
                         {
@@ -333,7 +365,7 @@ namespace Datadog.Trace.Agent
             }
         }
 
-        private void SerializeTrace(ArraySegment<Span> trace)
+        private void SerializeTrace(ArraySegment<Span> spans)
         {
             // Declaring as inline method because only safe to invoke in the context of SerializeTrace
             SpanBuffer SwapBuffers()
@@ -358,13 +390,59 @@ namespace Datadog.Trace.Agent
                 return null;
             }
 
-            _statsAggregator?.AddRange(trace.Array, trace.Offset, trace.Count);
+            // Eagerly return if the trace is empty
+            if (spans.Count == 0)
+            {
+                return;
+            }
+
+            RunSpanSampler(spans);
+            int? chunkSamplingPriority = null;
+            if (CanComputeStats)
+            {
+                spans = _statsAggregator?.ProcessTrace(spans) ?? spans;
+                bool shouldSendTrace = _statsAggregator?.ShouldKeepTrace(spans) ?? true;
+                _statsAggregator?.AddRange(spans);
+                var singleSpanSamplingSpans = new List<Span>(); // TODO maybe we can store this from above?
+
+                for (var i = 0; i < spans.Count; i++)
+                {
+                    var index = i + spans.Offset;
+                    if (spans.Array![index].GetMetric(Metrics.SingleSpanSampling.SamplingMechanism) is not null)
+                    {
+                        singleSpanSamplingSpans.Add(spans.Array![index]);
+                    }
+                }
+
+                if (!shouldSendTrace)
+                {
+                    // If stats computation determined that we can drop the P0 Trace,
+                    // skip all other processing
+                    if (singleSpanSamplingSpans.Count == 0)
+                    {
+                        Interlocked.Increment(ref _droppedP0Traces);
+                        Interlocked.Add(ref _droppedP0Spans, spans.Count);
+                        return;
+                    }
+                    else
+                    {
+                        // we need to set the sampling priority of the chunk to be user keep so the agent handles it correctly
+                        // this will override the TraceContext sampling priority when we do a SpanBuffer.TryWrite
+                        chunkSamplingPriority = SamplingPriorityValues.UserKeep;
+                        Interlocked.Increment(ref _droppedP0Traces); // increment since we are sampling out the entire trace
+                        Interlocked.Add(ref _droppedP0Spans, spans.Count - singleSpanSamplingSpans.Count);
+                        spans = new ArraySegment<Span>(singleSpanSamplingSpans.ToArray());
+                    }
+                }
+            }
 
             // Add the current keep rate to the root span
-            var rootSpan = trace.Array[trace.Offset].Context.TraceContext?.RootSpan;
+            var rootSpan = spans.Array![spans.Offset].Context.TraceContext?.RootSpan;
+
             if (rootSpan is not null)
             {
                 var currentKeepRate = _traceKeepRateCalculator.GetKeepRate();
+
                 if (rootSpan.Tags is CommonTags commonTags)
                 {
                     commonTags.TracesKeepRate = currentKeepRate;
@@ -379,7 +457,7 @@ namespace Datadog.Trace.Agent
             // This allows the serialization thread to keep doing its job while a buffer is being flushed
             var buffer = _activeBuffer;
 
-            if (buffer.TryWrite(trace, ref _temporaryBuffer))
+            if (buffer.TryWrite(spans, ref _temporaryBuffer, chunkSamplingPriority))
             {
                 // Serialization to the primary buffer succeeded
                 return;
@@ -393,7 +471,7 @@ namespace Datadog.Trace.Agent
                 // One buffer is full, request an eager flush
                 RequestFlush();
 
-                if (buffer.TryWrite(trace, ref _temporaryBuffer))
+                if (buffer.TryWrite(spans, ref _temporaryBuffer, chunkSamplingPriority))
                 {
                     // Serialization to the secondary buffer succeeded
                     return;
@@ -401,13 +479,29 @@ namespace Datadog.Trace.Agent
             }
 
             // All the buffers are full :( drop the trace
-            Log.Warning("Trace buffer is full. Dropping a trace.");
+            Interlocked.Increment(ref _droppedSpans);
             _traceKeepRateCalculator.IncrementDrops(1);
 
             if (_statsd != null)
             {
                 _statsd.Increment(TracerMetricNames.Queue.DroppedTraces);
-                _statsd.Increment(TracerMetricNames.Queue.DroppedSpans, trace.Count);
+                _statsd.Increment(TracerMetricNames.Queue.DroppedSpans, spans.Count);
+            }
+        }
+
+        private void RunSpanSampler(ArraySegment<Span> spans)
+        {
+            if (_spanSampler is null)
+            {
+                return;
+            }
+
+            if (spans.Array![spans.Offset].Context.TraceContext?.SamplingPriority <= 0)
+            {
+                for (int i = 0; i < spans.Count; i++)
+                {
+                    _spanSampler.MakeSamplingDecision(spans.Array[i + spans.Offset]);
+                }
             }
         }
 
@@ -460,7 +554,7 @@ namespace Datadog.Trace.Agent
                 }
                 else
                 {
-                    // No traces were pushed in the last period, wait undefinitely
+                    // No traces were pushed in the last period, wait indefinitely
                     _serializationMutex.Wait();
                     _serializationMutex.Reset();
                 }

@@ -15,12 +15,12 @@ namespace Datadog.Trace.Ci.Processors
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor<OriginTagTraceProcessor>();
 
         private readonly bool _isPartialFlushEnabled = false;
-        private readonly bool _isAgentlessEnabled = false;
+        private readonly bool _isCiVisibilityProtocol = false;
 
-        public OriginTagTraceProcessor(bool isPartialFlushEnabled, bool isAgentlessEnabled)
+        public OriginTagTraceProcessor(bool isPartialFlushEnabled, bool isCiVisibilityProtocol)
         {
             _isPartialFlushEnabled = isPartialFlushEnabled;
-            _isAgentlessEnabled = isAgentlessEnabled;
+            _isCiVisibilityProtocol = isCiVisibilityProtocol;
 
             Log.Information("OriginTraceProcessor initialized.");
         }
@@ -45,6 +45,9 @@ namespace Datadog.Trace.Ci.Processors
                     var span = trace.Array![i];
                     if (span.Context.Parent is null &&
                         span.Type != SpanTypes.Test &&
+                        span.Type != SpanTypes.TestSuite &&
+                        span.Type != SpanTypes.TestModule &&
+                        span.Type != SpanTypes.TestSession &&
                         span.Type != SpanTypes.Benchmark &&
                         span.Type != SpanTypes.Build)
                     {
@@ -54,11 +57,14 @@ namespace Datadog.Trace.Ci.Processors
                 }
             }
 
-            if (!_isAgentlessEnabled)
+            if (!_isCiVisibilityProtocol)
             {
-                for (var i = trace.Offset; i < trace.Count + trace.Offset; i++)
+                // Sets the origin tag on the TraceContext to ensure the CI track.
+                var traceContext = trace.Array![trace.Offset].Context.TraceContext;
+
+                if (traceContext is not null)
                 {
-                    trace.Array[i] = Process(trace.Array[i]);
+                    traceContext.Origin = TestTags.CIAppTestOriginName;
                 }
             }
 
@@ -67,8 +73,14 @@ namespace Datadog.Trace.Ci.Processors
 
         public Span Process(Span span)
         {
-            // Sets the origin tag to any other spans to ensure the CI track.
-            span.Context.Origin = TestTags.CIAppTestOriginName;
+            // Sets the origin tag on the TraceContext to ensure the CI track.
+            var traceContext = span.Context.TraceContext;
+
+            if (traceContext is not null)
+            {
+                traceContext.Origin = TestTags.CIAppTestOriginName;
+            }
+
             return span;
         }
 

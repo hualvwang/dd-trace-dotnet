@@ -4,26 +4,27 @@
 #include "WallTimeProvider.h"
 
 #include "IAppDomainStore.h"
-#include "IConfiguration.h"
 #include "IFrameStore.h"
 #include "IRuntimeIdStore.h"
 #include "IThreadsCpuManager.h"
 #include "RawWallTimeSample.h"
 
 
+std::vector<SampleValueType> WallTimeProvider::SampleTypeDefinitions(
+    {
+        {"wall", "nanoseconds"}
+    }
+    );
+
 WallTimeProvider::WallTimeProvider(
+    uint32_t valueOffset,
     IThreadsCpuManager* pThreadsCpuManager,
     IFrameStore* pFrameStore,
     IAppDomainStore* pAppDomainStore,
-    IRuntimeIdStore* pRuntimeIdStore
+    IRuntimeIdStore* pRuntimeIdStore,
+    IConfiguration* pConfiguration
     )
     :
-    CollectorBase<RawWallTimeSample>("WallTimeProvider", pThreadsCpuManager, pFrameStore, pAppDomainStore, pRuntimeIdStore)
+    CollectorBase<RawWallTimeSample>("WallTimeProvider", valueOffset, pThreadsCpuManager, pFrameStore, pAppDomainStore, pRuntimeIdStore, pConfiguration)
 {
 }
-
-void WallTimeProvider::OnTransformRawSample(const RawWallTimeSample& rawSample, Sample& sample)
-{
-    sample.AddValue(rawSample.Duration, SampleValue::WallTimeDuration);
-}
-

@@ -86,6 +86,116 @@ partial class Build
             Console.WriteLine($"PR assigned");
         });
 
+    Target SummaryOfSnapshotChanges => _ => _
+           .Unlisted()
+           .Requires(() => GitHubRepositoryName)
+           .Requires(() => GitHubToken)
+           .Requires(() => PullRequestNumber)
+           .Requires(() => TargetBranch)
+           .Executes(async() =>
+            {
+                // This assumes that we're running in a pull request, so we compare against the target branch
+                var baseCommit = GitTasks.Git($"merge-base origin/{TargetBranch} HEAD").First().Text;
+
+                // This is a dumb implementation that just show the diff
+                // We could imagine getting the whole context with -U1000 and show the differences including parent name
+                // eg now we show -oldAttribute: oldValue, but we could show -tag.oldattribute: oldvalue
+                var changes = GitTasks.Git($"diff --diff-filter=M \"{baseCommit}\" -- */*snapshots*/*.*")
+                                   .Select(f => f.Text);
+
+                if (!changes.Any())
+                {
+                    Console.WriteLine($"No snapshots modified (some may have been added/deleted). Not doing snapshots diff.");
+                    return;
+                }
+
+                const string unlinkedLinesExplicitor = "[...]";
+                var crossVersionTestsNamePattern = new [] {"VersionMismatchNewerNugetTests"};
+                var diffCounts = new Dictionary<string, int>();
+                StringBuilder diffsInFile = new();
+                var considerUpdatingPublicFeed = false;
+                var lastLine = string.Empty;
+                foreach (var line in changes)
+                {
+                    if (line.StartsWith("@@ ")) // new change, not looking at files cause the changes would be too different
+                    {
+                        RecordChange(diffsInFile, diffCounts);
+                        lastLine = String.Empty;
+                        continue;
+                    }
+
+                    if (line.StartsWith("- ") || line.StartsWith("+ "))
+                    {
+                        if (!string.IsNullOrEmpty(lastLine) &&
+                            lastLine[0] != line[0] &&
+                            lastLine.Trim(',').Substring(1) == line.Trim(',').Substring(1))
+                        {
+                            // The two lines are actually the same, just an additional comma on previous line
+                            // So we can remove it from the diff for better understanding?
+                            diffsInFile.Remove(diffsInFile.Length - lastLine.Length - Environment.NewLine.Length, lastLine.Length + Environment.NewLine.Length);
+                            lastLine = string.Empty;
+                            continue;
+                        }
+
+                        diffsInFile.AppendLine(line);
+                        lastLine = line;
+                        continue;
+                    }
+
+                    if (!string.IsNullOrEmpty(lastLine))
+                    {
+                        diffsInFile.AppendLine(unlinkedLinesExplicitor);
+                        lastLine = string.Empty;
+                    }
+
+                    if (!considerUpdatingPublicFeed && crossVersionTestsNamePattern.Any(p => line.Contains(p)))
+                    {
+                        considerUpdatingPublicFeed = true;
+                    }
+                }
+
+                RecordChange(diffsInFile, diffCounts);
+
+                var markdown = new StringBuilder();
+                markdown.AppendLine("## Snapshots difference summary").AppendLine();
+                markdown.AppendLine("The following differences have been observed in committed snapshots. It is meant to help the reviewer.");
+                markdown.AppendLine("The diff is simplistic, so please check some files anyway while we improve it.").AppendLine();
+
+                if (considerUpdatingPublicFeed)
+                {
+                    markdown.AppendLine("**Note** that this PR updates a version mismatch test. You may need to upgrade your code in the Azure public feed");
+                }
+
+                foreach (var diff in diffCounts)
+                {
+                    markdown.AppendLine($"{diff.Value} occurrences of : ");
+                    markdown.AppendLine("```diff");
+                    markdown.AppendLine(diff.Key);
+                    markdown.Append("```").AppendLine();
+                }
+
+                // Console.WriteLine(markdown.ToString());
+                await HideCommentsInPullRequest(PullRequestNumber.Value, "## Snapshots difference");
+                await PostCommentToPullRequest(PullRequestNumber.Value, markdown.ToString());
+
+                void RecordChange(StringBuilder diffsInFile, Dictionary<string, int> diffCounts)
+                {
+                    var unlinkedLinesExplicitorWithNewLine = unlinkedLinesExplicitor + Environment.NewLine;
+
+                    if (diffsInFile.Length > 0)
+                    {
+                        var change = diffsInFile.ToString();
+                        if (change.EndsWith(unlinkedLinesExplicitorWithNewLine))
+                        {
+                            change = change.Substring(0, change.Length - unlinkedLinesExplicitorWithNewLine.Length);
+                        }
+                        diffCounts.TryAdd(change, 0);
+                        diffCounts[change]++;
+                        diffsInFile.Clear();
+                    }
+                }
+            });
+
     Target AssignLabelsToPullRequest => _ => _
        .Unlisted()
        .Requires(() => GitHubRepositoryName)
@@ -244,7 +354,7 @@ partial class Build
 
     Target OutputCurrentVersionToGitHub => _ => _
        .Unlisted()
-       .After(UpdateVersion, UpdateMsiContents)
+       .After(UpdateVersion)
        .Requires(() => Version)
        .Executes(() =>
         {
@@ -290,7 +400,7 @@ partial class Build
     Target VerifyChangedFilesFromVersionBump => _ => _
        .Unlisted()
        .Description("Verifies that the expected files were changed")
-       .After(UpdateVersion, UpdateMsiContents, UpdateChangeLog)
+       .After(UpdateVersion, UpdateChangeLog)
        .Executes(() =>
         {
             var expectedFileChanges = new List<string>
@@ -299,7 +409,10 @@ partial class Build
                 "profiler/src/ProfilerEngine/Datadog.Profiler.Native.Linux/CMakeLists.txt",
                 "profiler/src/ProfilerEngine/Datadog.Profiler.Native.Windows/Resource.rc",
                 "profiler/src/ProfilerEngine/Datadog.Profiler.Native/dd_profiler_version.h",
+                "profiler/src/ProfilerEngine/Datadog.Linux.ApiWrapper/CMakeLists.txt",
                 "profiler/src/ProfilerEngine/ProductVersion.props",
+                "shared/src/Datadog.Trace.ClrProfiler.Native/CMakeLists.txt",
+                "shared/src/Datadog.Trace.ClrProfiler.Native/Resource.rc",
                 "shared/src/msi-installer/WindowsInstaller.wixproj",
                 "tracer/build/_build/Build.cs",
                 "tracer/samples/AutomaticTraceIdInjection/MicrosoftExtensionsExample/MicrosoftExtensionsExample.csproj",
@@ -312,14 +425,14 @@ partial class Build
                 "tracer/samples/ConsoleApp/Alpine3.9.dockerfile",
                 "tracer/samples/ConsoleApp/Debian.dockerfile",
                 "tracer/samples/WindowsContainer/Dockerfile",
-                "tracer/src/Datadog.Monitoring.Distribution/Datadog.Monitoring.Distribution.csproj",
+                "tracer/src/Datadog.Trace.Bundle/Datadog.Trace.Bundle.csproj",
                 "tracer/src/Datadog.Trace.AspNet/Datadog.Trace.AspNet.csproj",
                 "tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Datadog.Trace.ClrProfiler.Managed.Loader.csproj",
                 "tracer/src/Datadog.Trace.ClrProfiler.Managed.Loader/Startup.cs",
-                "tracer/src/Datadog.Trace.ClrProfiler.Native/CMakeLists.txt",
-                "tracer/src/Datadog.Trace.ClrProfiler.Native/dd_profiler_constants.h",
-                "tracer/src/Datadog.Trace.ClrProfiler.Native/Resource.rc",
-                "tracer/src/Datadog.Trace.ClrProfiler.Native/version.h",
+                "tracer/src/Datadog.Tracer.Native/CMakeLists.txt",
+                "tracer/src/Datadog.Tracer.Native/dd_profiler_constants.h",
+                "tracer/src/Datadog.Tracer.Native/Resource.rc",
+                "tracer/src/Datadog.Tracer.Native/version.h",
                 "tracer/src/Datadog.Trace.MSBuild/Datadog.Trace.MSBuild.csproj",
                 "tracer/src/Datadog.Trace.OpenTracing/Datadog.Trace.OpenTracing.csproj",
                 "tracer/src/Datadog.Trace.Tools.Runner/Datadog.Trace.Tools.Runner.csproj",
@@ -444,7 +557,7 @@ partial class Build
             const string buildAndTest = "Build / Test";
             const string misc = "Miscellaneous";
             const string tracer = "Tracer";
-            const string ciApp = "CI App";
+            const string ciVisibility = "CI Visibility";
             const string appSecMonitoring = "ASM";
             const string profiler = "Continuous Profiler";
             const string debugger = "Debugger";
@@ -535,7 +648,7 @@ partial class Build
                 var fixIssues = new[] { "type:bug", "type:regression", "type:cleanup" };
                 var areaLabelToComponentMap = new Dictionary<string, string>() {
                     { "area:tracer", tracer },
-                    { "area:ci-app", ciApp },
+                    { "area:ci-visibility", ciVisibility },
                     { "area:asm", appSecMonitoring },
                     { "area:profiler", profiler },
                     { "area:debugger", debugger },
@@ -580,7 +693,7 @@ partial class Build
             static int CategoryToOrder(string category) => category switch
             {
                 tracer => 0,
-                ciApp => 1,
+                ciVisibility => 1,
                 appSecMonitoring => 2,
                 profiler => 3,
                 debugger => 4,

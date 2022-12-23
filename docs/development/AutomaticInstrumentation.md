@@ -13,17 +13,19 @@ Creating a new instrumentation implementation typically uses the following proce
 5. (Optional) Create duck-typing unit tests in _Datadog.Trace.Tests_ to confirm any duck types are valid. This can make the feedback cycle much faster than relying on integration tests
 6. Create integration tests for your instrumentation 
    1. Create (or reuse) a sample application that uses the target library, which ideally exercises all the code paths in your new instrumentation. Use an `$(ApiVersion)` MSBuild variables to allow testing against multiple package versions in CI. 
-   2. Add an entry in [tracer/build/PackageVersionsGeneratorDefinitions.json](../../tracer/build/PackageVersionsGeneratorDefinitions.json) defining the range of all supported versions. See the existing definitions for examples
-   3. Run `./tracer/build.ps1 GeneratePackageVersions`. This generates the xunit test data for package versions in the `TestData` that you can use as `[MemberData]` for your `[Theory]` tests. 
-   4. If needed, add a docker image in the docker-compose.yml to allow the CI to test against it. Locally, you can use docker-compose as well and start only the dependencies you need.
-   5. Use the `MockTracerAgent` to confirm your instrumentation is working as expected.
+   2. Add a new entry in the [SpanMetadataRules file](../../tracer/test/Datadog.Trace.TestHelpers/SpanMetadataRules.cs) that defines the expected Name, Type, and Tags for the new integration spans, and run build target `GenerateSpanDocumentation` to generate the updated Markdown file.
+   3. Add an entry in [tracer/build/PackageVersionsGeneratorDefinitions.json](../../tracer/build/PackageVersionsGeneratorDefinitions.json) defining the range of all supported versions. See the existing definitions for examples. You may need to add an entry in the [tracer/build/Honeypot/IntegrationGroups.cs](../../tracer/build//Honeypot/IntegrationGroups.cs) to specify the Nuget Package instrumented by the integration. 
+   4. Run `./tracer/build.ps1 GeneratePackageVersions`. This generates the xunit test data for package versions in the `TestData` that you can use as `[MemberData]` for your `[Theory]` tests. 
+   5. If needed, add a docker image in the docker-compose.yml to allow the CI to test against it. Locally, you can use docker-compose as well and start only the dependencies you need.
+   6. Use the `MockTracerAgent` and the newly defined `SpanMetadataRules` method in your integration test to confirm your instrumentation is working as expected.
 7. After testing locally, push to GitHub, and do a manual run in Azure Devops for your branch
    1. Navigate to the [consolidated-pipeline](https://dev.azure.com/datadoghq/dd-trace-dotnet/_build?definitionId=54)
    2. Click `Run Pipeline`
    3. Select your branch from the drop down
    4. Click `Variables`, set `perform_comprehensive_testing` to true. (This is false for PRs by default for speed, but ensures your new code is tested against all the specified packages initially)
    5. Select `Stages To Run`, and select only the `build*`, `unit_test*` and `integration_test*` stages. This avoids using excessive resources, and will complete your build faster
-8. Once your test branch works, create a PR!
+   6. Add the instrumentation to the list of integrations in the [dotnet-core tracing documentation](https://docs.datadoghq.com/tracing/setup_overview/compatibility_requirements/dotnet-core/#integrations) and/or [dotnet-framework tracing documentation](https://docs.datadoghq.com/tracing/setup_overview/compatibility_requirements/dotnet-framework/#integrations) as appropiate.
+   7. Once your test branch works, create a PR for both the `dd-trace-dotnet` and `documentation` repositories and have them reference each other!
 
 ### Instrumentation classes
 
@@ -215,6 +217,8 @@ The above attribute shows how to select which signatures to implement, via the  
 
 #### Inheritance
 
+> ⚠️ Warning: This requires much more overhead because all of the types in a module must be inspected to determine if a module requires instrumentation. Carefully consider when to introduce this type of instrumentation.
+
 Virtual or normal methods in abstract classes can be instrumented, as long as they are not overridden. But if a class inherits and overrides those methods, then the original instrumentation won't be called. To make sure the child classes methods are instrumented, another property needs to be added specifying `Datadog.Trace.ClrProfiler.IntegrationType` as `IntegrationType.Derived`, but the same integration can be used since the methods will have the same signature. Example:
 
 ```csharp
@@ -234,3 +238,15 @@ string get_Name();
 void set_Name(string value);
 ```
 
+### Interfaces
+
+> ⚠️ Warning: This requires much more overhead because all of the types in a module must be inspected to determine if a module requires instrumentation. Carefully consider when to introduce this type of instrumentation.
+
+Interface methods can be instrumented by setting the `TypeName` to the name of the interface and setting `Datadog.Trace.ClrProfiler.IntegrationType` to `IntegrationType.Interface`. Instrumentation will occur on types that directly implement the specified interface. But if a class inherits and overrides those methods, then the original instrumentation won't be called. To make sure the child classes methods are instrumented, another property needs to be added that sets the `TypeName` to the base class and sets the `Datadog.Trace.ClrProfiler.IntegrationType` to `IntegrationType.Derived`. Example:
+
+```csharp
+    [InstrumentMethod(AssemblyName = "AssemblyName", TypeName = "InterfaceA", MethodName = "MethodName", CallTargetIntegrationType = IntegrationType.Interface ...)]
+    [InstrumentMethod(AssemblyName = "AssemblyName", TypeName = "TypeThatImplementsInterfaceA", MethodName = "MethodName", CallTargetIntegrationType = IntegrationType.Derived  ...)]
+    public class My_Integration
+    {
+```

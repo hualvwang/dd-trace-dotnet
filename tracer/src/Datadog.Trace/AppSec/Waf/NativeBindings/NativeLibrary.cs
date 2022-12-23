@@ -86,7 +86,7 @@ namespace Datadog.Trace.AppSec.Waf.NativeBindings
             {
                 var msgOut = StringBuilderCache.Acquire(256);
                 var size = FormatMessage(FORMAT_MESSAGE.ALLOCATE_BUFFER | FORMAT_MESSAGE.FROM_SYSTEM | FORMAT_MESSAGE.IGNORE_INSERTS, IntPtr.Zero, hresult, 0, ref msgOut, (uint)msgOut.Capacity, IntPtr.Zero);
-                var message = msgOut.ToString().Trim();
+                var message = StringBuilderCache.GetStringAndRelease(msgOut).Trim();
                 Log.Warning("Error occurred when calling {Function} message was: 0x{HResult}: {Message}", source, hresult.ToString("X8"), message);
             }
             else
@@ -156,14 +156,16 @@ namespace Datadog.Trace.AppSec.Waf.NativeBindings
 
         private static class NonWindows
         {
+            // These are re-written by the native tracer to point to the correct location,
+            // but if running in a managed-only context (i.e. unit tests) they need to have the right file name
 #pragma warning disable SA1300 // Element should begin with upper-case letter
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             internal static extern IntPtr dddlopen(string fileName, int flags);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             internal static extern IntPtr dddlerror();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             internal static extern IntPtr dddlsym(IntPtr hModule, string lpProcName);
         }
     }

@@ -17,6 +17,7 @@ namespace Datadog.Trace.Ci
 {
     internal sealed class CIEnvironmentValues
     {
+        internal const string RepositoryUrlPattern = @"((http|git|ssh|http(s)|file|\/?)|(git@[\w\.\-]+))(:(\/\/)?)([\w\.@\:/\-~]+)(\.git)(\/)?";
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor(typeof(CIEnvironmentValues));
 
         private static readonly Lazy<CIEnvironmentValues> _instance = new Lazy<CIEnvironmentValues>(() => new CIEnvironmentValues());
@@ -74,6 +75,8 @@ namespace Datadog.Trace.Ci
 
         public CodeOwners CodeOwners { get; private set; }
 
+        public Dictionary<string, string> VariablesToBypass { get; private set; }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void SetTagIfNotNullOrEmpty(Span span, string key, string value)
         {
@@ -98,12 +101,22 @@ namespace Datadog.Trace.Ci
             return path;
         }
 
-        private static string GetEnvironmentVariableIfIsNotEmpty(string key, string defaultValue)
+        private static string GetEnvironmentVariableIfIsNotEmpty(string key, string defaultValue, Func<string, string, bool> validator = null)
         {
             string value = EnvironmentHelpers.GetEnvironmentVariable(key, defaultValue);
-            if (string.IsNullOrEmpty(value))
+            if (validator is not null)
             {
-                return defaultValue;
+                if (!validator.Invoke(value, defaultValue))
+                {
+                    return defaultValue;
+                }
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(value))
+                {
+                    return defaultValue;
+                }
             }
 
             return value;
@@ -123,6 +136,23 @@ namespace Datadog.Trace.Ci
             }
 
             return defaultValue;
+        }
+
+        private static bool IsHex(IEnumerable<char> chars)
+        {
+            foreach (var c in chars)
+            {
+                var isHex = (c is >= '0' and <= '9' ||
+                             c is >= 'a' and <= 'f' ||
+                             c is >= 'A' and <= 'F');
+
+                if (!isHex)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public void DecorateSpan(Span span)
@@ -153,6 +183,10 @@ namespace Datadog.Trace.Ci
             SetTagIfNotNullOrEmpty(span, CommonTags.GitCommitCommitterDate, CommitterDate?.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK", CultureInfo.InvariantCulture));
             SetTagIfNotNullOrEmpty(span, CommonTags.GitCommitMessage, Message);
             SetTagIfNotNullOrEmpty(span, CommonTags.BuildSourceRoot, SourceRoot);
+            if (VariablesToBypass is { } variablesToBypass)
+            {
+                span.SetTag(CommonTags.CiEnvVars, Datadog.Trace.Vendors.Newtonsoft.Json.JsonConvert.SerializeObject(variablesToBypass));
+            }
         }
 
         public string MakeRelativePathFromSourceRoot(string absolutePath, bool useOSSeparator = true)
@@ -223,14 +257,29 @@ namespace Datadog.Trace.Ci
             else if (EnvironmentHelpers.GetEnvironmentVariable("CIRCLECI") != null)
             {
                 SetupCircleCiEnvironment();
+                VariablesToBypass = new Dictionary<string, string>
+                {
+                    ["CIRCLE_WORKFLOW_ID"] = EnvironmentHelpers.GetEnvironmentVariable("CIRCLE_WORKFLOW_ID"),
+                    ["CIRCLE_BUILD_NUM"] = EnvironmentHelpers.GetEnvironmentVariable("CIRCLE_BUILD_NUM"),
+                };
             }
             else if (EnvironmentHelpers.GetEnvironmentVariable("JENKINS_URL") != null)
             {
                 SetupJenkinsEnvironment();
+                VariablesToBypass = new Dictionary<string, string>
+                {
+                    ["DD_CUSTOM_TRACE_ID"] = EnvironmentHelpers.GetEnvironmentVariable("DD_CUSTOM_TRACE_ID"),
+                };
             }
             else if (EnvironmentHelpers.GetEnvironmentVariable("GITLAB_CI") != null)
             {
                 SetupGitlabEnvironment();
+                VariablesToBypass = new Dictionary<string, string>
+                {
+                    ["CI_PROJECT_URL"] = EnvironmentHelpers.GetEnvironmentVariable("CI_PROJECT_URL"),
+                    ["CI_PIPELINE_ID"] = EnvironmentHelpers.GetEnvironmentVariable("CI_PIPELINE_ID"),
+                    ["CI_JOB_ID"] = EnvironmentHelpers.GetEnvironmentVariable("CI_JOB_ID"),
+                };
             }
             else if (EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR") != null)
             {
@@ -247,6 +296,13 @@ namespace Datadog.Trace.Ci
             else if (EnvironmentHelpers.GetEnvironmentVariable("GITHUB_SHA") != null)
             {
                 SetupGithubActionsEnvironment();
+                VariablesToBypass = new Dictionary<string, string>
+                {
+                    ["GITHUB_SERVER_URL"] = EnvironmentHelpers.GetEnvironmentVariable("GITHUB_SERVER_URL"),
+                    ["GITHUB_REPOSITORY"] = EnvironmentHelpers.GetEnvironmentVariable("GITHUB_REPOSITORY"),
+                    ["GITHUB_RUN_ID"] = EnvironmentHelpers.GetEnvironmentVariable("GITHUB_RUN_ID"),
+                    ["GITHUB_RUN_ATTEMPT"] = EnvironmentHelpers.GetEnvironmentVariable("GITHUB_RUN_ATTEMPT"),
+                };
             }
             else if (EnvironmentHelpers.GetEnvironmentVariable("TEAMCITY_VERSION") != null)
             {
@@ -255,10 +311,19 @@ namespace Datadog.Trace.Ci
             else if (EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE") != null)
             {
                 SetupBuildkiteEnvironment();
+                VariablesToBypass = new Dictionary<string, string>
+                {
+                    ["BUILDKITE_BUILD_ID"] = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_BUILD_ID"),
+                    ["BUILDKITE_JOB_ID"] = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_JOB_ID"),
+                };
             }
             else if (EnvironmentHelpers.GetEnvironmentVariable("BITRISE_BUILD_SLUG") != null)
             {
                 SetupBitriseEnvironment();
+            }
+            else if (EnvironmentHelpers.GetEnvironmentVariable("BUDDY") != null)
+            {
+                SetupBuddyEnvironment(gitInfo);
             }
             else
             {
@@ -275,40 +340,51 @@ namespace Datadog.Trace.Ci
             // Merge commits have a different commit hash from the one reported by the CI.
             if (gitInfo.Commit == Commit)
             {
-                if (string.IsNullOrEmpty(AuthorName))
+                if (string.IsNullOrWhiteSpace(AuthorName) || string.IsNullOrWhiteSpace(AuthorEmail))
                 {
-                    AuthorName = gitInfo.AuthorName;
+                    if (!string.IsNullOrWhiteSpace(gitInfo.AuthorEmail))
+                    {
+                        AuthorEmail = gitInfo.AuthorEmail;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(gitInfo.AuthorName))
+                    {
+                        AuthorName = gitInfo.AuthorName;
+                    }
                 }
 
-                if (string.IsNullOrEmpty(AuthorEmail))
+                AuthorDate ??= gitInfo.AuthorDate;
+
+                if (string.IsNullOrWhiteSpace(CommitterName) || string.IsNullOrWhiteSpace(CommitterEmail))
                 {
-                    AuthorEmail = gitInfo.AuthorEmail;
+                    if (!string.IsNullOrWhiteSpace(gitInfo.CommitterEmail))
+                    {
+                        CommitterEmail = gitInfo.CommitterEmail;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(gitInfo.CommitterName))
+                    {
+                        CommitterName = gitInfo.CommitterName;
+                    }
                 }
 
-                if (AuthorDate is null)
-                {
-                    AuthorDate = gitInfo.AuthorDate;
-                }
+                CommitterDate ??= gitInfo.CommitterDate;
 
-                if (string.IsNullOrEmpty(CommitterName))
+                if (!string.IsNullOrWhiteSpace(gitInfo.Message))
                 {
-                    CommitterName = gitInfo.CommitterName;
+                    // Some CI's (eg Azure) adds the `Merge X into Y` message to the Pull Request
+                    // If we have the original commit message we use that.
+                    if (string.IsNullOrWhiteSpace(Message) ||
+                        (Message.StartsWith("Merge", StringComparison.Ordinal) &&
+                        !gitInfo.Message.StartsWith("Merge", StringComparison.Ordinal)))
+                    {
+                        Message = gitInfo.Message;
+                    }
                 }
-
-                if (string.IsNullOrEmpty(CommitterEmail))
-                {
-                    CommitterEmail = gitInfo.CommitterEmail;
-                }
-
-                if (CommitterDate is null)
-                {
-                    CommitterDate = gitInfo.CommitterDate;
-                }
-
-                if (string.IsNullOrEmpty(Message))
-                {
-                    Message = gitInfo.Message;
-                }
+            }
+            else
+            {
+                Log.Warning("Git commit in .git folder is different from the one in the environment variables. [{gitCommit} != {envVarCommit}]", gitInfo.Commit, Commit);
             }
 
             // **********
@@ -334,8 +410,88 @@ namespace Datadog.Trace.Ci
             // **********
             Branch = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_BRANCH", Branch);
             Tag = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_TAG", Tag);
-            Repository = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_REPOSITORY_URL", Repository);
-            Commit = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_COMMIT_SHA", Commit);
+            Repository = GetEnvironmentVariableIfIsNotEmpty(
+                "DD_GIT_REPOSITORY_URL",
+                Repository,
+                (value, defaultValue) =>
+                {
+                    if (value is not null)
+                    {
+                        value = value.Trim();
+                        if (value.Length == 0)
+                        {
+                            if (string.IsNullOrEmpty(defaultValue))
+                            {
+                                Log.Error("DD_GIT_REPOSITORY_URL is set with an empty value, and the Git repository could not be automatically extracted");
+                            }
+                            else
+                            {
+                                Log.Error("DD_GIT_REPOSITORY_URL is set with an empty value, defaulting to '{default}'", defaultValue);
+                            }
+
+                            return false;
+                        }
+
+                        if (Regex.Match(value, RepositoryUrlPattern).Length != value.Length)
+                        {
+                            if (string.IsNullOrEmpty(defaultValue))
+                            {
+                                Log.Error("DD_GIT_REPOSITORY_URL is set with an invalid value ('{value}'), and the Git repository could not be automatically extracted", value);
+                            }
+                            else
+                            {
+                                Log.Error("DD_GIT_REPOSITORY_URL is set with an invalid value ('{value}'), defaulting to '{default}'", value, defaultValue);
+                            }
+
+                            return false;
+                        }
+
+                        // All ok!
+                        return true;
+                    }
+
+                    if (string.IsNullOrEmpty(defaultValue))
+                    {
+                        Log.Error("The Git repository couldn't be automatically extracted.");
+                    }
+
+                    // If not set use the default value
+                    return false;
+                });
+            Commit = GetEnvironmentVariableIfIsNotEmpty(
+                "DD_GIT_COMMIT_SHA",
+                Commit,
+                (value, defaultValue) =>
+                {
+                    if (value is not null)
+                    {
+                        value = value.Trim();
+                        if (value.Length < 40 || !IsHex(value))
+                        {
+                            if (string.IsNullOrEmpty(defaultValue))
+                            {
+                                Log.Error("DD_GIT_COMMIT_SHA must be a full-length git SHA, and the The Git commit sha couldn't be automatically extracted.");
+                            }
+                            else
+                            {
+                                Log.Error("DD_GIT_COMMIT_SHA must be a full-length git SHA, defaulting to '{default}", defaultValue);
+                            }
+
+                            return false;
+                        }
+
+                        // All ok!
+                        return true;
+                    }
+
+                    if (string.IsNullOrEmpty(defaultValue))
+                    {
+                        Log.Error("The Git commit sha couldn't be automatically extracted.");
+                    }
+
+                    // If not set use the default value
+                    return false;
+                });
             Message = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_COMMIT_MESSAGE", Message);
             AuthorName = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_COMMIT_AUTHOR_NAME", AuthorName);
             AuthorEmail = GetEnvironmentVariableIfIsNotEmpty("DD_GIT_COMMIT_AUTHOR_EMAIL", AuthorEmail);
@@ -567,7 +723,13 @@ namespace Datadog.Trace.Ci
                 Branch = EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR_REPO_BRANCH");
             }
 
-            Message = EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR_REPO_COMMIT_MESSAGE_EXTENDED");
+            Message = EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR_REPO_COMMIT_MESSAGE");
+            string extendedMessage = EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR_REPO_COMMIT_MESSAGE_EXTENDED");
+            if (!string.IsNullOrWhiteSpace(extendedMessage))
+            {
+                Message = Message + "\n" + extendedMessage;
+            }
+
             AuthorName = EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR_REPO_COMMIT_AUTHOR");
             AuthorEmail = EnvironmentHelpers.GetEnvironmentVariable("APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL");
         }
@@ -721,6 +883,8 @@ namespace Datadog.Trace.Ci
             Message = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_MESSAGE");
             AuthorName = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_BUILD_AUTHOR");
             AuthorEmail = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_BUILD_AUTHOR_EMAIL");
+            CommitterName = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_BUILD_CREATOR");
+            CommitterEmail = EnvironmentHelpers.GetEnvironmentVariable("BUILDKITE_BUILD_CREATOR_EMAIL");
         }
 
         private void SetupBitriseEnvironment()
@@ -744,6 +908,43 @@ namespace Datadog.Trace.Ci
             PipelineUrl = EnvironmentHelpers.GetEnvironmentVariable("BITRISE_BUILD_URL");
 
             Message = EnvironmentHelpers.GetEnvironmentVariable("BITRISE_GIT_MESSAGE");
+            AuthorName = EnvironmentHelpers.GetEnvironmentVariable("GIT_CLONE_COMMIT_AUTHOR_NAME");
+            AuthorEmail = EnvironmentHelpers.GetEnvironmentVariable("GIT_CLONE_COMMIT_AUTHOR_EMAIL");
+            CommitterName = EnvironmentHelpers.GetEnvironmentVariable("GIT_CLONE_COMMIT_COMMITER_NAME");
+            CommitterEmail = EnvironmentHelpers.GetEnvironmentVariable("GIT_CLONE_COMMIT_COMMITER_EMAIL");
+            if (string.IsNullOrWhiteSpace(CommitterEmail))
+            {
+                CommitterEmail = CommitterName;
+            }
+        }
+
+        private void SetupBuddyEnvironment(GitInfo gitInfo)
+        {
+            IsCI = true;
+            Provider = "buddy";
+            Repository = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_SCM_URL");
+            Commit = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_REVISION");
+            Branch = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_BRANCH");
+            Tag = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_TAG");
+
+            PipelineId = string.Format(
+                "{0}/{1}",
+                EnvironmentHelpers.GetEnvironmentVariable("BUDDY_PIPELINE_ID"),
+                EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_ID"));
+            PipelineName = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_PIPELINE_NAME");
+            PipelineNumber = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_ID");
+            PipelineUrl = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_URL");
+
+            Message = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_REVISION_MESSAGE");
+            CommitterName = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_REVISION_COMMITTER_NAME");
+            CommitterEmail = EnvironmentHelpers.GetEnvironmentVariable("BUDDY_EXECUTION_REVISION_COMMITTER_EMAIL");
+            if (string.IsNullOrWhiteSpace(CommitterEmail))
+            {
+                CommitterEmail = CommitterName;
+            }
+
+            SourceRoot = gitInfo.SourceRoot;
+            WorkspacePath = gitInfo.SourceRoot;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -799,6 +1000,16 @@ namespace Datadog.Trace.Ci
             catch (Exception ex)
             {
                 Log.Warning(ex, "Error fixing branch name: {BranchName}", Branch);
+            }
+
+            if (string.IsNullOrEmpty(Tag))
+            {
+                Tag = null;
+            }
+
+            if (string.IsNullOrEmpty(Branch))
+            {
+                Branch = null;
             }
         }
     }

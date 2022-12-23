@@ -30,7 +30,7 @@ namespace Datadog.Trace.TestHelpers
             if (_solutionDirectory == null)
             {
                 var startDirectory = Environment.CurrentDirectory;
-                var currentDirectory = Directory.GetParent(startDirectory);
+                var currentDirectory = new DirectoryInfo(startDirectory);
                 const string searchItem = @"Datadog.Trace.sln";
 
                 while (true)
@@ -69,6 +69,11 @@ namespace Datadog.Trace.TestHelpers
             return RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
         }
 
+        public static bool IsLinux()
+        {
+            return RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
+        }
+
         public static string GetPlatform()
         {
             return RuntimeInformation.ProcessArchitecture.ToString();
@@ -85,15 +90,13 @@ namespace Datadog.Trace.TestHelpers
 
         public static string GetTracerTargetFrameworkDirectory()
         {
-            // The conditions looks weird, but it seems like _OR_GREATER is not supported yet in all environments
-            // We can trim all the additional conditions when this is fixed
 #if NET6_0_OR_GREATER
             return "net6.0";
 #elif NETCOREAPP3_1_OR_GREATER
             return "netcoreapp3.1";
 #elif NETCOREAPP || NETSTANDARD
             return "netstandard2.0";
-#elif NET461_OR_GREATER
+#elif NETFRAMEWORK
             return "net461";
 #else
 #error Unexpected TFM

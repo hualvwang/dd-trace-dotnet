@@ -91,6 +91,18 @@ internal static partial class DotNetSettingsExtensions
         return settings.SetProperty("BuildProjectReferences", false);
     }
 
+    public static DotNetTestSettings EnableCrashDumps(this DotNetTestSettings settings, MiniDumpType dumpType = MiniDumpType.MiniDumpWithPrivateReadWriteMemory)
+    {
+        if (bool.Parse(Environment.GetEnvironmentVariable("enable_crash_dumps") ?? "false"))
+        {
+            return settings
+                .SetProcessEnvironmentVariable("COMPlus_DbgEnableMiniDump", "1")
+                .SetProcessEnvironmentVariable("COMPlus_DbgMiniDumpType", ((int) dumpType).ToString());
+        }
+
+        return settings;
+    }
+
     public static DotNetTestSettings EnableTrxLogOutput(this DotNetTestSettings settings, string resultsDirectory)
     {
         return settings
@@ -162,7 +174,7 @@ internal static partial class DotNetSettingsExtensions
             var sb = new StringBuilder();
             foreach (var testToIgnore in testsToIgnore)
             {
-                sb.Append("FullyQualifiedName!~");
+                sb.Append("FullyQualifiedName!=");
                 sb.Append(testToIgnore);
                 sb.Append(value: '&');
             }
@@ -183,5 +195,31 @@ internal static partial class DotNetSettingsExtensions
                     .Add("--blame-hang-dump-type full")
                     .Add($"--blame-hang-timeout {timeoutInMinutes}m")
         );
+    }
+
+    public static DotNetTestSettings WithDatadogLogger(this DotNetTestSettings settings)
+    {
+        var enabled = NukeBuild.IsServerBuild;
+        try
+        {
+            var envVar = Environment.GetEnvironmentVariable("DD_LOGGER_ENABLED");
+            if (!string.IsNullOrWhiteSpace(envVar))
+            {
+                enabled = !string.Equals(envVar, "false", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch
+        {
+            // Security issues...
+        }
+
+        if (enabled)
+        {
+            var pArgConf = settings.ProcessArgumentConfigurator ?? (args => args);
+            return settings.SetProcessArgumentConfigurator(
+                args => pArgConf(args.Add("--logger:datadog")));
+        }
+
+        return settings;
     }
 }

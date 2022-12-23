@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props" Condition="Exists('..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props')" />
+  <Import Project="..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props" Condition="Exists('..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -22,7 +22,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{A1D8D09C-62E4-44A4-AACD-CA57BCE218D0}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
     <ConfigurationType>Application</ConfigurationType>
     <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
@@ -49,14 +49,17 @@
     <ClCompile Include="FrameStoreHelper.cpp" />
     <ClCompile Include="IMetricsSenderFactoryTest.cpp" />
     <ClCompile Include="LibddprofExporterTest.cpp" />
+    <ClCompile Include="LinuxStackFramesCollectorTest.cpp" />
     <ClCompile Include="LogTest.cpp" />
     <ClCompile Include="ManagedThreadListTest.cpp" />
+    <ClCompile Include="OpSysToolsTest.cpp" />
     <ClCompile Include="ProfilerMockedInterface.cpp" />
+    <ClCompile Include="ProfilerSignalManagerTest.cpp" />
     <ClCompile Include="RuntimeIdStoreHelper.cpp" />
     <ClCompile Include="RuntimeIdTest.cpp" />
-    <ClCompile Include="SamplesProviderTest.cpp" />
-    <ClCompile Include="SamplesAggregatorTest.cpp" />
-    <ClCompile Include="StackSnapshotResultReusableBufferTest.cpp" />
+    <ClCompile Include="RuntimeInfoHelper.cpp" />
+    <ClCompile Include="SamplesCollectorTest.cpp" />
+    <ClCompile Include="StackSnapshotResultBufferTest.cpp" />
     <ClCompile Include="TagsHelperTest.cpp" />
     <ClCompile Include="ProviderTest.cpp" />
     <ClCompile Include="ThreadsCpuManagerHelper.cpp" />
@@ -68,6 +71,7 @@
     <ClInclude Include="FrameStoreHelper.h" />
     <ClInclude Include="ProfilerMockedInterface.h" />
     <ClInclude Include="RuntimeIdStoreHelper.h" />
+    <ClInclude Include="RuntimeInfoHelper.h" />
     <ClInclude Include="ThreadsCpuManagerHelper.h" />
   </ItemGroup>
   <ItemGroup>
@@ -170,6 +174,6 @@
     </PropertyGroup>
     <Error Condition="!Exists('$(PackagesDir)\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-static.1.8.1.4\build\native\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-static.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\packages\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-static.1.8.1.4\build\native\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-static.targets'))" />
     <Error Condition="!Exists('..\..\..\packages\gmock.1.11.0\build\native\gmock.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\packages\gmock.1.11.0\build\native\gmock.targets'))" />
-    <Error Condition="!Exists('..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\packages\libddprof.0.2.0\build\native\libddprof.props'))" />
+    <Error Condition="!Exists('..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\packages\libdatadog.1.0.1\build\native\libdatadog.props'))" />
   </Target>
 </Project>

@@ -4,6 +4,9 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Datadog.Trace.AppSec.RcmModels.AsmData;
 using Datadog.Trace.AppSec.Waf.Initialization;
 using Datadog.Trace.AppSec.Waf.NativeBindings;
 using Datadog.Trace.AppSec.Waf.ReturnTypesManaged;
@@ -40,27 +43,25 @@ namespace Datadog.Trace.AppSec.Waf
 
         public InitializationResult InitializationResult => initializationResult;
 
-        public Version Version
+        public string Version
         {
-            get
-            {
-                var ver = wafNative.GetVersion();
-                return new Version(ver.Major, ver.Minor, ver.Patch);
-            }
+            get { return wafNative.GetVersion(); }
         }
 
         /// <summary>
         /// Loads library and configure it with the ruleset file
         /// </summary>
-        /// <param name="obfuscationParameterKeyRegex">the regex that will be used to obfuscate possible senative data in keys that are highlighted WAF as potentially malicious,
+        /// <param name="obfuscationParameterKeyRegex">the regex that will be used to obfuscate possible sensitive data in keys that are highlighted WAF as potentially malicious,
         /// empty string means use default embedded in the WAF</param>
-        /// <param name="obfuscationParameterValueRegex">the regex that will be used to obfuscate possible senative data in values that are highlighted WAF as potentially malicious,
+        /// <param name="obfuscationParameterValueRegex">the regex that will be used to obfuscate possible sensitive data in values that are highlighted WAF as potentially malicious,
         /// empty string means use default embedded in the WAF</param>
         /// <param name="rulesFile">can be null, means use rules embedded in the manifest </param>
+        /// <param name="rulesJson">can be null. RemoteConfig rules json. Takes precedence over rulesFile </param>
+        /// <param name="libVersion">can be null, means use a specific version in the name of the loaded file </param>
         /// <returns>the waf wrapper around waf native</returns>
-        internal static Waf Create(string obfuscationParameterKeyRegex, string obfuscationParameterValueRegex, string rulesFile = null)
+        internal static Waf Create(string obfuscationParameterKeyRegex, string obfuscationParameterValueRegex, string rulesFile = null, string rulesJson = null, string libVersion = null)
         {
-            var libraryHandle = LibraryLoader.LoadAndGetHandle();
+            var libraryHandle = LibraryLoader.LoadAndGetHandle(libVersion);
             if (libraryHandle == IntPtr.Zero)
             {
                 return null;
@@ -68,13 +69,22 @@ namespace Datadog.Trace.AppSec.Waf
 
             var wafNative = new WafNative(libraryHandle);
             var encoder = new Encoder(wafNative);
-            var initalizationResult = WafConfigurator.Configure(rulesFile, wafNative, encoder, obfuscationParameterKeyRegex, obfuscationParameterValueRegex);
+            InitializationResult initalizationResult;
+            if (!string.IsNullOrEmpty(rulesJson))
+            {
+                initalizationResult = WafConfigurator.ConfigureFromRemoteConfig(rulesJson, wafNative, encoder, obfuscationParameterKeyRegex, obfuscationParameterValueRegex);
+            }
+            else
+            {
+                initalizationResult = WafConfigurator.Configure(rulesFile, wafNative, encoder, obfuscationParameterKeyRegex, obfuscationParameterValueRegex);
+            }
+
             return new Waf(initalizationResult, wafNative, encoder);
         }
 
         public IContext CreateContext()
         {
-            var contextHandle = wafNative.InitContext(ruleHandle.Value, wafNative.ObjectFreeFuncPtr);
+            var contextHandle = wafNative.InitContext(ruleHandle.Value);
 
             if (contextHandle == IntPtr.Zero)
             {
@@ -89,6 +99,66 @@ namespace Datadog.Trace.AppSec.Waf
         {
             Dispose(true);
             GC.SuppressFinalize(this);
+        }
+
+        public bool UpdateRules(IEnumerable<RuleData> res)
+        {
+            if (res == null || res.Count() == 0)
+            {
+                return false;
+            }
+
+            var finalRuleDatas = MergeRuleData(res);
+            using var encoded = encoder.Encode(finalRuleDatas, new List<Obj>(), false);
+            var ret = wafNative.UpdateRuleData(ruleHandle.Value, encoded.RawPtr);
+            Log.Information("{number} rules have been updated and waf status is {status}", finalRuleDatas.Count, ret);
+            return ret == DDWAF_RET_CODE.DDWAF_OK;
+        }
+
+        public bool ToggleRules(IDictionary<string, bool> ruleStatus)
+        {
+            if (ruleStatus == null || ruleStatus.Count == 0)
+            {
+                return false;
+            }
+
+            var encoded = encoder.Encode(ruleStatus);
+            var ret = wafNative.ToggleRules(ruleHandle.Value, encoded.RawPtr);
+            Log.Information("{number} rule status have been updated and waf status is {status}", ruleStatus.Count, ret);
+            return ret == DDWAF_RET_CODE.DDWAF_OK;
+        }
+
+        internal static List<object> MergeRuleData(IEnumerable<RuleData> res)
+        {
+            if (res == null)
+            {
+                throw new ArgumentNullException(nameof(res));
+            }
+
+            var finalRuleDatas = new List<object>();
+            var groups = res.GroupBy(r => r.Id + r.Type);
+            foreach (var ruleDatas in groups)
+            {
+                var datasByValue = ruleDatas.SelectMany(d => d.Data).GroupBy(d => d.Value);
+                var mergedDatas = new List<object>();
+                foreach (var data in datasByValue)
+                {
+                    var longestLastingIp = data.OrderByDescending(d => d.Expiration ?? long.MaxValue).First();
+                    var dataIp = new Dictionary<string, object>();
+                    if (longestLastingIp.Expiration.HasValue)
+                    {
+                        dataIp.Add("expiration", longestLastingIp.Expiration.Value);
+                    }
+
+                    dataIp.Add("value", longestLastingIp.Value);
+                    mergedDatas.Add(dataIp);
+                }
+
+                var ruleData = ruleDatas.First();
+                finalRuleDatas.Add(new Dictionary<string, object> { { "id", ruleData.Id }, { "type", ruleData.Type }, { "data", mergedDatas } });
+            }
+
+            return finalRuleDatas;
         }
 
         private void Dispose(bool disposing)

@@ -3,9 +3,8 @@
   DllGetClassObject PRIVATE
   DllCanUnloadNow PRIVATE
 
-  GetAssemblyAndSymbolsBytes PRIVATE
-
   ThreadsCpuManager_Map PRIVATE
   GetNativeProfilerIsReadyPtr PRIVATE
   GetPointerToNativeTraceContext PRIVATE
   SetApplicationInfoForAppDomain PRIVATE
+  SetEndpointForTrace PRIVATE

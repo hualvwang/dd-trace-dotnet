@@ -8,20 +8,25 @@ using System.Collections.Generic;
 using System.Globalization;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
+using Datadog.Trace.Util.Http;
 
 namespace Datadog.Trace.AppSec
 {
     internal class SecuritySettings
     {
-        internal const string ObfuscationParameterKeyRegexDefault = @"(?i)(?:p(?:ass)?w(?:or)?d|pass(?:_?phrase)?|secret|(?:api_?|private_?|public_?)key)|token|consumer_?(?:id|key|secret)|sign(?:ed|ature)|bearer|authorization";
-        internal const string ObfuscationParameterValueRegexDefault = @"(?i)(?:p(?:ass)?w(?:or)?d|pass(?:_?phrase)?|secret|(?:api_?|private_?|public_?|access_?|secret_?)key(?:_?id)?|token|consumer_?(?:id|key|secret)|sign(?:ed|ature)?|auth(?:entication|orization)?)(?:\s*=[^;]|""\s*:\s*""[^""]+"")|bearer\s+[a-z0-9\._\-]+|token:[a-z0-9]{13}|gh[opsu]_[0-9a-zA-Z]{36}|ey[I-L][\w=-]+\.ey[I-L][\w=-]+(?:\.[\w.+\/=-]+)?|[\-]{5}BEGIN[a-z\s]+PRIVATE\sKEY[\-]{5}[^\-]+[\-]{5}END[a-z\s]+PRIVATE\sKEY|ssh-rsa\s*[a-z0-9\/\.+]{100,}";
-
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor<SecuritySettings>();
+
+        private bool _enabled = false;
 
         public SecuritySettings(IConfigurationSource source)
         {
+            BlockedHtmlTemplate = source?.GetString(ConfigurationKeys.AppSec.HtmlBlockedTemplate) ?? SecurityConstants.BlockedHtmlTemplate;
+            BlockedJsonTemplate = source?.GetString(ConfigurationKeys.AppSec.HtmlBlockedTemplate) ?? SecurityConstants.BlockedJsonTemplate;
             // both should default to false
-            Enabled = source?.GetBool(ConfigurationKeys.AppSec.Enabled) ?? false;
+            var enabledEnvVar = source?.GetBool(ConfigurationKeys.AppSec.Enabled);
+            _enabled = enabledEnvVar ?? false;
+            CanBeEnabled = enabledEnvVar == null || enabledEnvVar.Value;
+
             Rules = source?.GetString(ConfigurationKeys.AppSec.Rules);
             CustomIpHeader = source?.GetString(ConfigurationKeys.AppSec.CustomIpHeader);
             var extraHeaders = source?.GetString(ConfigurationKeys.AppSec.ExtraHeaders);
@@ -43,7 +48,7 @@ namespace Datadog.Trace.AppSec
                 var wafTimeout = ParseWafTimeout(wafTimeoutString);
                 if (wafTimeout <= 0)
                 {
-                    Log.Warning<string, string>("Ignoring '{WafTimeoutKey}' of '{wafTimeoutString}' because it was zero or less", ConfigurationKeys.AppSec.WafTimeout, wafTimeoutString);
+                    Log.Warning("Ignoring '{WafTimeoutKey}' of '{wafTimeoutString}' because it was zero or less", ConfigurationKeys.AppSec.WafTimeout, wafTimeoutString);
                     wafTimeout = defaultWafTimeout;
                 }
 
@@ -51,13 +56,20 @@ namespace Datadog.Trace.AppSec
             }
 
             var obfuscationParameterKeyRegex = source?.GetString(ConfigurationKeys.AppSec.ObfuscationParameterKeyRegex);
-            ObfuscationParameterKeyRegex = string.IsNullOrWhiteSpace(obfuscationParameterKeyRegex) ? ObfuscationParameterKeyRegexDefault : obfuscationParameterKeyRegex;
+            ObfuscationParameterKeyRegex = string.IsNullOrWhiteSpace(obfuscationParameterKeyRegex) ? SecurityConstants.ObfuscationParameterKeyRegexDefault : obfuscationParameterKeyRegex;
 
             var obfuscationParameterValueRegex = source?.GetString(ConfigurationKeys.AppSec.ObfuscationParameterValueRegex);
-            ObfuscationParameterValueRegex = string.IsNullOrWhiteSpace(obfuscationParameterValueRegex) ? ObfuscationParameterValueRegexDefault : obfuscationParameterValueRegex;
+            ObfuscationParameterValueRegex = string.IsNullOrWhiteSpace(obfuscationParameterValueRegex) ? SecurityConstants.ObfuscationParameterValueRegexDefault : obfuscationParameterValueRegex;
         }
 
-        public bool Enabled { get; set; }
+        public bool Enabled
+        {
+            get { return _enabled && CanBeEnabled; }
+
+            set { _enabled = value; }
+        }
+
+        public bool CanBeEnabled { get; }
 
         public string CustomIpHeader { get; }
 
@@ -98,10 +110,19 @@ namespace Datadog.Trace.AppSec
         /// </summary>
         public string ObfuscationParameterValueRegex { get; }
 
+        /// <summary>
+        /// Gets the blocking response template for Html content. This template is used in combination with the status code to craft and send a response upon blocking the request.
+        /// </summary>
+        public string BlockedHtmlTemplate { get; }
+
+        /// <summary>
+        /// Gets the response template for Json content. This template is used in combination with the status code to craft and send a response upon blocking the request.
+        /// </summary>
+        public string BlockedJsonTemplate { get; }
+
         public static SecuritySettings FromDefaultSources()
         {
-            var source = GlobalSettings.CreateDefaultConfigurationSource();
-            return new SecuritySettings(source);
+            return new SecuritySettings(GlobalConfigurationSource.Instance);
         }
 
         private static int ParseWafTimeout(string wafTimeoutString)

@@ -7,6 +7,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Datadog.Demos.Util;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -15,10 +16,13 @@ namespace BuggyBits
 {
     public enum Scenario
     {
-        StringConcat,
-        StringBuilder,
-        Parallel,
-        Async,
+        None,
+        StringConcat,    // using += / String.Concat
+        StringBuilder,   // using StringBuilder
+        Parallel,        // using parallel code
+        Async,           // using async code
+        FormatExceptions,// generating FormatExceptions for prices
+        ParallelLock     // using parallel code with lock
     }
 
     public class Program
@@ -29,7 +33,9 @@ namespace BuggyBits
 
             WriteLine("Starting at " + DateTime.UtcNow);
 
-            ParseCommandLine(args, out var timeout, out var iterations, out var scenario);
+            EnvironmentInfo.PrintDescriptionToConsole();
+
+            ParseCommandLine(args, out var timeout, out var iterations, out var scenario, out var nbIdleThreads);
 
             using (var host = CreateHostBuilder(args).Build())
             {
@@ -48,7 +54,7 @@ namespace BuggyBits
                 WriteLine($"Listening to {rootUrl}");
 
                 var cts = new CancellationTokenSource();
-                using (var selfInvoker = new SelfInvoker(cts.Token, scenario))
+                using (var selfInvoker = new SelfInvoker(cts.Token, scenario, nbIdleThreads))
                 {
                     await host.StartAsync();
 
@@ -116,12 +122,13 @@ namespace BuggyBits
                     webBuilder.UseStartup<Startup>();
                 });
 
-        private static void ParseCommandLine(string[] args, out TimeSpan timeout, out int iterations, out Scenario scenario)
+        private static void ParseCommandLine(string[] args, out TimeSpan timeout, out int iterations, out Scenario scenario, out int nbIdleThreads)
         {
             // by default, need interactive action to exit and string.Concat scenario
             timeout = TimeSpan.MinValue;
             iterations = 0;
             scenario = Scenario.StringConcat;
+            nbIdleThreads = 0;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -166,6 +173,21 @@ namespace BuggyBits
                 {
                     timeout = Timeout.InfiniteTimeSpan;
                 }
+                else
+                if ("--with-idle-threads".Equals(arg, StringComparison.OrdinalIgnoreCase))
+                {
+                    var nbThreadsArgument = i + 1;
+                    if (nbThreadsArgument >= args.Length || !int.TryParse(args[nbThreadsArgument], out nbIdleThreads))
+                    {
+                        throw new InvalidOperationException($"Invalid or missing count after --with-idle-threads");
+                    }
+                }
+            }
+
+            // sanity checks
+            if ((scenario == 0) && (iterations > 0))
+            {
+                throw new InvalidOperationException("It is not possible to iterate on scenario 0");
             }
         }
 

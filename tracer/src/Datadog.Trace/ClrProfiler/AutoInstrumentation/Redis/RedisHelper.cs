@@ -4,6 +4,8 @@
 // </copyright>
 
 using System;
+using System.Linq;
+using System.Text;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
 
@@ -16,7 +18,7 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis
 
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor(typeof(RedisHelper));
 
-        internal static Scope CreateScope(Tracer tracer, IntegrationId integrationId, string host, string port, string rawCommand)
+        internal static Scope CreateScope(Tracer tracer, IntegrationId integrationId, string integrationName, string host, string port, string rawCommand)
         {
             if (!Tracer.Instance.Settings.IsIntegrationEnabled(integrationId))
             {
@@ -38,6 +40,7 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis
             try
             {
                 var tags = new RedisTags();
+                tags.InstrumentationName = integrationName;
 
                 scope = tracer.StartActiveInternal(OperationName, serviceName: serviceName, tags: tags);
                 int separatorIndex = rawCommand.IndexOf(' ');
@@ -68,6 +71,24 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Redis
             }
 
             return scope;
+        }
+
+        internal static string GetRawCommand(byte[][] cmdWithBinaryArgs)
+        {
+            return string.Join(
+                " ",
+                cmdWithBinaryArgs.Select(
+                    bs =>
+                    {
+                        try
+                        {
+                            return Encoding.UTF8.GetString(bs);
+                        }
+                        catch
+                        {
+                            return string.Empty;
+                        }
+                    }));
         }
     }
 }

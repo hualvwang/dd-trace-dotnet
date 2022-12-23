@@ -3,6 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,7 +18,7 @@ using Xunit.Abstractions;
 namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [CollectionDefinition(nameof(HttpMessageHandlerTests), DisableParallelization = true)]
-    public class HttpMessageHandlerTests : TestHelper
+    public class HttpMessageHandlerTests : TracingIntegrationTest
     {
         public HttpMessageHandlerTests(ITestOutputHelper output)
             : base("HttpMessageHandler", output)
@@ -40,12 +41,16 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             from socketHandlerEnabled in new[] { true, false }
             select new object[] { instrumentationOptions, socketHandlerEnabled };
 
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsHttpMessageHandler();
+
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         [MemberData(nameof(IntegrationConfig))]
         public void HttpClient_SubmitsTraces(InstrumentationOptions instrumentation, bool enableSocketsHandler)
         {
+            SetInstrumentationVerification();
             ConfigureInstrumentation(instrumentation, enableSocketsHandler);
 
             var expectedAsyncCount = CalculateExpectedAsyncSpans(instrumentation);
@@ -65,15 +70,10 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             {
                 var spans = agent.WaitForSpans(expectedSpanCount, operationName: expectedOperationName);
                 Assert.Equal(expectedSpanCount, spans.Count);
+                ValidateIntegrationSpans(spans, expectedServiceName: expectedServiceName);
 
                 foreach (var span in spans)
                 {
-                    Assert.Equal(expectedOperationName, span.Name);
-                    Assert.Equal(expectedServiceName, span.Service);
-                    Assert.Equal(SpanTypes.Http, span.Type);
-                    Assert.Equal("HttpMessageHandler", span.Tags[Tags.InstrumentationName]);
-                    Assert.False(span.Tags?.ContainsKey(Tags.Version), "External service span should not have service version tag.");
-
                     if (span.Tags[Tags.HttpStatusCode] == "502")
                     {
                         Assert.Equal(1, span.Error);
@@ -93,15 +93,18 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 telemetry.AssertIntegration(IntegrationId.HttpSocketsHandler, enabled: IsUsingSocketHandler(instrumentation), autoEnabled: null);
                 telemetry.AssertIntegration(IntegrationId.WinHttpHandler, enabled: IsUsingWinHttpHandler(instrumentation), autoEnabled: null);
                 telemetry.AssertIntegration(IntegrationId.CurlHandler, enabled: IsUsingCurlHandler(instrumentation), autoEnabled: null);
+                VerifyInstrumentation(processResult.Process);
             }
         }
 
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         [MemberData(nameof(IntegrationConfig))]
         public void TracingDisabled_DoesNotSubmitsTraces(InstrumentationOptions instrumentation, bool enableSocketsHandler)
         {
+            SetInstrumentationVerification();
             ConfigureInstrumentation(instrumentation, enableSocketsHandler);
 
             const string expectedOperationName = "http.request";
@@ -129,6 +132,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 telemetry.AssertIntegration(IntegrationId.HttpSocketsHandler, enabled: false, autoEnabled: null);
                 telemetry.AssertIntegration(IntegrationId.WinHttpHandler, enabled: false, autoEnabled: null);
                 telemetry.AssertIntegration(IntegrationId.CurlHandler, enabled: false, autoEnabled: null);
+                VerifyInstrumentation(processResult.Process);
             }
         }
 

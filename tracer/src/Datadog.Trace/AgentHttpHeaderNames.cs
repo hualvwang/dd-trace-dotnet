@@ -59,6 +59,16 @@ namespace Datadog.Trace
         public const string StatsComputation = "Datadog-Client-Computed-Stats";
 
         /// <summary>
+        /// Tells the agent how many P0 traces were dropped as a result of stats computation in the tracer
+        /// </summary>
+        public const string DroppedP0Traces = "Datadog-Client-Dropped-P0-Traces";
+
+        /// <summary>
+        /// Tells the agent how many P0 spans were dropped as a result of stats computation in the tracer
+        /// </summary>
+        public const string DroppedP0Spans = "Datadog-Client-Dropped-P0-Spans";
+
+        /// <summary>
         /// Gets the default constant header that should be added to any request to the agent
         /// </summary>
         internal static KeyValuePair<string, string>[] DefaultHeaders { get; } =
@@ -69,6 +79,16 @@ namespace Datadog.Trace
             new(LanguageInterpreter, FrameworkDescription.Instance.Name),
             new(LanguageVersion, FrameworkDescription.Instance.ProductVersion),
             new(ComputedTopLevelSpan, "1")
+        };
+
+        /// <summary>
+        /// Gets the minimal constant header that can be added to any request to the agent
+        /// </summary>
+        internal static KeyValuePair<string, string>[] MinimalHeaders { get; } =
+        {
+            new(Language, ".NET"),
+            new(TracerVersion, TracerConstants.AssemblyVersion),
+            new(HttpHeaderNames.TracingEnabled, "false"), // don't add automatic instrumentation to requests directed to the agent
         };
     }
 }

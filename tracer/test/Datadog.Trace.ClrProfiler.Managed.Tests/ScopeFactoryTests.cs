@@ -29,6 +29,12 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
         [InlineData("E653C852-227B-4F0C-9E48-D30D83C68BF3", Id)]
         [InlineData("E653C852227B4F0C9E48D30D83C68BF3/", Id + "/")]
         [InlineData("E653C852227B4F0C9E48D30D83C68BF3", Id)]
+        [InlineData("123,123/", Id + "/")]
+        [InlineData("123,123", Id)]
+        [InlineData("users,123/", "users,123/")]
+        [InlineData("123af,12a/", "123af,12a/")]
+        [InlineData("123afafafafaf,12a/", "123afafafafaf,12a/")]
+        [InlineData("afafafafaf,afafafafaf/", "afafafafaf,afafafafaf/")]
         public void CleanUriSegment(string segment, string expected)
         {
             string actual = UriHelpers.GetCleanUriPath(segment);
@@ -43,8 +49,13 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
         [InlineData("https://example.com/path/to/file.aspx#fragment", "GET", "GET example.com/path/to/file.aspx")]
         [InlineData("http://example.com/path/to/file.aspx", "GET", "GET example.com/path/to/file.aspx")]
         [InlineData("https://example.com/path/123/file.aspx", "GET", "GET example.com/path/" + Id + "/file.aspx")]
+        [InlineData("https://example.com/path/123,123/file.aspx", "GET", "GET example.com/path/" + Id + "/file.aspx")]
+        [InlineData("https://example.com/path/123afafafafaf,12a/file.aspx", "GET", "GET example.com/path/123afafafafaf,12a/file.aspx")]
+        [InlineData("https://example.com/path/afafafafaf,afafafafaf/file.aspx", "GET", "GET example.com/path/afafafafaf,afafafafaf/file.aspx")]
         [InlineData("https://example.com/path/123/", "GET", "GET example.com/path/" + Id + "/")]
         [InlineData("https://example.com/path/123", "GET", "GET example.com/path/" + Id)]
+        [InlineData("https://example.com/path/123,123/", "GET", "GET example.com/path/" + Id + "/")]
+        [InlineData("https://example.com/path/123,123", "GET", "GET example.com/path/" + Id)]
         [InlineData("https://example.com/path/4294967294/file.aspx", "GET", "GET example.com/path/" + Id + "/file.aspx")]
         [InlineData("https://example.com/path/4294967294/", "GET", "GET example.com/path/" + Id + "/")]
         [InlineData("https://example.com/path/4294967294", "GET", "GET example.com/path/" + Id)]
@@ -55,7 +66,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
             // Set up Tracer
             var settings = new TracerSettings();
             var writerMock = new Mock<IAgentWriter>();
-            var samplerMock = new Mock<ISampler>();
+            var samplerMock = new Mock<ITraceSampler>();
             var tracer = new Tracer(settings, writerMock.Object, samplerMock.Object, scopeManager: null, statsd: null);
 
             using (var automaticScope = ScopeFactory.CreateOutboundHttpScope(tracer, method, new Uri(uri), IntegrationId.HttpMessageHandler, out _))
@@ -70,7 +81,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
             // Set up Tracer
             var settings = new TracerSettings();
             var writerMock = new Mock<IAgentWriter>();
-            var samplerMock = new Mock<ISampler>();
+            var samplerMock = new Mock<ITraceSampler>();
             var tracer = new Tracer(settings, writerMock.Object, samplerMock.Object, scopeManager: null, statsd: null);
 
             using (var automaticScope = ScopeFactory.CreateOutboundHttpScope(tracer, "GET", null, IntegrationId.HttpMessageHandler, out _))
@@ -86,8 +97,11 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
         [InlineData("https://example.com/path/to/file.aspx#fragment", "https://example.com/path/to/file.aspx")]
         [InlineData("http://example.com/path/to/file.aspx", "http://example.com/path/to/file.aspx")]
         [InlineData("https://example.com/path/123/file.aspx", "https://example.com/path/123/file.aspx")]
+        [InlineData("https://example.com/path/123,123/file.aspx", "https://example.com/path/123,123/file.aspx")]
         [InlineData("https://example.com/path/123/", "https://example.com/path/123/")]
         [InlineData("https://example.com/path/123", "https://example.com/path/123")]
+        [InlineData("https://example.com/path/123,123/", "https://example.com/path/123,123/")]
+        [InlineData("https://example.com/path/123,123", "https://example.com/path/123,123")]
         [InlineData("https://example.com/path/E653C852-227B-4F0C-9E48-D30D83C68BF3", "https://example.com/path/E653C852-227B-4F0C-9E48-D30D83C68BF3")]
         [InlineData("https://example.com/path/E653C852227B4F0C9E48D30D83C68BF3", "https://example.com/path/E653C852227B4F0C9E48D30D83C68BF3")]
         public void CleanUri_HttpUrlTag(string uri, string expected)
@@ -95,7 +109,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
             // Set up Tracer
             var settings = new TracerSettings();
             var writerMock = new Mock<IAgentWriter>();
-            var samplerMock = new Mock<ISampler>();
+            var samplerMock = new Mock<ITraceSampler>();
             var tracer = new Tracer(settings, writerMock.Object, samplerMock.Object, scopeManager: null, statsd: null);
 
             const string method = "GET";
@@ -115,7 +129,7 @@ namespace Datadog.Trace.ClrProfiler.Managed.Tests
             // Set up Tracer
             var settings = new TracerSettings();
             var writerMock = new Mock<IAgentWriter>();
-            var samplerMock = new Mock<ISampler>();
+            var samplerMock = new Mock<ITraceSampler>();
             var tracer = new Tracer(settings, writerMock.Object, samplerMock.Object, scopeManager: null, statsd: null);
 
             const string method = "GET";

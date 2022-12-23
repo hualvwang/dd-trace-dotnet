@@ -10,11 +10,15 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Datadog.Trace.AppSec;
+using Datadog.Trace.AppSec.Coordinator;
+using Datadog.Trace.AppSec.Waf;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.DuckTyping;
 using Datadog.Trace.ExtensionMethods;
 using Datadog.Trace.Headers;
+using Datadog.Trace.Iast;
 using Datadog.Trace.Logging;
 using Datadog.Trace.PlatformHelpers;
 using Datadog.Trace.Propagators;
@@ -52,10 +56,8 @@ namespace Datadog.Trace.DiagnosticListeners
 
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor<AspNetCoreDiagnosticObserver>();
         private static readonly AspNetCoreHttpRequestHandler AspNetCoreRequestHandler = new AspNetCoreHttpRequestHandler(Log, HttpRequestInOperationName, IntegrationId);
-
         private readonly Tracer _tracer;
         private readonly Security _security;
-
         private string _hostingHttpRequestInStartEventKey;
         private string _mvcBeforeActionEventKey;
         private string _mvcAfterActionEventKey;
@@ -79,7 +81,7 @@ namespace Datadog.Trace.DiagnosticListeners
 
         private Tracer CurrentTracer => _tracer ?? Tracer.Instance;
 
-        private IDatadogSecurity CurrentSecurity => _security ?? Security.Instance;
+        private Security CurrentSecurity => _security ?? Security.Instance;
 
 #if NETCOREAPP
         protected override void OnNext(string eventName, object arg)
@@ -114,7 +116,7 @@ namespace Datadog.Trace.DiagnosticListeners
                     return;
                 }
                 else if (ReferenceEquals(eventName, _hostingUnhandledExceptionEventKey) ||
-                    ReferenceEquals(eventName, _diagnosticsUnhandledExceptionEventKey))
+                         ReferenceEquals(eventName, _diagnosticsUnhandledExceptionEventKey))
                 {
                     OnHostingUnhandledException(arg);
                     return;
@@ -210,7 +212,7 @@ namespace Datadog.Trace.DiagnosticListeners
                     return;
                 }
                 else if (ReferenceEquals(eventName, _hostingUnhandledExceptionEventKey) ||
-                    ReferenceEquals(eventName, _diagnosticsUnhandledExceptionEventKey))
+                         ReferenceEquals(eventName, _diagnosticsUnhandledExceptionEventKey))
                 {
                     OnHostingUnhandledException(arg);
                     return;
@@ -273,186 +275,6 @@ namespace Datadog.Trace.DiagnosticListeners
         }
 #endif
 
-        private static string SimplifyRoutePattern(
-            RoutePattern routePattern,
-            RouteValueDictionary routeValueDictionary,
-            string areaName,
-            string controllerName,
-            string actionName,
-            bool expandRouteParameters)
-        {
-            var maxSize = routePattern.RawText.Length
-                        + (string.IsNullOrEmpty(areaName) ? 0 : Math.Max(areaName.Length - 4, 0)) // "area".Length
-                        + (string.IsNullOrEmpty(controllerName) ? 0 : Math.Max(controllerName.Length - 10, 0)) // "controller".Length
-                        + (string.IsNullOrEmpty(actionName) ? 0 : Math.Max(actionName.Length - 6, 0)) // "action".Length
-                        + 1; // '/' prefix
-
-            var sb = StringBuilderCache.Acquire(maxSize);
-
-            foreach (var pathSegment in routePattern.PathSegments)
-            {
-                foreach (var part in pathSegment.DuckCast<RoutePatternPathSegmentStruct>().Parts)
-                {
-                    if (part.TryDuckCast(out RoutePatternContentPartStruct contentPart))
-                    {
-                        sb.Append('/');
-                        sb.Append(contentPart.Content);
-                    }
-                    else if (part.TryDuckCast(out RoutePatternParameterPartStruct parameter))
-                    {
-                        var parameterName = parameter.Name;
-                        if (parameterName.Equals("area", StringComparison.OrdinalIgnoreCase))
-                        {
-                            sb.Append('/');
-                            sb.Append(areaName);
-                        }
-                        else if (parameterName.Equals("controller", StringComparison.OrdinalIgnoreCase))
-                        {
-                            sb.Append('/');
-                            sb.Append(controllerName);
-                        }
-                        else if (parameterName.Equals("action", StringComparison.OrdinalIgnoreCase))
-                        {
-                            sb.Append('/');
-                            sb.Append(actionName);
-                        }
-                        else
-                        {
-                            var haveParameter = routeValueDictionary.TryGetValue(parameterName, out var value);
-                            if (!parameter.IsOptional || haveParameter)
-                            {
-                                sb.Append('/');
-                                if (expandRouteParameters && haveParameter && !IsIdentifierSegment(value, out var valueAsString))
-                                {
-                                    // write the expanded parameter value
-                                    sb.Append(valueAsString);
-                                }
-                                else
-                                {
-                                    // write the route template value
-                                    sb.Append('{');
-                                    if (parameter.IsCatchAll)
-                                    {
-                                        if (parameter.EncodeSlashes)
-                                        {
-                                            sb.Append("**");
-                                        }
-                                        else
-                                        {
-                                            sb.Append('*');
-                                        }
-                                    }
-
-                                    sb.Append(parameterName);
-                                    if (parameter.IsOptional)
-                                    {
-                                        sb.Append('?');
-                                    }
-
-                                    sb.Append('}');
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            var simplifiedRoute = StringBuilderCache.GetStringAndRelease(sb);
-
-            return string.IsNullOrEmpty(simplifiedRoute) ? "/" : simplifiedRoute.ToLowerInvariant();
-        }
-
-        private static string SimplifyRoutePattern(
-            RouteTemplate routePattern,
-            RouteValueDictionary routeValueDictionary,
-            string areaName,
-            string controllerName,
-            string actionName,
-            bool expandRouteParameters)
-        {
-            var maxSize = routePattern.TemplateText.Length
-                        + (string.IsNullOrEmpty(areaName) ? 0 : Math.Max(areaName.Length - 4, 0)) // "area".Length
-                        + (string.IsNullOrEmpty(controllerName) ? 0 : Math.Max(controllerName.Length - 10, 0)) // "controller".Length
-                        + (string.IsNullOrEmpty(actionName) ? 0 : Math.Max(actionName.Length - 6, 0)) // "action".Length
-                        + 1; // '/' prefix
-
-            var sb = StringBuilderCache.Acquire(maxSize);
-
-            foreach (var pathSegment in routePattern.Segments)
-            {
-                foreach (var part in pathSegment.Parts)
-                {
-                    var partName = part.Name;
-
-                    if (!part.IsParameter)
-                    {
-                        sb.Append('/');
-                        sb.Append(part.Text);
-                    }
-                    else if (partName.Equals("area", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.Append('/');
-                        sb.Append(areaName);
-                    }
-                    else if (partName.Equals("controller", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.Append('/');
-                        sb.Append(controllerName);
-                    }
-                    else if (partName.Equals("action", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.Append('/');
-                        sb.Append(actionName);
-                    }
-                    else
-                    {
-                        var haveParameter = routeValueDictionary.TryGetValue(partName, out var value);
-                        if (!part.IsOptional || haveParameter)
-                        {
-                            sb.Append('/');
-                            if (expandRouteParameters && haveParameter && !IsIdentifierSegment(value, out var valueAsString))
-                            {
-                                // write the expanded parameter value
-                                sb.Append(valueAsString);
-                            }
-                            else
-                            {
-                                // write the route template value
-                                sb.Append('{');
-                                if (part.IsCatchAll)
-                                {
-                                    sb.Append('*');
-                                }
-
-                                sb.Append(partName);
-                                if (part.IsOptional)
-                                {
-                                    sb.Append('?');
-                                }
-
-                                sb.Append('}');
-                            }
-                        }
-                    }
-                }
-            }
-
-            var simplifiedRoute = StringBuilderCache.GetStringAndRelease(sb);
-
-            return string.IsNullOrEmpty(simplifiedRoute) ? "/" : simplifiedRoute.ToLowerInvariant();
-        }
-
-        private static bool IsIdentifierSegment(object value, [NotNullWhen(false)] out string valueAsString)
-        {
-            valueAsString = value as string ?? value?.ToString();
-            if (valueAsString is null)
-            {
-                return false;
-            }
-
-            return UriHelpers.IsIdentifierSegment(valueAsString, 0, valueAsString.Length);
-        }
-
         private static void SetLegacyResourceNames(BeforeActionStruct typedArg, Span span)
         {
             ActionDescriptor actionDescriptor = typedArg.ActionDescriptor;
@@ -504,17 +326,17 @@ namespace Datadog.Trace.DiagnosticListeners
             IDictionary<string, string> routeValues = actionDescriptor.RouteValues;
 
             string controllerName = routeValues.TryGetValue("controller", out controllerName)
-                ? controllerName?.ToLowerInvariant()
-                : null;
+                                        ? controllerName?.ToLowerInvariant()
+                                        : null;
             string actionName = routeValues.TryGetValue("action", out actionName)
-                ? actionName?.ToLowerInvariant()
-                : null;
+                                    ? actionName?.ToLowerInvariant()
+                                    : null;
             string areaName = routeValues.TryGetValue("area", out areaName)
-                ? areaName?.ToLowerInvariant()
-                : null;
+                                  ? areaName?.ToLowerInvariant()
+                                  : null;
             string pagePath = routeValues.TryGetValue("page", out pagePath)
-                ? pagePath?.ToLowerInvariant()
-                : null;
+                                  ? pagePath?.ToLowerInvariant()
+                                  : null;
             string aspNetRoute = trackingFeature.Route;
             string resourceName = trackingFeature.ResourceName;
 
@@ -545,7 +367,7 @@ namespace Datadog.Trace.DiagnosticListeners
                 if (routeTemplate is not null)
                 {
                     // If we have a route, overwrite the existing resource name
-                    var resourcePathName = SimplifyRoutePattern(
+                    var resourcePathName = AspNetCoreResourceNameHelper.SimplifyRouteTemplate(
                         routeTemplate,
                         typedArg.RouteData.Values,
                         areaName: areaName,
@@ -578,6 +400,7 @@ namespace Datadog.Trace.DiagnosticListeners
                 // these will already be set correctly
                 parentTags.AspNetCoreRoute = aspNetRoute;
                 parentSpan.ResourceName = span.ResourceName;
+                parentSpan.SetTag(Tags.HttpRoute, aspNetRoute);
             }
 
             return span;
@@ -599,30 +422,15 @@ namespace Datadog.Trace.DiagnosticListeners
             if (arg.TryDuckCast<HttpRequestInStartStruct>(out var requestStruct))
             {
                 HttpContext httpContext = requestStruct.HttpContext;
-                HttpRequest request = httpContext.Request;
-                Span span = null;
                 if (shouldTrace)
                 {
                     // Use an empty resource name here, as we will likely replace it as part of the request
                     // If we don't, update it in OnHostingHttpRequestInStop or OnHostingUnhandledException
-                    span = AspNetCoreRequestHandler.StartAspNetCorePipelineScope(tracer, httpContext, httpContext.Request, resourceName: string.Empty).Span;
-                }
-
-                if (shouldSecure)
-                {
-                    httpContext.Response.OnStarting(() =>
+                    var scope = AspNetCoreRequestHandler.StartAspNetCorePipelineScope(tracer, httpContext, httpContext.Request, resourceName: string.Empty);
+                    if (shouldSecure)
                     {
-                        // we subscribe here because in OnHostingHttpRequestInStop or HostingEndRequest it's too late,
-                        // the waf is already disposed by the registerfordispose callback
-                        security.InstrumentationGateway.RaiseEndRequest(httpContext, request, span);
-                        return System.Threading.Tasks.Task.CompletedTask;
-                    });
-
-                    httpContext.Response.OnCompleted(() =>
-                    {
-                        security.InstrumentationGateway.RaiseLastChanceToWriteTags(httpContext, span);
-                        return System.Threading.Tasks.Task.CompletedTask;
-                    });
+                        SecurityCoordinator.ReportWafInitInfoOnce(security, scope.Span);
+                    }
                 }
             }
         }
@@ -715,20 +523,12 @@ namespace Datadog.Trace.DiagnosticListeners
 
                 var request = httpContext.Request.DuckCast<HttpRequestStruct>();
                 RouteValueDictionary routeValues = request.RouteValues;
-
-                var security = CurrentSecurity;
-                var shouldSecure = security.Settings.Enabled;
-                if (shouldSecure)
-                {
-                    security.InstrumentationGateway.RaisePathParamsAvailable(httpContext, span, routeValues);
-                }
-
                 // No need to ToLowerInvariant() these strings, as we lower case
                 // the whole route later
                 object raw;
                 string controllerName = routeValues.TryGetValue("controller", out raw)
-                                        ? raw as string
-                                        : null;
+                                            ? raw as string
+                                            : null;
                 string actionName = routeValues.TryGetValue("action", out raw)
                                         ? raw as string
                                         : null;
@@ -736,7 +536,7 @@ namespace Datadog.Trace.DiagnosticListeners
                                       ? raw as string
                                       : null;
 
-                var resourcePathName = SimplifyRoutePattern(
+                var resourcePathName = AspNetCoreResourceNameHelper.SimplifyRoutePattern(
                     routePattern,
                     routeValues,
                     areaName: areaName,
@@ -756,6 +556,14 @@ namespace Datadog.Trace.DiagnosticListeners
                 {
                     span.ResourceName = resourceName;
                     tags.AspNetCoreRoute = normalizedRoute;
+                    span.SetTag(Tags.HttpRoute, normalizedRoute);
+                }
+
+                CurrentSecurity.CheckPathParams(httpContext, span, routeValues);
+
+                if (Iast.Iast.Instance.Settings.Enabled)
+                {
+                    span.Context?.TraceContext?.IastRequestContext?.AddRequestData(httpContext.Request, routeValues);
                 }
             }
         }
@@ -767,8 +575,9 @@ namespace Datadog.Trace.DiagnosticListeners
 
             var shouldTrace = tracer.Settings.IsIntegrationEnabled(IntegrationId);
             var shouldSecure = security.Settings.Enabled;
+            var shouldUseIast = Iast.Iast.Instance.Settings.Enabled;
 
-            if (!shouldTrace && !shouldSecure)
+            if (!shouldTrace && !shouldSecure && !shouldUseIast)
             {
                 return;
             }
@@ -795,20 +604,11 @@ namespace Datadog.Trace.DiagnosticListeners
                     }
                 }
 
-                if (shouldSecure && typedArg.ActionDescriptor?.Parameters != null)
-                {
-                    var pathParams = typedArg.ActionDescriptor.Parameters;
-                    var eventData = new Dictionary<string, object>(pathParams.Count);
-                    for (var i = 0; i < pathParams.Count; i++)
-                    {
-                        var p = typedArg.ActionDescriptor.Parameters[i];
-                        if (typedArg.RouteData.Values.ContainsKey(p.Name))
-                        {
-                            eventData.Add(p.Name, typedArg.RouteData.Values[p.Name]);
-                        }
-                    }
+                CurrentSecurity.CheckPathParamsFromAction(httpContext, span, typedArg.ActionDescriptor?.Parameters, typedArg.RouteData.Values);
 
-                    security.InstrumentationGateway.RaisePathParamsAvailable(httpContext, span ?? parentSpan, eventData);
+                if (shouldUseIast)
+                {
+                    parentSpan.Context?.TraceContext?.IastRequestContext?.AddRequestData(request, typedArg.RouteData?.Values);
                 }
             }
         }
@@ -866,14 +666,14 @@ namespace Datadog.Trace.DiagnosticListeners
 
             if (scope != null)
             {
-                var span = scope.Span;
-
                 // We may need to update the resource name if none of the routing/mvc events updated it.
                 // If we had an unhandled exception, the status code will already be updated correctly,
                 // but if the span was manually marked as an error, we still need to record the status code
-                var isMissingHttpStatusCode = !span.HasHttpStatusCode();
                 var httpRequest = arg.DuckCast<HttpRequestInStopStruct>();
-                HttpContext httpContext = httpRequest.HttpContext;
+                var httpContext = httpRequest.HttpContext;
+                var span = scope.Span;
+                var isMissingHttpStatusCode = !span.HasHttpStatusCode();
+
                 if (string.IsNullOrEmpty(span.ResourceName) || isMissingHttpStatusCode)
                 {
                     if (string.IsNullOrEmpty(span.ResourceName))
@@ -888,6 +688,13 @@ namespace Datadog.Trace.DiagnosticListeners
                 }
 
                 span.SetHeaderTags(new HeadersCollectionAdapter(httpContext.Response.Headers), tracer.Settings.HeaderTags, defaultTagPrefix: SpanContextPropagator.HttpResponseHeadersTagPrefix);
+                var security = CurrentSecurity;
+                if (security.Settings.Enabled)
+                {
+                    var transport = new SecurityCoordinator(security, httpContext, span);
+                    transport.Cleanup();
+                }
+
                 scope.Dispose();
             }
         }
@@ -905,23 +712,21 @@ namespace Datadog.Trace.DiagnosticListeners
 
             if (span != null && arg.TryDuckCast<UnhandledExceptionStruct>(out var unhandledStruct))
             {
-                span.SetException(unhandledStruct.Exception);
-                int statusCode = 500;
+                var statusCode = 500;
 
                 if (unhandledStruct.Exception.TryDuckCast<BadHttpRequestExceptionStruct>(out var badRequestException))
                 {
                     statusCode = badRequestException.StatusCode;
                 }
 
-                var security = CurrentSecurity;
-                if (security.Settings.Enabled)
-                {
-                    var httpContext = unhandledStruct.HttpContext;
-                    security.InstrumentationGateway.RaiseEndRequest(httpContext, httpContext.Request, span);
-                }
-
                 // Generic unhandled exceptions are converted to 500 errors by Kestrel
                 span.SetHttpStatusCode(statusCode: statusCode, isServer: true, tracer.Settings);
+
+                if (unhandledStruct.Exception is not BlockException)
+                {
+                    span.SetException(unhandledStruct.Exception);
+                    CurrentSecurity.CheckAndBlock(unhandledStruct.HttpContext, span);
+                }
             }
         }
 
@@ -944,6 +749,7 @@ namespace Datadog.Trace.DiagnosticListeners
         {
             [Duck(BindingFlags = DuckAttribute.DefaultFlags | BindingFlags.IgnoreCase)]
             public HttpContext HttpContext;
+
             [Duck(BindingFlags = DuckAttribute.DefaultFlags | BindingFlags.IgnoreCase)]
             public Exception Exception;
         }

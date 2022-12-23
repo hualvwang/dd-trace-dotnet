@@ -16,7 +16,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [CollectionDefinition(nameof(WebRequestTests), DisableParallelization = true)]
     [Collection(nameof(WebRequestTests))]
-    public class WebRequestTests : TestHelper
+    public class WebRequestTests : TracingIntegrationTest
     {
         public WebRequestTests(ITestOutputHelper output)
             : base("WebRequest", output)
@@ -24,15 +24,18 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             SetServiceVersion("1.0.0");
         }
 
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsWebRequest();
+
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public void SubmitsTraces()
         {
+            SetInstrumentationVerification();
             var expectedSpanCount = 76;
 
             const string expectedOperationName = "http.request";
-            const string expectedServiceName = "Samples.WebRequest-http-client";
 
             int httpPort = TcpPortProvider.GetOpenPort();
             Output.WriteLine($"Assigning port {httpPort} for the httpPort.");
@@ -43,15 +46,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             {
                 var spans = agent.WaitForSpans(expectedSpanCount, operationName: expectedOperationName).OrderBy(s => s.Start);
                 spans.Should().HaveCount(expectedSpanCount);
-
-                foreach (var span in spans)
-                {
-                    Assert.Equal(expectedOperationName, span.Name);
-                    Assert.Equal(expectedServiceName, span.Service);
-                    Assert.Equal(SpanTypes.Http, span.Type);
-                    Assert.True(string.Equals(span.Tags[Tags.InstrumentationName], "WebRequest") || string.Equals(span.Tags[Tags.InstrumentationName], "HttpMessageHandler"));
-                    Assert.False(span.Tags?.ContainsKey(Tags.Version), "External service span should not have service version tag.");
-                }
+                ValidateIntegrationSpans(spans, expectedServiceName: "Samples.WebRequest-http-client");
 
                 var firstSpan = spans.First();
                 var traceId = StringUtil.GetHeader(processResult.StandardOutput, HttpHeaderNames.TraceId);
@@ -60,15 +55,18 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 Assert.Equal(firstSpan.TraceId.ToString(CultureInfo.InvariantCulture), traceId);
                 Assert.Equal(firstSpan.SpanId.ToString(CultureInfo.InvariantCulture), parentSpanId);
                 telemetry.AssertIntegrationEnabled(IntegrationId.WebRequest);
+                VerifyInstrumentation(processResult.Process);
             }
         }
 
         [SkippableFact]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
+        [Trait("SupportsInstrumentationVerification", "True")]
         public void TracingDisabled_DoesNotSubmitsTraces()
         {
             const string expectedOperationName = "http.request";
+            SetInstrumentationVerification();
 
             int httpPort = TcpPortProvider.GetOpenPort();
 
@@ -87,6 +85,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 Assert.Null(parentSpanId);
                 Assert.Equal("false", tracingEnabled);
                 telemetry.AssertIntegrationDisabled(IntegrationId.WebRequest);
+                VerifyInstrumentation(processResult.Process);
             }
         }
     }

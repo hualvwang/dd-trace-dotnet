@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using Datadog.Trace.Agent.DiscoveryService;
 using Datadog.Trace.Ci;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.TestHelpers;
@@ -60,7 +61,7 @@ namespace Datadog.Trace.Tests
             Assert.Throws<ArgumentNullException>(() => Tracer.Instance = null);
 
             Assert.Throws<InvalidOperationException>(() => TracerManager.ReplaceGlobalManager(null, TracerManagerFactory.Instance));
-            Assert.Throws<InvalidOperationException>(() => TracerManager.ReplaceGlobalManager(null, new CITracerManagerFactory(CIVisibility.Settings)));
+            Assert.Throws<InvalidOperationException>(() => TracerManager.ReplaceGlobalManager(null, new CITracerManagerFactory(CIVisibility.Settings, NullDiscoveryService.Instance, false)));
         }
 
         [Fact]
@@ -68,7 +69,7 @@ namespace Datadog.Trace.Tests
         {
             var agentPort = TcpPortProvider.GetOpenPort();
 
-            using (var agent = new MockTracerAgent(agentPort))
+            using (var agent = MockTracerAgent.Create(null, agentPort))
             {
                 var oldSettings = new TracerSettings
                 {
@@ -117,7 +118,7 @@ namespace Datadog.Trace.Tests
         private class LockedTracerManager : TracerManager, ILockedTracer
         {
             public LockedTracerManager()
-                : base(null, null, null, null, null, null, null, null, null)
+                : base(null, null, null, null, null, null, null, null, null, null, null, null)
             {
             }
         }

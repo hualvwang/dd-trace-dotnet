@@ -6,6 +6,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
+using Datadog.Trace.ExtensionMethods;
 using Datadog.Trace.Logging.DirectSubmission;
 using Datadog.Trace.Util;
 
@@ -35,9 +37,46 @@ namespace Datadog.Trace.Configuration
         /// <param name="settings">The tracer settings to use to populate the immutable tracer settings</param>
         public ImmutableTracerSettings(TracerSettings settings)
         {
-            Environment = settings.Environment;
+            // DD_ENV has precedence over DD_TAGS
+            if (!string.IsNullOrWhiteSpace(settings.Environment))
+            {
+                Environment = settings.Environment.Trim();
+            }
+            else
+            {
+                var env = settings.GlobalTags.GetValueOrDefault(Tags.Env);
+
+                if (!string.IsNullOrWhiteSpace(env))
+                {
+                    Environment = env.Trim();
+                }
+            }
+
+            // DD_VERSION has precedence over DD_TAGS
+            if (!string.IsNullOrWhiteSpace(settings.ServiceVersion))
+            {
+                ServiceVersion = settings.ServiceVersion.Trim();
+            }
+            else
+            {
+                var version = settings.GlobalTags.GetValueOrDefault(Tags.Version);
+
+                if (!string.IsNullOrWhiteSpace(version))
+                {
+                    ServiceVersion = version.Trim();
+                }
+            }
+
+            // create dictionary copy without "env" or "version",
+            // these value are used for "Environment" and "ServiceVersion"
+            // or overriden with DD_ENV and DD_VERSION
+            var globalTags = settings.GlobalTags
+                                     .Where(kvp => kvp.Key is not (Tags.Env or Tags.Version))
+                                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            GlobalTags = new ReadOnlyDictionary<string, string>(globalTags);
+
             ServiceName = settings.ServiceName;
-            ServiceVersion = settings.ServiceVersion;
             TraceEnabled = settings.TraceEnabled;
             Exporter = new ImmutableExporterSettings(settings.Exporter);
 #pragma warning disable 618 // App analytics is deprecated, but still used
@@ -45,13 +84,16 @@ namespace Datadog.Trace.Configuration
 #pragma warning restore 618
             MaxTracesSubmittedPerSecond = settings.MaxTracesSubmittedPerSecond;
             CustomSamplingRules = settings.CustomSamplingRules;
+            SpanSamplingRules = settings.SpanSamplingRules;
             GlobalSamplingRate = settings.GlobalSamplingRate;
             Integrations = new ImmutableIntegrationSettingsCollection(settings.Integrations, settings.DisabledIntegrationNames);
-            GlobalTags = new ReadOnlyDictionary<string, string>(settings.GlobalTags);
             HeaderTags = new ReadOnlyDictionary<string, string>(settings.HeaderTags);
             GrpcTags = new ReadOnlyDictionary<string, string>(settings.GrpcTags);
+            IpHeader = settings.IpHeader;
+            IpHeaderEnabled = settings.IpHeaderEnabled;
             TracerMetricsEnabled = settings.TracerMetricsEnabled;
             StatsComputationEnabled = settings.StatsComputationEnabled;
+            StatsComputationInterval = settings.StatsComputationInterval;
             RuntimeMetricsEnabled = settings.RuntimeMetricsEnabled;
             KafkaCreateConsumerScopeEnabled = settings.KafkaCreateConsumerScopeEnabled;
             StartupDiagnosticLogEnabled = settings.StartupDiagnosticLogEnabled;
@@ -63,6 +105,7 @@ namespace Datadog.Trace.Configuration
             TraceBatchInterval = settings.TraceBatchInterval;
             RouteTemplateResourceNamesEnabled = settings.RouteTemplateResourceNamesEnabled;
             DelayWcfInstrumentationEnabled = settings.DelayWcfInstrumentationEnabled;
+            WcfObfuscationEnabled = settings.WcfObfuscationEnabled;
             DbClientSplitByInstance = settings.DbClientSplitByInstance;
             DbSqlRecordParam = settings.DbSqlRecordParam;
             CustomPropagationHeaders = settings.CustomPropagationHeaders;
@@ -70,6 +113,8 @@ namespace Datadog.Trace.Configuration
             PropagationStyleExtract = settings.PropagationStyleExtract;
             TraceMethods = settings.TraceMethods;
             IsActivityListenerEnabled = settings.IsActivityListenerEnabled;
+            IsDataStreamsMonitoringEnabled = settings.IsDataStreamsMonitoringEnabled;
+            IsRareSamplerEnabled = settings.IsRareSamplerEnabled;
 
             LogSubmissionSettings = ImmutableDirectLogSubmissionSettings.Create(settings.LogSubmissionSettings);
             // Logs injection is enabled by default if direct log submission is enabled, otherwise disabled by default
@@ -80,6 +125,17 @@ namespace Datadog.Trace.Configuration
             _domainMetadata = DomainMetadata.Instance;
 
             ExpandRouteTemplatesEnabled = settings.ExpandRouteTemplatesEnabled || !RouteTemplateResourceNamesEnabled;
+
+            // tag propagation
+            OutgoingTagPropagationHeaderMaxLength = settings.OutgoingTagPropagationHeaderMaxLength;
+
+            // query string related env variables
+            ObfuscationQueryStringRegex = settings.ObfuscationQueryStringRegex;
+            QueryStringReportingEnabled = settings.QueryStringReportingEnabled;
+            ObfuscationQueryStringRegexTimeout = settings.ObfuscationQueryStringRegexTimeout;
+
+            IsRunningInAzureAppService = settings.IsRunningInAzureAppService;
+            AzureAppServiceMetadata = settings.AzureAppServiceMetadata;
         }
 
         /// <summary>
@@ -144,6 +200,12 @@ namespace Datadog.Trace.Configuration
         public string CustomSamplingRules { get; }
 
         /// <summary>
+        /// Gets a value indicating the span sampling rules.
+        /// </summary>
+        /// <seealso cref="ConfigurationKeys.SpanSamplingRules"/>
+        internal string SpanSamplingRules { get; }
+
+        /// <summary>
         /// Gets a value indicating a global rate for sampling.
         /// </summary>
         /// <seealso cref="ConfigurationKeys.GlobalSamplingRate"/>
@@ -170,6 +232,16 @@ namespace Datadog.Trace.Configuration
         /// of incoming and outgoing GRPC requests.
         /// </summary>
         public IReadOnlyDictionary<string, string> GrpcTags { get; }
+
+        /// <summary>
+        /// Gets a custom request header configured to read the ip from. For backward compatibility, it fallbacks on DD_APPSEC_IPHEADER
+        /// </summary>
+        internal string IpHeader { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether the ip header should be collected. The default is false.
+        /// </summary>
+        internal bool IpHeaderEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether internal metrics
@@ -199,6 +271,11 @@ namespace Datadog.Trace.Configuration
         /// are enabled and sent to DogStatsd.
         /// </summary>
         internal bool RuntimeMetricsEnabled { get; }
+
+        /// <summary>
+        /// Gets a value indicating the time interval (in seconds) for sending stats
+        /// </summary>
+        internal int StatsComputationInterval { get; }
 
         /// <summary>
         /// Gets the comma separated list of url patterns to skip tracing.
@@ -247,6 +324,23 @@ namespace Datadog.Trace.Configuration
         /// <seealso cref="ConfigurationKeys.ExpandRouteTemplatesEnabled"/>
         internal bool ExpandRouteTemplatesEnabled { get; }
 
+        /// <summary>
+        /// Gets a value indicating the regex to apply to obfuscate http query strings.
+        /// </summary>
+        /// <seealso cref="ConfigurationKeys.ObfuscationQueryStringRegex"/>
+        internal string ObfuscationQueryStringRegex { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether or not http.url should contain the query string, enabled by default with DD_HTTP_SERVER_TAG_QUERY_STRING
+        /// </summary>
+        internal bool QueryStringReportingEnabled { get; }
+
+        /// <summary>
+        /// Gets a value indicating a timeout in milliseconds to the execution of the query string obfuscation regex
+        /// Default value is 200ms
+        /// </summary>
+        internal double ObfuscationQueryStringRegexTimeout { get; }
+
         internal ImmutableDirectLogSubmissionSettings LogSubmissionSettings { get; }
 
         /// <summary>
@@ -254,6 +348,12 @@ namespace Datadog.Trace.Configuration
         /// until later in the WCF pipeline when the WCF server exception handling is established.
         /// </summary>
         internal bool DelayWcfInstrumentationEnabled { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether to obfuscate the <c>LocalPath</c> of a WCF request that goes
+        /// into the <c>resourceName</c> of a span.
+        /// </summary>
+        internal bool WcfObfuscationEnabled { get; }
 
         /// <summary>
         /// Gets or sets a value indicating whether db spans get assigned the instance name as the service name.
@@ -291,14 +391,43 @@ namespace Datadog.Trace.Configuration
         internal bool IsActivityListenerEnabled { get; }
 
         /// <summary>
+        /// Gets a value indicating whether data streams monitoring is enabled or not.
+        /// </summary>
+        internal bool IsDataStreamsMonitoringEnabled { get; }
+
+        /// <summary>
+        /// Gets the maximum length of an outgoing propagation header's value ("x-datadog-tags")
+        /// when injecting it into downstream service calls.
+        /// </summary>
+        /// <seealso cref="ConfigurationKeys.TagPropagation.HeaderMaxLength"/>
+        /// <remarks>
+        /// This value is not used when extracting an incoming propagation header from an upstream service.
+        /// </remarks>
+        internal int OutgoingTagPropagationHeaderMaxLength { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether the rare sampler is enabled
+        /// </summary>
+        internal bool IsRareSamplerEnabled { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether the tracer is running in AAS
+        /// </summary>
+        internal bool IsRunningInAzureAppService { get; }
+
+        /// <summary>
+        /// Gets the AAS settings
+        /// </summary>
+        internal ImmutableAzureAppServiceSettings AzureAppServiceMetadata { get; }
+
+        /// <summary>
         /// Create a <see cref="ImmutableTracerSettings"/> populated from the default sources
-        /// returned by <see cref="GlobalSettings.CreateDefaultConfigurationSource()"/>.
+        /// returned by <see cref="GlobalConfigurationSource.Instance"/>.
         /// </summary>
         /// <returns>A <see cref="ImmutableTracerSettings"/> populated from the default sources.</returns>
         public static ImmutableTracerSettings FromDefaultSources()
         {
-            var source = GlobalSettings.CreateDefaultConfigurationSource();
-            return new ImmutableTracerSettings(source);
+            return new ImmutableTracerSettings(GlobalConfigurationSource.Instance);
         }
 
         internal bool IsErrorStatusCode(int statusCode, bool serverStatusCode)

@@ -4,6 +4,11 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using Datadog.Trace.Configuration;
+using Datadog.Trace.PlatformHelpers;
+using Datadog.Trace.TestHelpers;
 using Datadog.Trace.Util;
 using FluentAssertions;
 using Moq;
@@ -57,13 +62,13 @@ namespace Datadog.Trace.Tests
 
             void AddAndCloseSpan()
             {
-                var span = new Span(new SpanContext(42, SpanIdGenerator.ThreadInstance.CreateNew()), DateTimeOffset.UtcNow);
+                var span = new Span(new SpanContext(42, SpanIdGenerator.CreateNew()), DateTimeOffset.UtcNow);
 
                 traceContext.AddSpan(span);
                 traceContext.CloseSpan(span);
             }
 
-            var rootSpan = new Span(new SpanContext(42, SpanIdGenerator.ThreadInstance.CreateNew()), DateTimeOffset.UtcNow);
+            var rootSpan = new Span(new SpanContext(42, SpanIdGenerator.CreateNew()), DateTimeOffset.UtcNow);
 
             traceContext.AddSpan(rootSpan);
 
@@ -120,7 +125,7 @@ namespace Datadog.Trace.Tests
         {
             const int partialFlushThreshold = 3;
 
-            Span CreateSpan() => new Span(new SpanContext(42, SpanIdGenerator.ThreadInstance.CreateNew()), DateTimeOffset.UtcNow);
+            Span CreateSpan() => new Span(new SpanContext(42, SpanIdGenerator.CreateNew()), DateTimeOffset.UtcNow);
 
             var tracer = new Mock<IDatadogTracer>();
 
@@ -136,7 +141,7 @@ namespace Datadog.Trace.Tests
             ArraySegment<Span>? spans = null;
 
             tracer.Setup(t => t.Write(It.IsAny<ArraySegment<Span>>()))
-                  .Callback<ArraySegment<Span>>(s => spans = s);
+                  .Callback<ArraySegment<Span>>((s) => spans = s);
 
             var traceContext = new TraceContext(tracer.Object);
             traceContext.SetSamplingPriority(SamplingPriorityValues.UserKeep);
@@ -161,17 +166,17 @@ namespace Datadog.Trace.Tests
 
             spans.Value.Should().NotBeNullOrEmpty("a full flush should have been triggered");
 
-            rootSpan.GetMetric(Metrics.SamplingPriority).Should().Be(SamplingPriorityValues.UserKeep, "priority should be assigned to the root span");
+            rootSpan.GetMetric(Metrics.SamplingPriority).Should().BeNull("because sampling priority is not added until serialization");
 
-            spans.Value.Should().OnlyContain(s => s == rootSpan || s.GetMetric(Metrics.SamplingPriority) == null, "only the root span should have a priority");
+            spans.Value.Should().OnlyContain(s => s.GetMetric(Metrics.SamplingPriority) == null, "because sampling priority is not added until serialization");
         }
 
         [Fact]
-        public void PartialFlushShouldPropagateSamplingPriority()
+        public void PartialFlushShouldPropagateMetadata()
         {
             const int partialFlushThreshold = 2;
 
-            Span CreateSpan() => new Span(new SpanContext(42, SpanIdGenerator.ThreadInstance.CreateNew()), DateTimeOffset.UtcNow);
+            Span CreateSpan() => new Span(new SpanContext(42, SpanIdGenerator.CreateNew()), DateTimeOffset.UtcNow);
 
             var tracer = new Mock<IDatadogTracer>();
 
@@ -181,13 +186,13 @@ namespace Datadog.Trace.Tests
                 {
                     PartialFlushEnabled = true,
                     PartialFlushMinSpans = partialFlushThreshold
-                }
+                },
             }.Build());
 
             ArraySegment<Span>? spans = null;
 
             tracer.Setup(t => t.Write(It.IsAny<ArraySegment<Span>>()))
-                  .Callback<ArraySegment<Span>>(s => spans = s);
+                  .Callback<ArraySegment<Span>>((s) => spans = s);
 
             var traceContext = new TraceContext(tracer.Object);
             traceContext.SetSamplingPriority(SamplingPriorityValues.UserKeep);
@@ -206,8 +211,7 @@ namespace Datadog.Trace.Tests
             }
 
             spans.Value.Should().NotBeNullOrEmpty("partial flush should have been triggered");
-
-            spans.Value.Should().OnlyContain(s => (int)s.GetMetric(Metrics.SamplingPriority) == SamplingPriorityValues.UserKeep);
+            spans.Value.Should().OnlyContain(s => s.GetMetric(Metrics.SamplingPriority) == null, "because sampling priority is not added until serialization");
         }
     }
 }

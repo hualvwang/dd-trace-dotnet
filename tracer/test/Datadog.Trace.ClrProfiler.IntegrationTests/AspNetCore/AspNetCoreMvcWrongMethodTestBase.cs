@@ -6,6 +6,7 @@
 #if NETCOREAPP
 #pragma warning disable SA1402 // File may only contain a single class
 #pragma warning disable SA1649 // File name must match first type name
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Datadog.Trace.TestHelpers;
@@ -16,7 +17,7 @@ using Xunit.Abstractions;
 namespace Datadog.Trace.ClrProfiler.IntegrationTests.AspNetCore
 {
     [UsesVerify]
-    public class AspNetCoreMvcWrongMethodTestBase : TestHelper, IClassFixture<AspNetCoreMvcTestBase.AspNetCoreTestFixture>
+    public class AspNetCoreMvcWrongMethodTestBase : TracingIntegrationTest, IClassFixture<AspNetCoreMvcTestBase.AspNetCoreTestFixture>
     {
         private readonly AspNetCoreMvcTestBase.AspNetCoreTestFixture fixture;
         private readonly string _testName;
@@ -26,17 +27,26 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests.AspNetCore
         {
             this.fixture = fixture;
             _testName = testName;
+            EnableDebugMode();
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) =>
+            span.Type switch
+            {
+                "aspnet_core.request" => span.IsAspNetCore(),
+                "aspnet_core_mvc.request" => span.IsAspNetCoreMvc(),
+                _ => Result.DefaultSuccess,
+            };
 
         public async Task TestIncorrectMethod(string path)
         {
-            var sanitisedPath = VerifyHelper.SanitisePathsForVerify(path);
-
-            var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedPath);
-
             await fixture.TryStartApp(this);
 
             var spans = await fixture.WaitForSpans(path, true);
+            ValidateIntegrationSpans(spans, expectedServiceName: EnvironmentHelper.FullSampleName, isExternalSpan: false);
+
+            var sanitisedPath = VerifyHelper.SanitisePathsForVerify(path);
+            var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedPath);
 
             // Overriding the type name here as we have multiple test classes in the file
             // Ensures that we get nice file nesting in Solution Explorer

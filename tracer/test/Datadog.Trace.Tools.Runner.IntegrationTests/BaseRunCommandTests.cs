@@ -24,6 +24,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests
         protected bool EnableCiVisibilityMode { get; }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public void Run()
         {
             string command = null;
@@ -40,7 +41,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests
             };
 
             // CI visibility mode checks if there's a running agent
-            using var agent = EnableCiVisibilityMode ? new MockTracerAgent(TcpPortProvider.GetOpenPort()) : null;
+            using var agent = EnableCiVisibilityMode ? MockTracerAgent.Create(null, TcpPortProvider.GetOpenPort()) : null;
 
             var agentUrl = $"http://localhost:{agent?.Port ?? 1111}";
 
@@ -80,6 +81,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public void AdditionalArguments()
         {
             string command = null;
@@ -96,7 +98,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests
             };
 
             // CI visibility mode checks if there's a running agent
-            using var agent = EnableCiVisibilityMode ? new MockTracerAgent(TcpPortProvider.GetOpenPort()) : null;
+            using var agent = EnableCiVisibilityMode ? MockTracerAgent.Create(null, TcpPortProvider.GetOpenPort()) : null;
 
             var agentUrl = $"http://localhost:{agent?.Port ?? 1111}";
 
@@ -120,6 +122,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public void EmptyCommand()
         {
             bool callbackInvoked = false;
@@ -130,7 +133,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests
             };
 
             // CI visibility mode checks if there's a running agent
-            using var agent = EnableCiVisibilityMode ? new MockTracerAgent(TcpPortProvider.GetOpenPort()) : null;
+            using var agent = EnableCiVisibilityMode ? MockTracerAgent.Create(null, TcpPortProvider.GetOpenPort()) : null;
 
             var agentUrl = $"http://localhost:{agent?.Port ?? 1111}";
 

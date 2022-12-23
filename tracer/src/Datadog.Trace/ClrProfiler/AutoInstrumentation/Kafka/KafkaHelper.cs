@@ -4,6 +4,9 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
+using System.Text;
+using Datadog.Trace.DataStreamsMonitoring;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Propagators;
 using Datadog.Trace.Tagging;
@@ -14,6 +17,7 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
     {
         private static readonly IDatadogLogger Log = DatadogLogging.GetLoggerFor(typeof(KafkaHelper));
         private static bool _headersInjectionEnabled = true;
+        private static string[] defaultProduceEdgeTags = new[] { "direction:out", "type:kafka" };
 
         internal static Scope CreateProducerScope(Tracer tracer, ITopicPartition topicPartition, bool isTombstone, bool finishOnClose)
         {
@@ -76,6 +80,8 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
 
         internal static Scope CreateConsumerScope(
             Tracer tracer,
+            DataStreamsManager dataStreamsManager,
+            object consumer,
             string topic,
             Partition? partition,
             Offset? offset,
@@ -100,8 +106,10 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
                 }
 
                 SpanContext propagatedContext = null;
+                PathwayContext? pathwayContext = null;
+
                 // Try to extract propagated context from headers
-                if (message is not null && message.Headers is not null)
+                if (message?.Headers is not null)
                 {
                     var headers = new KafkaHeadersCollectionAdapter(message.Headers);
 
@@ -112,6 +120,18 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Error extracting propagated headers from Kafka message");
+                    }
+
+                    if (dataStreamsManager.IsEnabled)
+                    {
+                        try
+                        {
+                            pathwayContext = dataStreamsManager.ExtractPathwayContext(headers);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "Error extracting PathwayContext from Kafka message");
+                        }
                     }
                 }
 
@@ -137,6 +157,11 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
                     tags.Offset = offset.ToString();
                 }
 
+                if (ConsumerGroupHelper.TryGetConsumerGroup(consumer, out var groupId))
+                {
+                    tags.ConsumerGroup = groupId;
+                }
+
                 if (message is not null && message.Timestamp.Type != 0)
                 {
                     var consumeTime = span.StartTime.UtcDateTime;
@@ -153,6 +178,47 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
                 span.SetTag(Tags.Measured, "1");
 
                 tags.SetAnalyticsSampleRate(KafkaConstants.IntegrationId, tracer.Settings, enabledWithGlobalSetting: false);
+
+                if (dataStreamsManager.IsEnabled)
+                {
+                    // remove any leftover junk they may be left in the headers
+                    message?.Headers?.Remove(DataStreamsPropagationHeaders.TemporaryBase64PathwayContext);
+                    message?.Headers?.Remove(DataStreamsPropagationHeaders.TemporaryEdgeTags);
+
+                    if (!tracer.Settings.KafkaCreateConsumerScopeEnabled && message?.Headers is not null)
+                    {
+                        // This is a brilliant and horrible approach to let customers who are already
+                        // extracting the span context from a Kafka message automatically get
+                        // checkpointing support in their custom instrumentation
+                        if (message.Headers.TryGetLastBytes(DataStreamsPropagationHeaders.PropagationKey, out var bytes))
+                        {
+                            // annoyingly we have to re-encode the pathwayContext as base64 so we can read it as
+                            // a string in SpanContextExtractor.Extract
+                            // if there was no pathway context, we don't need to encode it
+                            var base64PathwayContext = System.Convert.ToBase64String(bytes);
+                            message.Headers.Add(DataStreamsPropagationHeaders.TemporaryBase64PathwayContext, Encoding.UTF8.GetBytes(base64PathwayContext));
+                        }
+
+                        // ','is not a valid character in kafka topic or group names, so we use as the
+                        // separator here NOTE: the tags must be sorted in alphabetical order
+                        var edgeTags = string.IsNullOrEmpty(topic)
+                                           ? $"direction:in,group:{groupId},type:kafka"
+                                           : $"direction:in,group:{groupId},topic:{topic},type:kafka";
+                        message.Headers.Add(DataStreamsPropagationHeaders.TemporaryEdgeTags, Encoding.UTF8.GetBytes(edgeTags));
+                    }
+                    else
+                    {
+                        span.Context.MergePathwayContext(pathwayContext);
+
+                        // TODO: we could pool these arrays to reduce allocations
+                        // NOTE: the tags must be sorted in alphabetical order
+                        var edgeTags = string.IsNullOrEmpty(topic)
+                                           ? new[] { "direction:in", $"group:{groupId}", "type:kafka" }
+                                           : new[] { "direction:in", $"group:{groupId}", $"topic:{topic}", "type:kafka" };
+
+                        span.Context.SetCheckpoint(dataStreamsManager, edgeTags);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -194,10 +260,16 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
         /// Try to inject the prop
         /// </summary>
         /// <param name="context">The Span context to propagate</param>
+        /// <param name="dataStreamsManager">The global data streams manager</param>
+        /// <param name="topic">Topic name</param>
         /// <param name="message">The duck-typed Kafka Message object</param>
         /// <typeparam name="TTopicPartitionMarker">The TopicPartition type (used  optimisation purposes)</typeparam>
         /// <typeparam name="TMessage">The type of the duck-type proxy</typeparam>
-        internal static void TryInjectHeaders<TTopicPartitionMarker, TMessage>(SpanContext context, TMessage message)
+        internal static void TryInjectHeaders<TTopicPartitionMarker, TMessage>(
+            SpanContext context,
+            DataStreamsManager dataStreamsManager,
+            string topic,
+            TMessage message)
             where TMessage : IMessage
         {
             if (!_headersInjectionEnabled)
@@ -215,6 +287,15 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Kafka
                 var adapter = new KafkaHeadersCollectionAdapter(message.Headers);
 
                 SpanContextPropagator.Instance.Inject(context, adapter);
+
+                if (dataStreamsManager.IsEnabled)
+                {
+                    var edgeTags = string.IsNullOrEmpty(topic)
+                        ? defaultProduceEdgeTags
+                        : new[] { "direction:out", $"topic:{topic}", "type:kafka" };
+                    context.SetCheckpoint(dataStreamsManager, edgeTags);
+                    dataStreamsManager.InjectPathwayContext(context.PathwayContext, adapter);
+                }
             }
             catch (Exception ex)
             {

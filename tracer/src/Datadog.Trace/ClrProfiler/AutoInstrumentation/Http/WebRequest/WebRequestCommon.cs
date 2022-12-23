@@ -9,6 +9,8 @@ using Datadog.Trace.ClrProfiler.CallTarget;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.ExtensionMethods;
 using Datadog.Trace.Propagators;
+using Datadog.Trace.Sampling;
+using Datadog.Trace.Tagging;
 
 namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest
 {
@@ -24,7 +26,7 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest
 
         internal const string Major2 = "2";
         internal const string Major4 = "4";
-        internal const string Major6 = "6";
+        internal const string Major7 = "7";
 
         internal const string IntegrationName = nameof(Configuration.IntegrationId.WebRequest);
         internal const IntegrationId IntegrationId = Configuration.IntegrationId.WebRequest;
@@ -54,9 +56,9 @@ namespace Datadog.Trace.ClrProfiler.AutoInstrumentation.Http.WebRequest
 
                     if (scope != null)
                     {
-                        if (setSamplingPriority && spanContext?.SamplingPriority is not null)
+                        if (setSamplingPriority)
                         {
-                            scope.Span.SetTraceSamplingPriority(spanContext.SamplingPriority.Value);
+                            scope.Span.Context.TraceContext.SetSamplingPriority(spanContext.SamplingPriority.Value);
                         }
 
                         // add distributed tracing headers to the HTTP request

@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Datadog.Trace.Configuration;
+using Datadog.Trace.Logging;
 using Xunit.Abstractions;
 
 namespace Datadog.Trace.TestHelpers
@@ -28,6 +29,7 @@ namespace Datadog.Trace.TestHelpers
         private readonly bool _isCoreClr;
         private readonly string _samplesDirectory;
         private readonly TargetFrameworkAttribute _targetFramework;
+        private TestTransports _transportType = TestTransports.Tcp;
 
         public EnvironmentHelper(
             string sampleName,
@@ -40,11 +42,8 @@ namespace Datadog.Trace.TestHelpers
             _samplesDirectory = samplesDirectory ?? Path.Combine("test", "test-applications", "integrations");
             _targetFramework = Assembly.GetAssembly(anchorType).GetCustomAttribute<TargetFrameworkAttribute>();
             _output = output;
-            TracerHome = GetTracerHomePath();
-
-            // The Native loader is used only on Windows and Linux x64.
-            // We need to keep this check until all platforms/configurations are supported.
-            ProfilerPath = UseNativeLoader ? GetNativeLoaderPath() : GetTracerNativeDLLPath();
+            MonitoringHome = GetMonitoringHomePath();
+            LogDirectory = DatadogLoggingFactory.GetLogDirectory();
 
             var parts = _targetFramework.FrameworkName.Split(',');
             _runtime = parts[0];
@@ -64,8 +63,6 @@ namespace Datadog.Trace.TestHelpers
                           : string.Empty;
         }
 
-        public TestTransports TransportType { get; set; } = TestTransports.Tcp;
-
         public bool AutomaticInstrumentationEnabled { get; private set; } = true;
 
         public bool DebugModeEnabled { get; set; }
@@ -74,13 +71,11 @@ namespace Datadog.Trace.TestHelpers
 
         public string SampleName { get; }
 
-        public string ProfilerPath { get; }
+        public string LogDirectory { get; }
 
-        public string TracerHome { get; }
+        public string MonitoringHome { get; }
 
         public string FullSampleName => $"{_appNamePrepend}{SampleName}";
-
-        public bool UseNativeLoader => string.Equals("true", Environment.GetEnvironmentVariable("USE_NATIVE_LOADER"), StringComparison.InvariantCultureIgnoreCase);
 
         public static bool IsNet5()
         {
@@ -92,91 +87,60 @@ namespace Datadog.Trace.TestHelpers
             return RuntimeFrameworkDescription.Contains("core") || IsNet5();
         }
 
-        public static string GetTracerHomePath()
+        public static bool IsAlpine() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("IsAlpine"));
+
+        public static string GetMonitoringHomePath()
         {
-            var tracerHomeDirectoryEnvVar = "TracerHomeDirectory";
-            var tracerHome = Environment.GetEnvironmentVariable(tracerHomeDirectoryEnvVar);
-            if (string.IsNullOrEmpty(tracerHome))
+            var monitoringHomeDirectoryEnvVar = "MonitoringHomeDirectory";
+            var monitoringHome = Environment.GetEnvironmentVariable(monitoringHomeDirectoryEnvVar);
+            if (string.IsNullOrEmpty(monitoringHome))
             {
                 // default
-                return Path.Combine(
-                    GetMonitoringHomePath(),
-                    "tracer");
+                monitoringHome = Path.Combine(
+                    EnvironmentTools.GetSolutionDirectory(),
+                    "shared",
+                    "bin",
+                    "monitoring-home");
             }
 
-            if (!Directory.Exists(tracerHome))
+            if (!Directory.Exists(monitoringHome))
             {
-                throw new InvalidOperationException($"{tracerHomeDirectoryEnvVar} was set to '{tracerHome}', but directory does not exist");
+                throw new InvalidOperationException($"{monitoringHomeDirectoryEnvVar} was set to '{monitoringHome}', but directory does not exist");
             }
 
             // basic verification
             var tfmDirectory = EnvironmentTools.GetTracerTargetFrameworkDirectory();
-            var dllLocation = Path.Combine(tracerHome, tfmDirectory);
+            var dllLocation = Path.Combine(monitoringHome, tfmDirectory);
             if (!Directory.Exists(dllLocation))
             {
-                throw new InvalidOperationException($"{tracerHomeDirectoryEnvVar} was set to '{tracerHome}', but location does not contain expected folder '{tfmDirectory}'");
+                throw new InvalidOperationException($"{monitoringHomeDirectoryEnvVar} was set to '{monitoringHome}', but location does not contain expected folder '{tfmDirectory}'");
             }
 
-            return tracerHome;
-        }
-
-        public static string GetMonitoringHomePath()
-        {
-            // default
-            return Path.Combine(
-                EnvironmentTools.GetSolutionDirectory(),
-                "shared",
-                "bin",
-                "monitoring-home");
+            return monitoringHome;
         }
 
         public static string GetNativeLoaderPath()
         {
             var monitoringHome = GetMonitoringHomePath();
 
-            string fileName = (EnvironmentTools.GetOS(), EnvironmentTools.GetPlatform()) switch
+            var (extension, dir) = (EnvironmentTools.GetOS(), EnvironmentTools.GetPlatform(), IsAlpine()) switch
             {
-                ("win", "X64")     => "Datadog.AutoInstrumentation.NativeLoader.x64.dll",
-                ("win", "X86")     => "Datadog.AutoInstrumentation.NativeLoader.x86.dll",
-                ("linux", "X64")   => "Datadog.Trace.ClrProfiler.Native.so",
-                ("linux", "Arm64") => "Datadog.AutoInstrumentation.NativeLoader.so",
-                ("osx", _)         => "Datadog.AutoInstrumentation.NativeLoader.dylib",
-                _ => throw new PlatformNotSupportedException()
-            };
-
-            var path = Path.Combine(monitoringHome, fileName);
-
-            if (!File.Exists(path))
-            {
-                throw new Exception($"Unable to find Native Loader at {path}");
-            }
-
-            return path;
-        }
-
-        public static string GetTracerNativeDLLPath()
-        {
-            var tracerHome = GetTracerHomePath();
-
-            var (extension, dir) = (EnvironmentTools.GetOS(), EnvironmentTools.GetPlatform()) switch
-            {
-                ("win", "X64") => ("dll", "win-x64"),
-                ("win", "X86") => ("dll", "win-x86"),
-                ("linux", "X64") => ("so", null),
-                ("linux", "Arm64") => ("so", null),
-                ("osx", _) => ("dylib", null),
+                ("win", "X64", _) => ("dll", "win-x64"),
+                ("win", "X86", _) => ("dll", "win-x86"),
+                ("linux", "X64", false) => ("so", "linux-x64"),
+                ("linux", "X64", true) => ("so", "linux-musl-x64"),
+                ("linux", "Arm64", _) => ("so", "linux-arm64"),
+                ("osx", "X64", _) => ("dylib", "osx-x64"),
+                ("osx", "Arm64", _) => ("dylib", "osx-arm64"),
                 _ => throw new PlatformNotSupportedException()
             };
 
             var fileName = $"Datadog.Trace.ClrProfiler.Native.{extension}";
-
-            var path = dir is null
-                           ? Path.Combine(tracerHome, fileName)
-                           : Path.Combine(tracerHome, dir, fileName);
+            var path = Path.Combine(monitoringHome, dir, fileName);
 
             if (!File.Exists(path))
             {
-                throw new Exception($"Unable to find profiler at {path}");
+                throw new Exception($"Unable to find Native Loader at {path}");
             }
 
             return path;
@@ -206,6 +170,7 @@ namespace Datadog.Trace.TestHelpers
                 "DD_VERSION",
                 "DD_TAGS",
                 "DD_APPSEC_ENABLED",
+                "DD_WRITE_INSTRUMENTATION_TO_DISK"
             };
 
             foreach (string variable in environmentVariables)
@@ -219,23 +184,29 @@ namespace Datadog.Trace.TestHelpers
             int aspNetCorePort,
             IDictionary<string, string> environmentVariables,
             string processToProfile = null,
-            bool enableSecurity = false,
+            bool? enableSecurity = null,
             string externalRulesFile = null)
         {
             string profilerEnabled = AutomaticInstrumentationEnabled ? "1" : "0";
-            environmentVariables["DD_DOTNET_TRACER_HOME"] = TracerHome;
+            environmentVariables["DD_DOTNET_TRACER_HOME"] = MonitoringHome;
+
+            // see https://github.com/DataDog/dd-trace-dotnet/pull/3579
+            environmentVariables["DD_INTERNAL_WORKAROUND_77973_ENABLED"] = "1";
+
+            // Everything should be using the native loader now
+            var nativeLoaderPath = GetNativeLoaderPath();
 
             if (IsCoreClr())
             {
                 environmentVariables["CORECLR_ENABLE_PROFILING"] = profilerEnabled;
                 environmentVariables["CORECLR_PROFILER"] = EnvironmentTools.ProfilerClsId;
-                environmentVariables["CORECLR_PROFILER_PATH"] = ProfilerPath;
+                environmentVariables["CORECLR_PROFILER_PATH"] = nativeLoaderPath;
             }
             else
             {
                 environmentVariables["COR_ENABLE_PROFILING"] = profilerEnabled;
                 environmentVariables["COR_PROFILER"] = EnvironmentTools.ProfilerClsId;
-                environmentVariables["COR_PROFILER_PATH"] = ProfilerPath;
+                environmentVariables["COR_PROFILER_PATH"] = nativeLoaderPath;
             }
 
             if (DebugModeEnabled)
@@ -251,9 +222,9 @@ namespace Datadog.Trace.TestHelpers
             // for ASP.NET Core sample apps, set the server's port
             environmentVariables["ASPNETCORE_URLS"] = $"http://127.0.0.1:{aspNetCorePort}/";
 
-            if (enableSecurity)
+            if (enableSecurity != null)
             {
-                environmentVariables[ConfigurationKeys.AppSec.Enabled] = enableSecurity.ToString();
+                environmentVariables[ConfigurationKeys.AppSec.Enabled] = enableSecurity.Value.ToString();
             }
 
             if (!string.IsNullOrEmpty(externalRulesFile))
@@ -295,31 +266,37 @@ namespace Datadog.Trace.TestHelpers
 
         public void ConfigureTransportVariables(IDictionary<string, string> environmentVariables, MockTracerAgent agent)
         {
-            if (TransportType == TestTransports.Uds)
+            var envVars = agent switch
             {
-                string apmKey = "DD_APM_RECEIVER_SOCKET";
-                string dsdKey = "DD_DOGSTATSD_SOCKET";
-
-                environmentVariables.Add(apmKey, agent.TracesUdsPath);
-                environmentVariables.Add(dsdKey, agent.StatsUdsPath);
-            }
-            else if (TransportType == TestTransports.WindowsNamedPipe)
-            {
-                string apmKey = "DD_TRACE_PIPE_NAME";
-                string dsdKey = "DD_DOGSTATSD_PIPE_NAME";
-
-                environmentVariables.Add(apmKey, agent.TracesUdsPath);
-                environmentVariables.Add(dsdKey, agent.StatsUdsPath);
-            }
-            else if (TransportType == TestTransports.Tcp)
-            {
-                environmentVariables["DD_TRACE_AGENT_HOSTNAME"] = "127.0.0.1";
-                environmentVariables["DD_TRACE_AGENT_PORT"] = agent.Port.ToString();
-
-                if (agent.StatsdPort != default(int))
+#if NETCOREAPP3_1_OR_GREATER
+                MockTracerAgent.UdsAgent uds => new Dictionary<string, string>
                 {
-                    environmentVariables["DD_DOGSTATSD_PORT"] = agent.StatsdPort.ToString();
-                }
+                    { "DD_APM_RECEIVER_SOCKET", uds.TracesUdsPath },
+                    { "DD_DOGSTATSD_SOCKET", uds.StatsUdsPath },
+                },
+#endif
+                MockTracerAgent.NamedPipeAgent np => new Dictionary<string, string>
+                {
+                    { "DD_TRACE_PIPE_NAME", np.TracesWindowsPipeName },
+                    { "DD_DOGSTATSD_PIPE_NAME", np.StatsWindowsPipeName },
+                },
+                MockTracerAgent.TcpUdpAgent { StatsdPort: not 0 } tcp => new Dictionary<string, string>
+                {
+                    { "DD_TRACE_AGENT_HOSTNAME", "127.0.0.1" },
+                    { "DD_TRACE_AGENT_PORT", tcp.Port.ToString() },
+                    { "DD_DOGSTATSD_PORT", tcp.StatsdPort.ToString() },
+                },
+                MockTracerAgent.TcpUdpAgent tcp => new Dictionary<string, string>
+                {
+                    { "DD_TRACE_AGENT_HOSTNAME", "127.0.0.1" },
+                    { "DD_TRACE_AGENT_PORT", tcp.Port.ToString() },
+                },
+                _ => throw new InvalidOperationException($"Unknown MockTracerAgent type {agent?.GetType()}")
+            };
+
+            foreach (var envVar in envVars)
+            {
+                environmentVariables[envVar.Key] = envVar.Value;
             }
         }
 
@@ -500,66 +477,102 @@ namespace Datadog.Trace.TestHelpers
 
         public void EnableWindowsNamedPipes(string tracePipeName = null, string statsPipeName = null)
         {
-            TransportType = TestTransports.WindowsNamedPipe;
+            if (!EnvironmentTools.IsWindows())
+            {
+                throw new NotSupportedException("Windows named pipes is only supported on Windows");
+            }
+
+            _transportType = TestTransports.WindowsNamedPipe;
         }
 
         public void EnableDefaultTransport()
         {
-            TransportType = TestTransports.Tcp;
+            _transportType = TestTransports.Tcp;
         }
 
         public void EnableUnixDomainSockets()
         {
 #if NETCOREAPP3_1_OR_GREATER
-            TransportType = TestTransports.Uds;
+            _transportType = TestTransports.Uds;
 #else
             // Unsupported
             throw new NotSupportedException("UDS is not supported in non-netcore applications or < .NET Core 3.1 ");
 #endif
         }
 
+        public void EnableTransport(TestTransports transport)
+        {
+            switch (transport)
+            {
+                case TestTransports.Tcp:
+                    EnableDefaultTransport();
+                    break;
+                case TestTransports.Uds:
+                    EnableUnixDomainSockets();
+                    break;
+                case TestTransports.WindowsNamedPipe:
+                    EnableWindowsNamedPipes();
+                    break;
+                default:
+                    throw new InvalidOperationException("Unknown transport " + transport.ToString());
+            }
+        }
+
         public MockTracerAgent GetMockAgent(bool useStatsD = false, int? fixedPort = null, bool useTelemetry = false)
         {
             MockTracerAgent agent = null;
 
-#if NETCOREAPP
             // Decide between transports
-            if (TransportType == TestTransports.Uds)
+            if (_transportType == TestTransports.Uds)
             {
 #if NETCOREAPP3_1_OR_GREATER
                 var tracesUdsPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
                 var metricsUdsPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-                agent = new MockTracerAgent(new UnixDomainSocketConfig(tracesUdsPath, metricsUdsPath) { UseDogstatsD = useStatsD, UseTelemetry = useTelemetry });
+                agent = MockTracerAgent.Create(_output, new UnixDomainSocketConfig(tracesUdsPath, metricsUdsPath) { UseDogstatsD = useStatsD, UseTelemetry = useTelemetry });
 #else
             throw new NotSupportedException("UDS is not supported in non-netcore applications or < .NET Core 3.1 ");
 #endif
             }
-            else if (TransportType == TestTransports.WindowsNamedPipe)
+            else if (_transportType == TestTransports.WindowsNamedPipe)
             {
-                agent = new MockTracerAgent(new WindowsPipesConfig($"trace-{Guid.NewGuid()}", $"metrics-{Guid.NewGuid()}") { UseDogstatsD = useStatsD, UseTelemetry = useTelemetry });
+                agent = MockTracerAgent.Create(_output, new WindowsPipesConfig($"trace-{Guid.NewGuid()}", $"metrics-{Guid.NewGuid()}") { UseDogstatsD = useStatsD, UseTelemetry = useTelemetry });
             }
             else
             {
                 // Default
                 var agentPort = fixedPort ?? TcpPortProvider.GetOpenPort();
-                agent = new MockTracerAgent(agentPort, useStatsd: useStatsD, useTelemetry: useTelemetry);
+                agent = MockTracerAgent.Create(_output, agentPort, useStatsd: useStatsD, useTelemetry: useTelemetry);
             }
-#else
-            if (TransportType == TestTransports.WindowsNamedPipe)
-            {
-                agent = new MockTracerAgent(new WindowsPipesConfig($"trace-{Guid.NewGuid()}", $"metrics-{Guid.NewGuid()}") { UseDogstatsD = useStatsD, UseTelemetry = useTelemetry });
-            }
-            else
-            {
-                // Default
-                var agentPort = fixedPort ?? TcpPortProvider.GetOpenPort();
-                agent = new MockTracerAgent(agentPort, useStatsd: useStatsD, useTelemetry: useTelemetry);
-            }
-#endif
 
             _output.WriteLine($"Agent listener info: {agent.ListenerInfo}");
 
             return agent;
+        }
+
+        public bool IsRunningInAzureDevOps()
+        {
+            return Environment.GetEnvironmentVariable("SYSTEM_COLLECTIONID") != null;
+        }
+
+        public bool IsScheduledBuild()
+        {
+            return IsEnvironmentVariableSet("isScheduledBuild");
+        }
+
+        private bool IsEnvironmentVariableSet(string ev)
+        {
+            if (string.IsNullOrEmpty(ev))
+            {
+                return false;
+            }
+
+            var evValue = Environment.GetEnvironmentVariable(ev);
+            if (evValue == null)
+            {
+                CustomEnvironmentVariables.TryGetValue(ev, out evValue);
+            }
+
+            return evValue == "1" || string.Equals(evValue, "true", StringComparison.InvariantCultureIgnoreCase);
         }
     }
 }

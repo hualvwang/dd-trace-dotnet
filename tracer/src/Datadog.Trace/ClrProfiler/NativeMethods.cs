@@ -11,7 +11,7 @@ namespace Datadog.Trace.ClrProfiler
 {
     internal static class NativeMethods
     {
-        private static readonly bool IsWindows = string.Equals(FrameworkDescription.Instance.OSPlatform, "Windows", StringComparison.OrdinalIgnoreCase);
+        private static readonly bool IsWindows = FrameworkDescription.Instance.IsWindows();
 
         public static bool IsProfilerAttached()
         {
@@ -40,6 +40,23 @@ namespace Datadog.Trace.ClrProfiler
             }
         }
 
+        public static void RemoveCallTargetDefinitions(string id, NativeCallTargetDefinition[] methodArrays)
+        {
+            if (methodArrays is null || methodArrays.Length == 0)
+            {
+                return;
+            }
+
+            if (IsWindows)
+            {
+                Windows.RemoveCallTargetDefinitions(id, methodArrays, methodArrays.Length);
+            }
+            else
+            {
+                NonWindows.RemoveCallTargetDefinitions(id, methodArrays, methodArrays.Length);
+            }
+        }
+
         public static void EnableByRefInstrumentation()
         {
             if (IsWindows)
@@ -64,6 +81,18 @@ namespace Datadog.Trace.ClrProfiler
             }
         }
 
+        public static void DisableTracerCLRProfiler()
+        {
+            if (IsWindows)
+            {
+                Windows.DisableTracerCLRProfiler();
+            }
+            else
+            {
+                NonWindows.DisableTracerCLRProfiler();
+            }
+        }
+
         public static void AddDerivedInstrumentations(string id, NativeCallTargetDefinition[] methodArrays)
         {
             if (methodArrays is null || methodArrays.Length == 0)
@@ -78,6 +107,23 @@ namespace Datadog.Trace.ClrProfiler
             else
             {
                 NonWindows.AddDerivedInstrumentations(id, methodArrays, methodArrays.Length);
+            }
+        }
+
+        public static void AddInterfaceInstrumentations(string id, NativeCallTargetDefinition[] methodArrays)
+        {
+            if (methodArrays is null || methodArrays.Length == 0)
+            {
+                return;
+            }
+
+            if (IsWindows)
+            {
+                Windows.AddInterfaceInstrumentations(id, methodArrays, methodArrays.Length);
+            }
+            else
+            {
+                NonWindows.AddInterfaceInstrumentations(id, methodArrays, methodArrays.Length);
             }
         }
 
@@ -120,53 +166,73 @@ namespace Datadog.Trace.ClrProfiler
 
         // the "dll" extension is required on .NET Framework
         // and optional on .NET Core
+        // The DllImport methods are re-written by cor_profiler to have the correct vales
         private static class Windows
         {
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern bool IsProfilerAttached();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern void InitializeProfiler([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
+            public static extern void RemoveCallTargetDefinitions([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
+
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern void EnableByRefInstrumentation();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern void EnableCallTargetStateByRef();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern void AddDerivedInstrumentations([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
+            public static extern void AddInterfaceInstrumentations([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
+
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern void AddTraceAttributeInstrumentation([MarshalAs(UnmanagedType.LPWStr)] string id, [MarshalAs(UnmanagedType.LPWStr)] string assemblyName, [MarshalAs(UnmanagedType.LPWStr)] string typeName);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native.dll")]
+            [DllImport("Datadog.Tracer.Native.dll")]
             public static extern void InitializeTraceMethods([MarshalAs(UnmanagedType.LPWStr)] string id, [MarshalAs(UnmanagedType.LPWStr)] string assemblyName, [MarshalAs(UnmanagedType.LPWStr)] string typeName, [MarshalAs(UnmanagedType.LPWStr)] string configuration);
+
+            [DllImport("Datadog.Tracer.Native.dll")]
+            public static extern void DisableTracerCLRProfiler();
         }
 
         // assume .NET Core if not running on Windows
+        // The DllImport methods are re-written by cor_profiler to have the correct vales
         private static class NonWindows
         {
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             public static extern bool IsProfilerAttached();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             public static extern void InitializeProfiler([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
+            public static extern void RemoveCallTargetDefinitions([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
+
+            [DllImport("Datadog.Tracer.Native")]
             public static extern void EnableByRefInstrumentation();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             public static extern void EnableCallTargetStateByRef();
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             public static extern void AddDerivedInstrumentations([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
+            public static extern void AddInterfaceInstrumentations([MarshalAs(UnmanagedType.LPWStr)] string id, [In] NativeCallTargetDefinition[] methodArrays, int size);
+
+            [DllImport("Datadog.Tracer.Native")]
             public static extern void AddTraceAttributeInstrumentation([MarshalAs(UnmanagedType.LPWStr)] string id, [MarshalAs(UnmanagedType.LPWStr)] string assemblyName, [MarshalAs(UnmanagedType.LPWStr)] string typeName);
 
-            [DllImport("Datadog.Trace.ClrProfiler.Native")]
+            [DllImport("Datadog.Tracer.Native")]
             public static extern void InitializeTraceMethods([MarshalAs(UnmanagedType.LPWStr)] string id, [MarshalAs(UnmanagedType.LPWStr)] string assemblyName, [MarshalAs(UnmanagedType.LPWStr)] string typeName, [MarshalAs(UnmanagedType.LPWStr)] string configuration);
+
+            [DllImport("Datadog.Tracer.Native")]
+            public static extern void DisableTracerCLRProfiler();
         }
     }
 }

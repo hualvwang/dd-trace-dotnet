@@ -6,10 +6,11 @@ using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using Datadog.Trace.Ci.Coverage;
 using Datadog.Trace.Ci.Coverage.Attributes;
+using Datadog.Trace.Ci.Coverage.Metadata.Target;
 
 [assembly: CompilationRelaxations(8)]
 [assembly: RuntimeCompatibility(WrapNonExceptionThrows = true)]
-[assembly: Debuggable(DebuggableAttribute.DebuggingModes.Default | DebuggableAttribute.DebuggingModes.DisableOptimizations | DebuggableAttribute.DebuggingModes.IgnoreSymbolStoreSequencePoints | DebuggableAttribute.DebuggingModes.EnableEditAndContinue)]
+[assembly: Debuggable(DebuggableAttribute.DebuggingModes.IgnoreSymbolStoreSequencePoints)]
 [assembly: TargetFramework(".NETStandard,Version=v2.0", FrameworkDisplayName = "")]
 [assembly: AssemblyCompany("CoverageRewriterAssembly")]
 [assembly: AssemblyConfiguration("Debug")]
@@ -28,61 +29,47 @@ namespace CoverageRewriterAssembly
 			[CompilerGenerated]
 			get
 			{
-				if (!CoverageReporter.TryGetScope("/Users/tony.redondo/repos/CoverageRewriterAssembly/CoverageRewriterAssembly/Class1.cs", out var scope))
-				{
-					return <MyProperty>k__BackingField;
-				}
-				scope.Report(1407529502703656uL);
+				int[] counters = CoverageReporter<ModuleCoverage>.GetCounters(0);
+				counters[0]++;
 				return <MyProperty>k__BackingField;
 			}
 			[CompilerGenerated]
 			set
 			{
-				if (!CoverageReporter.TryGetScope("/Users/tony.redondo/repos/CoverageRewriterAssembly/CoverageRewriterAssembly/Class1.cs", out var scope))
-				{
-					<MyProperty>k__BackingField = value;
-					return;
-				}
-				scope.Report(1407550977540141uL);
+				int[] counters = CoverageReporter<ModuleCoverage>.GetCounters(1);
+				counters[0]++;
 				<MyProperty>k__BackingField = value;
 			}
 		}
 
 		public void Main()
 		{
-			int i;
-			if (!CoverageReporter.TryGetScope("/Users/tony.redondo/repos/CoverageRewriterAssembly/CoverageRewriterAssembly/Class1.cs", out var scope))
-			{
-				Console.WriteLine("Main Method");
-				for (i = 0; i < 100; i++)
-				{
-					Console.WriteLine(i);
-				}
-				MyProperty = "Value";
-				Console.WriteLine(MyProperty);
-				return;
-			}
-			scope.Report(2251838468915210uL, 2533330625560622uL);
+			int[] counters = CoverageReporter<ModuleCoverage>.GetCounters(2);
+			_ = counters[10];
+			counters[0]++;
+			counters[1]++;
 			Console.WriteLine("Main Method");
-			scope.Report(2814827077173275uL);
-			i = 0;
+			counters[2]++;
+			int num = 0;
 			while (true)
 			{
-				scope.Report(2814874321813540uL);
-				if (i >= 100)
+				counters[7]++;
+				if (num >= 100)
 				{
 					break;
 				}
-				scope.Report(3096280579112974uL, 3377772735758374uL);
-				Console.WriteLine(i);
-				scope.Report(3659230532665358uL, 2814912976519209uL);
-				i++;
+				counters[3]++;
+				counters[4]++;
+				Console.WriteLine(num);
+				counters[5]++;
+				counters[6]++;
+				num++;
 			}
-			scope.Report(4222180486217762uL);
+			counters[8]++;
 			MyProperty = "Value";
-			scope.Report(4785130439770155uL);
+			counters[9]++;
 			Console.WriteLine(MyProperty);
-			scope.Report(5066588236677130uL);
+			counters[10]++;
 		}
 
 		[AsyncStateMachine(typeof(<MainAsync>d__5))]
@@ -95,6 +82,26 @@ namespace CoverageRewriterAssembly
 			stateMachine.<>1__state = -1;
 			stateMachine.<>t__builder.Start(ref stateMachine);
 			return stateMachine.<>t__builder.Task;
+		}
+	}
+}
+namespace Datadog.Trace.Ci.Coverage.Metadata.Target
+{
+	internal sealed class ModuleCoverage : ModuleCoverageMetadata
+	{
+		public ModuleCoverage()
+		{
+			SequencePoints = new int[4];
+			SequencePoints[0] = 1;
+			SequencePoints[1] = 1;
+			SequencePoints[2] = 11;
+			SequencePoints[3] = 3;
+			Metadata = new long[4];
+			Metadata[0] = 4294967296L;
+			Metadata[1] = 4294967297L;
+			Metadata[2] = 4294967298L;
+			Metadata[3] = 8589934593L;
+			TotalInstructions = 16L;
 		}
 	}
 }

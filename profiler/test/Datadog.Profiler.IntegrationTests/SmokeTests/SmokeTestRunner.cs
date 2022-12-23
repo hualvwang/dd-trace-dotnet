@@ -17,6 +17,7 @@ namespace Datadog.Profiler.SmokeTests
     public class SmokeTestRunner
     {
         private readonly ITestOutputHelper _output;
+        private readonly TransportType _transportType;
         private readonly int _minimumExpectedPprofsCount = 2; // 1 empty and at least one normal
 
         private readonly TestApplicationRunner _testApplicationRunner;
@@ -25,8 +26,9 @@ namespace Datadog.Profiler.SmokeTests
             string appName,
             string framework,
             string appAssembly,
-            ITestOutputHelper output)
-            : this(appName, framework, appAssembly, commandLine: null, output)
+            ITestOutputHelper output,
+            TransportType transportType = TransportType.Http)
+            : this(appName, framework, appAssembly, commandLine: null, output, transportType)
         {
         }
 
@@ -35,9 +37,11 @@ namespace Datadog.Profiler.SmokeTests
             string framework,
             string appAssembly,
             string commandLine,
-            ITestOutputHelper output)
+            ITestOutputHelper output,
+            TransportType transportType = TransportType.Http)
         {
             _output = output;
+            _transportType = transportType;
             _testApplicationRunner = new TestApplicationRunner(appName, framework, appAssembly, output, commandLine);
         }
 
@@ -48,9 +52,31 @@ namespace Datadog.Profiler.SmokeTests
 
         public void RunAndCheck()
         {
-            using var agent = new MockDatadogAgent(_output);
-            _testApplicationRunner.Run(agent);
+            using var agent = Run();
             RunChecks(agent);
+        }
+
+        public MockDatadogAgent Run()
+        {
+            MockDatadogAgent agent = null;
+
+            try
+            {
+                agent = _transportType switch
+                {
+                    TransportType.Http => MockDatadogAgent.CreateHttpAgent(_output),
+                    TransportType.NamedPipe => MockDatadogAgent.CreateNamedPipeAgent(_output),
+                    _ => throw new Exception("Unknown transport type ")
+                };
+                _testApplicationRunner.Run(agent);
+            }
+            catch
+            {
+                agent?.Dispose();
+                throw;
+            }
+
+            return agent;
         }
 
         private void RunChecks(MockDatadogAgent agent)

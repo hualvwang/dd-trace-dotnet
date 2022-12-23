@@ -294,6 +294,8 @@ namespace Datadog.Trace.DuckTyping
                     // Create Methods
                     CreateReverseProxyMethods(proxyTypeBuilder, typeToDeriveFrom, typeToDelegateTo, instanceField);
 
+                    AddCustomAttributes(proxyTypeBuilder, typeToDelegateTo, dryRun);
+
                     if (dryRun)
                     {
                         // Dry run
@@ -480,6 +482,47 @@ namespace Datadog.Trace.DuckTyping
             return instanceField;
         }
 
+        private static void AddCustomAttributes(TypeBuilder? proxyTypeBuilder, Type targetType, bool isDryRun)
+        {
+            foreach (var customAttributeData in targetType.GetCustomAttributesData())
+            {
+                var attributeType = customAttributeData.AttributeType;
+                if (attributeType == typeof(DuckAttribute)
+                 || attributeType == typeof(DuckCopyAttribute)
+                 || attributeType == typeof(DuckFieldAttribute)
+                 || attributeType == typeof(DuckIgnoreAttribute)
+                 || attributeType == typeof(DuckIncludeAttribute)
+                 || attributeType == typeof(DuckReverseMethodAttribute))
+                {
+                    continue;
+                }
+
+                // Don't support named arguments for now
+                if (customAttributeData.NamedArguments?.Count > 0)
+                {
+                    DuckTypeCustomAttributeHasNamedArgumentsException.Throw(targetType, customAttributeData);
+                }
+
+                var args = Array.Empty<object?>();
+                if (customAttributeData.ConstructorArguments.Count > 0)
+                {
+                    args = new object[customAttributeData.ConstructorArguments.Count];
+                    for (var i = 0; i < customAttributeData.ConstructorArguments.Count; i++)
+                    {
+                        var arg = customAttributeData.ConstructorArguments[i];
+                        args[i] = arg.Value;
+                    }
+                }
+
+                var attributeBuilder = new CustomAttributeBuilder(customAttributeData.Constructor, constructorArgs: args);
+
+                if (!isDryRun)
+                {
+                    proxyTypeBuilder?.SetCustomAttribute(attributeBuilder);
+                }
+            }
+        }
+
         /// <summary>
         /// Adds the properties of any implemented interfaces in <paramref name="proxyDefinitionType"/>
         /// to list <paramref name="selectedProperties"/> list
@@ -595,7 +638,7 @@ namespace Datadog.Trace.DuckTyping
                                 var getMethod = proxyProperty.GetMethod;
                                 if (getMethod.IsAbstract || getMethod.IsVirtual)
                                 {
-                                    DuckTypePropertyOrFieldNotFoundException.Throw(proxyProperty.Name, duckAttribute.Name);
+                                    DuckTypePropertyOrFieldNotFoundException.Throw(proxyProperty.Name, duckAttribute.Name, targetType);
                                 }
                             }
 
@@ -604,7 +647,7 @@ namespace Datadog.Trace.DuckTyping
                                 var setMethod = proxyProperty.SetMethod;
                                 if (setMethod.IsAbstract || setMethod.IsVirtual)
                                 {
-                                    DuckTypePropertyOrFieldNotFoundException.Throw(proxyProperty.Name, duckAttribute.Name);
+                                    DuckTypePropertyOrFieldNotFoundException.Throw(proxyProperty.Name, duckAttribute.Name, targetType);
                                 }
                             }
 
@@ -671,7 +714,7 @@ namespace Datadog.Trace.DuckTyping
                         FieldInfo? targetField = targetType.GetField(duckAttribute.Name, duckAttribute.BindingFlags);
                         if (targetField is null)
                         {
-                            DuckTypePropertyOrFieldNotFoundException.Throw(proxyProperty.Name, duckAttribute.Name);
+                            DuckTypePropertyOrFieldNotFoundException.Throw(proxyProperty.Name, duckAttribute.Name, targetType);
                             continue;
                         }
 
@@ -761,7 +804,7 @@ namespace Datadog.Trace.DuckTyping
 
                 if (overriddenProperty is null)
                 {
-                    DuckTypePropertyOrFieldNotFoundException.Throw(implementationProperty.Name, duckAttribute.Name);
+                    DuckTypePropertyOrFieldNotFoundException.Throw(implementationProperty.Name, duckAttribute.Name, typeToDeriveFrom);
                     continue;
                 }
 
@@ -864,7 +907,7 @@ namespace Datadog.Trace.DuckTyping
                         PropertyInfo? targetProperty = targetType.GetProperty(duckAttribute.Name, duckAttribute.BindingFlags);
                         if (targetProperty is null)
                         {
-                            DuckTypePropertyOrFieldNotFoundException.Throw(proxyFieldInfo.Name, duckAttribute.Name);
+                            DuckTypePropertyOrFieldNotFoundException.Throw(proxyFieldInfo.Name, duckAttribute.Name, targetType);
                             continue;
                         }
 
@@ -896,7 +939,7 @@ namespace Datadog.Trace.DuckTyping
                         FieldInfo? targetField = targetType.GetField(duckAttribute.Name, duckAttribute.BindingFlags);
                         if (targetField is null)
                         {
-                            DuckTypePropertyOrFieldNotFoundException.Throw(proxyFieldInfo.Name, duckAttribute.Name);
+                            DuckTypePropertyOrFieldNotFoundException.Throw(proxyFieldInfo.Name, duckAttribute.Name, targetType);
                             continue;
                         }
 

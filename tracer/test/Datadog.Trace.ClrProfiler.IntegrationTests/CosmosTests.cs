@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 
 namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
-    public class CosmosTests : TestHelper
+    public class CosmosTests : TracingIntegrationTest
     {
         private const string ExpectedOperationName = "cosmosdb.query";
         private const string ExpectedServiceName = "Samples.CosmosDb-cosmosdb";
@@ -31,6 +31,8 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                 using var processResult = RunSampleAndWaitForExit(agent, arguments: $"{TestPrefix}");
             }
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) => span.IsCosmosDb();
 
         [SkippableTheory(Skip = "Cosmos emulator is too flaky at the moment")]
         [MemberData(nameof(PackageVersions.CosmosDb), MemberType = typeof(PackageVersions))]
@@ -58,16 +60,11 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
 
                 var dbTags = 0;
                 var containerTags = 0;
+                ValidateIntegrationSpans(spans, expectedServiceName: ExpectedServiceName);
 
                 foreach (var span in spans)
                 {
-                    span.Name.Should().Be(ExpectedOperationName);
-                    span.Service.Should().Be(ExpectedServiceName);
-                    span.Type.Should().Be(SpanTypes.Sql);
                     span.Resource.Should().StartWith("SELECT * FROM");
-                    span.Tags.Should().NotContain(Tags.Version, "External service span should not have service version tag.");
-                    span.Tags.Should().Contain(new KeyValuePair<string, string>(Tags.DbType, "cosmosdb"));
-                    span.Tags.Should().Contain(new KeyValuePair<string, string>(Tags.OutHost, "https://localhost:8081/"));
 
                     if (span.Tags.ContainsKey(Tags.CosmosDbContainer))
                     {

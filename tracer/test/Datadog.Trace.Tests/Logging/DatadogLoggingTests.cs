@@ -5,13 +5,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.Logging;
+using Datadog.Trace.Logging.Internal.Configuration;
 using Datadog.Trace.Util;
 using Datadog.Trace.Vendors.Serilog;
 using Datadog.Trace.Vendors.Serilog.Core;
 using Datadog.Trace.Vendors.Serilog.Events;
+using FluentAssertions;
 using Moq;
 using Xunit;
 
@@ -27,6 +30,8 @@ namespace Datadog.Trace.Tests.Logging
 
         public DatadogLoggingTests()
         {
+            Environment.SetEnvironmentVariable(ConfigurationKeys.LogFileRetentionDays, "36");
+
             GlobalSettings.Reload();
 
             _logEventSink = new CollectionSink();
@@ -203,6 +208,92 @@ namespace Datadog.Trace.Tests.Logging
 
             Assert.Empty(_logEventSink.Events);
             mockLogger.Verify();
+        }
+
+        [Fact]
+        public void DuringStartup_OldLogFilesGetDeleted()
+        {
+            var tempLogsDir = Path.Combine(Path.GetTempPath(), "Datadog .NET Tracer\\logs");
+            Directory.CreateDirectory(tempLogsDir);
+
+            // Creating log files that match expected formats
+            var logPath = Path.Combine(tempLogsDir, "DD-DotNet-Profiler-Native-1.log");
+            File.Create(logPath).Dispose();
+            File.SetLastWriteTime(logPath, DateTime.Now.AddDays(-39));
+
+            File.Create(Path.Combine(tempLogsDir, "dotnet-tracer-managed-2.log")).Dispose();
+            File.Create(Path.Combine(tempLogsDir, "dotnet-tracer-native-3.log")).Dispose();
+
+            for (int i = 0; i < 3; i++)
+            {
+                // Adding random files that don't match the pattern
+                var mockFilePath = Path.Combine(tempLogsDir, $"random-file-{i}.txt");
+                File.Create(mockFilePath).Dispose();
+                File.SetLastWriteTime(mockFilePath, DateTime.Now.AddDays(-31 * i));
+            }
+
+            // Running method to delete the old files
+            DatadogLogging.CleanLogFiles(32, tempLogsDir);
+
+            var deletedLogFiles = Directory.EnumerateFiles(tempLogsDir, "DD-DotNet-Profiler-Native-*").Count();
+            var retainedLogFiles = Directory.EnumerateFiles(tempLogsDir, "dotnet-tracer-*").Count();
+            var ignoredLogFiles = Directory.EnumerateFiles(tempLogsDir, "random-file-*").Count();
+
+            // Deleting temporary directory after test run
+            Directory.Delete(tempLogsDir, true);
+
+            // Asserting that the correct amount of files are left
+            deletedLogFiles.Should().Be(0);
+            retainedLogFiles.Should().Be(2);
+            ignoredLogFiles.Should().Be(3);
+        }
+
+        [Fact]
+        public void WritingToAnInvalidPathDoesntCauseErrors()
+        {
+            string directory;
+
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                // Windows
+                directory = @"Z:\i-dont-exist";
+            }
+            else
+            {
+                // Linux
+                directory = "/proc/self";
+            }
+
+            // make sure we can't write to it
+            IsDirectoryWritable(directory).Should().BeFalse();
+
+            var config = DatadogLoggingFactory.GetConfiguration(new NameValueConfigurationSource(new()
+            {
+                { ConfigurationKeys.LogDirectory, directory }
+            }));
+            var logger = DatadogLoggingFactory.CreateFromConfiguration(config, DomainMetadata.Instance);
+            logger.Should().NotBeNull();
+
+            logger!.Error("Trying to write an error");
+
+            logger.CloseAndFlush();
+
+            static bool IsDirectoryWritable(string dirPath)
+            {
+                try
+                {
+                    var path = Path.Combine(dirPath, Path.GetRandomFileName());
+                    using (var fs = File.Create(path, bufferSize: 1, FileOptions.DeleteOnClose))
+                    {
+                    }
+
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
         }
 
         private void WriteRateLimitedLogMessage(IDatadogLogger logger, string message)

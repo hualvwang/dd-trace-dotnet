@@ -2,10 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2022 Datadog, Inc.
 
 #pragma once
-#include <list>
-#include <mutex>
-#include <string>
-#include <thread>
 
 #include "CollectorBase.h"
 #include "RawWallTimeSample.h"
@@ -16,19 +12,23 @@ class IFrameStore;
 class IAppDomainStore;
 class IRuntimeIdStore;
 class IThreadsCpuManager;
+class IConfiguration;
 
 
 class WallTimeProvider
-    : public CollectorBase<RawWallTimeSample> // accepts raw walltime samples
+    :
+    public CollectorBase<RawWallTimeSample> // accepts raw walltime samples
 {
 public:
+    static std::vector<SampleValueType> SampleTypeDefinitions;
+
+public:
     WallTimeProvider(
+        uint32_t valueOffset,
         IThreadsCpuManager* pThreadsCpuManager,
         IFrameStore* pFrameStore,
-        IAppDomainStore* pAssemblyStore,
-        IRuntimeIdStore* pRuntimeIdStore
+        IAppDomainStore* pAppDomainStore,
+        IRuntimeIdStore* pRuntimeIdStore,
+        IConfiguration* pConfiguration
         );
-
-private:
-    virtual void OnTransformRawSample(const RawWallTimeSample& rawSample, Sample& sample) override;
 };

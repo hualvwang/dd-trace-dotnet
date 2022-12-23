@@ -3,13 +3,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
 #pragma warning disable SA1402 // File may only contain a single class
 #pragma warning disable SA1649 // File name must match first type name
+using System;
+using System.Linq;
 using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.TestHelpers;
+using FluentAssertions;
 using VerifyXunit;
 using Xunit;
 using Xunit.Abstractions;
@@ -62,7 +67,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
     }
 
     [UsesVerify]
-    public abstract class AspNetMvc4Tests : TestHelper, IClassFixture<IisFixture>
+    public abstract class AspNetMvc4Tests : TracingIntegrationTest, IClassFixture<IisFixture>
     {
         private readonly IisFixture _iisFixture;
         private readonly string _testName;
@@ -106,6 +111,14 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
               { "/graphql/GetAllFoo", 200 }, // Slug in route template
         };
 
+        public override Result ValidateIntegrationSpan(MockSpan span) =>
+            span.Name switch
+            {
+                "aspnet.request" => span.IsAspNet(),
+                "aspnet-mvc.request" => span.IsAspNetMvc(),
+                _ => Result.DefaultSuccess,
+            };
+
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
         [Trait("RunOnWindows", "True")]
@@ -121,9 +134,9 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             }
 
             var spans = await GetWebServerSpans(path, _iisFixture.Agent, _iisFixture.HttpPort, statusCode);
+            ValidateIntegrationSpans(spans, expectedServiceName: "sample", isExternalSpan: false);
 
             var sanitisedPath = VerifyHelper.SanitisePathsForVerify(path);
-
             var settings = VerifyHelper.GetSpanVerifierSettings(sanitisedPath, (int)statusCode);
 
             // Overriding the type name here as we have multiple test classes in the file
@@ -131,6 +144,50 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             await Verifier.Verify(spans, settings)
                           .UseMethodName("_")
                           .UseTypeName(_testName);
+        }
+
+        [SkippableFact]
+        [Trait("Category", "EndToEnd")]
+        [Trait("RunOnWindows", "True")]
+        [Trait("LoadFromGAC", "True")]
+        public async Task ClientDisconnect()
+        {
+            var isClassicMode = _testName.Contains(".Classic");
+
+            var data = $@"POST /ping HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Host: localhost:{_iisFixture.HttpPort}
+Content-Length: 25
+x-datadog-tracing-enabled: false
+User-Agent: testhelper
+Expect: 100-continue
+
+";
+
+            var testStart = DateTime.UtcNow;
+            Socket socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            socket.Connect("localhost", _iisFixture.HttpPort);
+            socket.Send(Encoding.ASCII.GetBytes(data));
+            var bytes = new byte[100];
+            socket.Receive(bytes);
+            socket.Close();
+
+            Output.WriteLine($"[http] {Encoding.ASCII.GetString(bytes)}");
+            Encoding.ASCII.GetString(bytes).Should().StartWith("HTTP/1.1 100 Continue");
+
+            var spans = _iisFixture.Agent.WaitForSpans(
+                count: isClassicMode ? 0 : 1, // classic mode doesn't generate any spans in this scenario
+                minDateTime: testStart,
+                returnAllOperations: true);
+
+            ValidateIntegrationSpans(spans, expectedServiceName: "sample", isExternalSpan: false);
+
+            var settings = VerifyHelper.GetSpanVerifierSettings();
+
+            await VerifyHelper.VerifySpans(spans, settings)
+                              .UseMethodName("ClientDisconnect")
+                              .UseTypeName(_testName);
         }
     }
 }

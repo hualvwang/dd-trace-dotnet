@@ -36,6 +36,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         };
 
         [SkippableTheory]
+        [Trait("RunOnWindows", "True")]
         [MemberData(nameof(TestData))]
         public async Task DetectAgentUrl((string, string)[] environmentVariables)
         {
@@ -53,9 +54,10 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task DetectTransportHttp()
         {
-            using var agent = new MockTracerAgent(TcpPortProvider.GetOpenPort());
+            using var agent = MockTracerAgent.Create(Output, TcpPortProvider.GetOpenPort());
 
             var url = $"http://127.0.0.1:{agent.Port}/";
 
@@ -74,13 +76,14 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
 
 #if NETCOREAPP3_1_OR_GREATER
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task DetectTransportUds()
         {
             var tracesUdsPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             var url = $"unix://{tracesUdsPath}";
             var uri = new System.Uri(url);
 
-            using var agent = new MockTracerAgent(new UnixDomainSocketConfig(tracesUdsPath, null));
+            using var agent = MockTracerAgent.Create(Output, new UnixDomainSocketConfig(tracesUdsPath, null));
             using var helper = await StartConsole(enableProfiler: false, ("DD_TRACE_AGENT_URL", url));
             using var console = ConsoleHelper.Redirect();
 
@@ -95,6 +98,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
 #endif
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task NoAgent()
         {
             using var console = ConsoleHelper.Redirect();
@@ -109,11 +113,12 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task FaultyAgent()
         {
             using var console = ConsoleHelper.Redirect();
 
-            using var agent = new MockTracerAgent(TcpPortProvider.GetOpenPort());
+            using var agent = MockTracerAgent.Create(Output, TcpPortProvider.GetOpenPort());
 
             agent.RequestReceived += (_, e) => e.Value.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
@@ -125,16 +130,15 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
         }
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task DetectVersion()
         {
             const string expectedVersion = "7.66.55";
 
             using var console = ConsoleHelper.Redirect();
 
-            using var agent = new MockTracerAgent(TcpPortProvider.GetOpenPort())
-            {
-                Version = expectedVersion
-            };
+            using var agent = MockTracerAgent.Create(Output, TcpPortProvider.GetOpenPort());
+            agent.Version = expectedVersion;
 
             var result = await AgentConnectivityCheck.RunAsync(CreateSettings($"http://localhost:{agent.Port}/"));
 
@@ -145,6 +149,7 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
 
 #if NETCOREAPP3_1_OR_GREATER
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task DetectVersionUds()
         {
             const string expectedVersion = "7.66.55";
@@ -153,10 +158,8 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
 
             var tracesUdsPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
 
-            using var agent = new MockTracerAgent(new UnixDomainSocketConfig(tracesUdsPath, null))
-            {
-                Version = expectedVersion
-            };
+            using var agent = MockTracerAgent.Create(Output, new UnixDomainSocketConfig(tracesUdsPath, null));
+            agent.Version = expectedVersion;
 
             var settings = new ExporterSettings
             {
@@ -172,14 +175,13 @@ namespace Datadog.Trace.Tools.Runner.IntegrationTests.Checks
 #endif
 
         [SkippableFact]
+        [Trait("RunOnWindows", "True")]
         public async Task NoVersion()
         {
             using var console = ConsoleHelper.Redirect();
 
-            using var agent = new MockTracerAgent(TcpPortProvider.GetOpenPort())
-            {
-                Version = null
-            };
+            using var agent = MockTracerAgent.Create(Output, TcpPortProvider.GetOpenPort());
+            agent.Version = null;
 
             var result = await AgentConnectivityCheck.RunAsync(CreateSettings($"http://localhost:{agent.Port}/"));
 

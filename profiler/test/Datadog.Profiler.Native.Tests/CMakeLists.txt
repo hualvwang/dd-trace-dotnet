@@ -6,15 +6,18 @@ include(GoogleTest)
 # ******************************************************
 set(CMAKE_CXX_STANDARD 17)
 
-if(ISLINUX)
-    SET (CMAKE_C_COMPILER   /usr/bin/clang)
-    SET (CMAKE_CXX_COMPILER /usr/bin/clang++)
-endif()
-
 # Sets compiler options
 add_compile_options(-fPIC -fms-extensions)
 add_compile_options(-DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -DUNICODE)
-add_compile_options(-Wno-invalid-noreturn -Wno-macro-redefined -Wc++17-extensions)
+add_compile_options(-Wno-invalid-noreturn -Wno-macro-redefined -Wc++17-extensions -DDD_TEST)
+
+if (RUN_ASAN)
+    add_compile_options(-g -fsanitize=address -fno-omit-frame-pointer)
+endif()
+
+if (RUN_UBSAN)
+    add_compile_options(-fsanitize=undefined -g -fno-omit-frame-pointer -fno-sanitize-recover=all)
+endif()
 
 if(ISLINUX)
     add_compile_options(-stdlib=libstdc++ -DLINUX -Wno-pragmas)
@@ -55,10 +58,18 @@ target_include_directories(${TEST_EXECUTABLE_NAME}
     PUBLIC ${googletest_SOURCE_DIR}/googlemock/include
 )
 
-add_dependencies(${TEST_EXECUTABLE_NAME} fmt gmock gtest Datadog.AutoInstrumentation.Profiler.Native.static.x64)
+add_dependencies(${TEST_EXECUTABLE_NAME} fmt gmock gtest Datadog.Profiler.Native.static libunwind)
+
+if (RUN_ASAN)
+    target_link_libraries(${TEST_EXECUTABLE_NAME} -fsanitize=address)
+endif()
+
+if (RUN_UBSAN)
+    target_link_libraries(${TEST_EXECUTABLE_NAME} -fsanitize=undefined)
+endif()
 
 target_link_libraries(${TEST_EXECUTABLE_NAME}
-  Datadog.AutoInstrumentation.Profiler.Native.static.x64
+  Datadog.Profiler.Native.static
   fmt-lib
   gtest_main
   gmock_main

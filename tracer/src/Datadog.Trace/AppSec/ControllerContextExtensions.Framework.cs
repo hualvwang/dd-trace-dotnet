@@ -4,13 +4,13 @@
 // </copyright>
 
 #if NETFRAMEWORK
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using Datadog.Trace.AspNet;
 using Datadog.Trace.ClrProfiler.AutoInstrumentation.AspNet;
+using Datadog.Trace.Iast;
 
 namespace Datadog.Trace.AppSec
 {
@@ -25,6 +25,14 @@ namespace Datadog.Trace.AppSec
 
             var security = Security.Instance;
             var context = HttpContext.Current;
+            var iastEnabled = Iast.Iast.Instance.Settings.Enabled;
+            Scope scope = null;
+
+            if ((context != null && security.Settings.Enabled) || iastEnabled)
+            {
+                scope = SharedItems.TryPeekScope(context, peekScopeKey);
+            }
+
             if (context != null && security.Settings.Enabled)
             {
                 var bodyDic = new Dictionary<string, object>(parameters.Count);
@@ -41,9 +49,16 @@ namespace Datadog.Trace.AppSec
                     }
                 }
 
-                var scope = SharedItems.TryPeekScope(context, peekScopeKey);
-                security.InstrumentationGateway.RaiseBodyAvailable(context, scope.Span, bodyDic);
-                security.InstrumentationGateway.RaisePathParamsAvailable(context, scope.Span, pathParamsDic);
+                var securityTransport = new Coordinator.SecurityCoordinator(security, context, scope.Span);
+                if (!securityTransport.IsBlocked)
+                {
+                    securityTransport.CheckAndBlock(new Dictionary<string, object> { { AddressesConstants.RequestBody, BodyExtractor.Extract(bodyDic) }, { AddressesConstants.RequestPathParams, pathParamsDic } });
+                }
+            }
+
+            if (iastEnabled)
+            {
+                scope?.Span?.Context?.TraceContext?.IastRequestContext?.AddRequestData(context.Request, controllerContext.RouteData.Values);
             }
         }
     }

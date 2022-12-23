@@ -3,7 +3,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/). Copyright 2017 Datadog, Inc.
 // </copyright>
 
-#if NET461
+#if NETFRAMEWORK
 
 using System;
 using System.Linq;
@@ -17,7 +17,7 @@ using Xunit.Abstractions;
 namespace Datadog.Trace.ClrProfiler.IntegrationTests
 {
     [Collection("IisTests")]
-    public class AspNetWebFormsTests : TestHelper, IClassFixture<IisFixture>
+    public class AspNetWebFormsTests : TracingIntegrationTest, IClassFixture<IisFixture>
     {
         private readonly IisFixture _iisFixture;
 
@@ -32,6 +32,14 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
             _iisFixture.ShutdownPath = "/account/login?shutdown=1";
             _iisFixture.TryStartIis(this, IisAppType.AspNetIntegrated);
         }
+
+        public override Result ValidateIntegrationSpan(MockSpan span) =>
+            span.Name switch
+            {
+                "aspnet.request" => span.IsAspNet(),
+                "aspnet-mvc.request" => span.IsAspNetMvc(),
+                _ => Result.DefaultSuccess,
+            };
 
         [SkippableTheory]
         [Trait("Category", "EndToEnd")]
@@ -79,6 +87,7 @@ namespace Datadog.Trace.ClrProfiler.IntegrationTests
                                    .ToList();
 
             Assert.True(allSpans.Count > 0, "Expected there to be spans.");
+            ValidateIntegrationSpans(allSpans, expectedServiceName: "sample", isExternalSpan: false);
 
             var elasticSpans = allSpans
                              .Where(s => s.Type == "elasticsearch")

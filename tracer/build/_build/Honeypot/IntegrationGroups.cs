@@ -23,6 +23,9 @@ namespace Honeypot
             NugetPackages.Add("netstandard", new string[] { });
             NugetPackages.Add("System.Messaging", new string[] { });
             NugetPackages.Add("System", new string[] { });
+            NugetPackages.Add("System.Diagnostics.Process", new string[] { });
+            NugetPackages.Add("System.Security.Cryptography", new string[] { });
+            NugetPackages.Add("System.Security.Cryptography.Primitives", new string[] { });
 
             NugetPackages.Add("Oracle.DataAccess", new string[] { });
 
@@ -37,6 +40,7 @@ namespace Honeypot
             NugetPackages.Add("Elasticsearch.Net", new [] { "Elasticsearch.Net" });
             NugetPackages.Add("GraphQL", new [] { "GraphQL" });
             NugetPackages.Add("GraphQL.SystemReactive", new [] { "GraphQL.SystemReactive" });
+            NugetPackages.Add("HotChocolate.Execution", new[] { "HotChocolate.AspNetCore" });
             NugetPackages.Add("System.Net.Http", new [] { "System.Net.Http" });
             NugetPackages.Add("System.Net.Http.WinHttpHandler", new [] { "System.Net.Http.WinHttpHandler" });
             NugetPackages.Add("Microsoft.Extensions.Logging.Abstractions", new [] { "Microsoft.Extensions.Logging.Abstractions" });
@@ -74,6 +78,7 @@ namespace Honeypot
             NugetPackages.Add("Grpc.Net.Client", new string[] { "Grpc.AspNetCore" });
             NugetPackages.Add("Grpc.Core", new string[] { "Grpc" });
             NugetPackages.Add("Microsoft.AspNetCore.Mvc.Core", new [] { "Microsoft.AspNetCore.Mvc.Core" });
+            NugetPackages.Add("OpenTelemetry.Api", new [] { "OpenTelemetry.Api" });
         }
 
         private IntegrationMap()

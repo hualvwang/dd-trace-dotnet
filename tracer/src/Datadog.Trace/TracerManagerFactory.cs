@@ -5,13 +5,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using Datadog.Trace.Agent;
+using Datadog.Trace.Agent.DiscoveryService;
 using Datadog.Trace.AppSec;
 using Datadog.Trace.ClrProfiler;
+using Datadog.Trace.ClrProfiler.ServerlessInstrumentation;
 using Datadog.Trace.Configuration;
 using Datadog.Trace.ContinuousProfiler;
+using Datadog.Trace.DataStreamsMonitoring;
 using Datadog.Trace.DogStatsd;
 using Datadog.Trace.Logging;
 using Datadog.Trace.Logging.DirectSubmission;
@@ -50,7 +54,9 @@ namespace Datadog.Trace
                 statsd: null,
                 runtimeMetrics: null,
                 logSubmissionManager: previous?.DirectLogSubmission,
-                telemetry: null);
+                telemetry: null,
+                discoveryService: null,
+                dataStreamsManager: null);
 
             try
             {
@@ -72,34 +78,38 @@ namespace Datadog.Trace
 
         /// <summary>
         /// Internal for use in tests that create "standalone" <see cref="TracerManager"/> by
-        /// <see cref="Tracer(TracerSettings, IAgentWriter, ISampler, IScopeManager, IDogStatsd, ITelemetryController)"/>
+        /// <see cref="Tracer(TracerSettings, IAgentWriter, ITraceSampler, IScopeManager, IDogStatsd, ITelemetryController, IDiscoveryService)"/>
         /// </summary>
         internal TracerManager CreateTracerManager(
             ImmutableTracerSettings settings,
             IAgentWriter agentWriter,
-            ISampler sampler,
+            ITraceSampler sampler,
             IScopeManager scopeManager,
             IDogStatsd statsd,
             RuntimeMetricsWriter runtimeMetrics,
             DirectLogSubmissionManager logSubmissionManager,
-            ITelemetryController telemetry)
+            ITelemetryController telemetry,
+            IDiscoveryService discoveryService,
+            DataStreamsManager dataStreamsManager)
         {
             settings ??= ImmutableTracerSettings.FromDefaultSources();
 
             var defaultServiceName = settings.ServiceName ??
-                                     GetApplicationName() ??
+                                     GetApplicationName(settings) ??
                                      UnknownServiceName;
+
+            discoveryService ??= GetDiscoveryService(settings);
 
             statsd = settings.TracerMetricsEnabled
                          ? (statsd ?? CreateDogStatsdClient(settings, defaultServiceName))
                          : null;
             sampler ??= GetSampler(settings);
-            agentWriter ??= GetAgentWriter(settings, statsd, sampler);
+            agentWriter ??= GetAgentWriter(settings, statsd, sampler, discoveryService);
             scopeManager ??= new AsyncLocalScopeManager();
 
             if (settings.RuntimeMetricsEnabled && !DistributedTracer.Instance.IsChildTracer)
             {
-                runtimeMetrics ??= new RuntimeMetricsWriter(statsd ?? CreateDogStatsdClient(settings, defaultServiceName), TimeSpan.FromSeconds(10));
+                runtimeMetrics ??= new RuntimeMetricsWriter(statsd ?? CreateDogStatsdClient(settings, defaultServiceName), TimeSpan.FromSeconds(10), settings.IsRunningInAzureAppService);
             }
 
             logSubmissionManager = DirectLogSubmissionManager.Create(
@@ -110,13 +120,16 @@ namespace Datadog.Trace
                 settings.ServiceVersion);
 
             telemetry ??= TelemetryFactory.CreateTelemetryController(settings);
-            telemetry.RecordTracerSettings(settings, defaultServiceName, AzureAppServices.Metadata);
+            telemetry.RecordTracerSettings(settings, defaultServiceName);
             telemetry.RecordSecuritySettings(Security.Instance.Settings);
+            telemetry.RecordIastSettings(Datadog.Trace.Iast.Iast.Instance.Settings);
             telemetry.RecordProfilerSettings(Profiler.Instance);
 
-            SpanContextPropagator.Instance = ContextPropagators.GetSpanContextPropagator(settings.PropagationStyleInject, settings.PropagationStyleExtract);
+            SpanContextPropagator.Instance = SpanContextPropagatorFactory.GetSpanContextPropagator(settings.PropagationStyleInject, settings.PropagationStyleExtract);
 
-            var tracerManager = CreateTracerManagerFrom(settings, agentWriter, sampler, scopeManager, statsd, runtimeMetrics, logSubmissionManager, telemetry, defaultServiceName);
+            dataStreamsManager ??= DataStreamsManager.Create(settings, discoveryService, defaultServiceName);
+
+            var tracerManager = CreateTracerManagerFrom(settings, agentWriter, sampler, scopeManager, statsd, runtimeMetrics, logSubmissionManager, telemetry, discoveryService, dataStreamsManager, defaultServiceName);
             return tracerManager;
         }
 
@@ -126,18 +139,20 @@ namespace Datadog.Trace
         protected virtual TracerManager CreateTracerManagerFrom(
             ImmutableTracerSettings settings,
             IAgentWriter agentWriter,
-            ISampler sampler,
+            ITraceSampler sampler,
             IScopeManager scopeManager,
             IDogStatsd statsd,
             RuntimeMetricsWriter runtimeMetrics,
             DirectLogSubmissionManager logSubmissionManager,
             ITelemetryController telemetry,
+            IDiscoveryService discoveryService,
+            DataStreamsManager dataStreamsManager,
             string defaultServiceName)
-            => new TracerManager(settings, agentWriter, sampler, scopeManager, statsd, runtimeMetrics, logSubmissionManager, telemetry, defaultServiceName);
+            => new TracerManager(settings, agentWriter, sampler, scopeManager, statsd, runtimeMetrics, logSubmissionManager, telemetry, discoveryService, dataStreamsManager, defaultServiceName);
 
-        protected virtual ISampler GetSampler(ImmutableTracerSettings settings)
+        protected virtual ITraceSampler GetSampler(ImmutableTracerSettings settings)
         {
-            var sampler = new RuleBasedSampler(new TracerRateLimiter(settings.MaxTracesSubmittedPerSecond));
+            var sampler = new TraceSampler(new TracerRateLimiter(settings.MaxTracesSubmittedPerSecond));
 
             if (!string.IsNullOrWhiteSpace(settings.CustomSamplingRules))
             {
@@ -164,15 +179,30 @@ namespace Datadog.Trace
             return sampler;
         }
 
-        protected virtual IAgentWriter GetAgentWriter(ImmutableTracerSettings settings, IDogStatsd statsd, ISampler sampler)
+        protected virtual ISpanSampler GetSpanSampler(ImmutableTracerSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.SpanSamplingRules))
+            {
+                return new SpanSampler(Enumerable.Empty<ISpanSamplingRule>());
+            }
+
+            return new SpanSampler(SpanSamplingRule.BuildFromConfigurationString(settings.SpanSamplingRules));
+        }
+
+        protected virtual IAgentWriter GetAgentWriter(ImmutableTracerSettings settings, IDogStatsd statsd, ITraceSampler sampler, IDiscoveryService discoveryService)
         {
             var apiRequestFactory = TracesTransportStrategy.Get(settings.Exporter);
-            var api = new Api(apiRequestFactory, statsd, rates => sampler.SetDefaultSampleRates(rates), settings.Exporter.PartialFlushEnabled, settings.StatsComputationEnabled);
+            var api = new Api(apiRequestFactory, statsd, rates => sampler.SetDefaultSampleRates(rates), settings.Exporter.PartialFlushEnabled);
 
-            var statsAggregator = StatsAggregator.Create(api, settings);
+            var statsAggregator = StatsAggregator.Create(api, settings, discoveryService);
 
-            return new AgentWriter(api, statsAggregator, statsd, maxBufferSize: settings.TraceBufferSize);
+            var spanSampler = GetSpanSampler(settings);
+
+            return new AgentWriter(api, statsAggregator, statsd, spanSampler, maxBufferSize: settings.TraceBufferSize);
         }
+
+        protected virtual IDiscoveryService GetDiscoveryService(ImmutableTracerSettings settings)
+            => DiscoveryService.Create(settings.Exporter);
 
         private static IDogStatsd CreateDogStatsdClient(ImmutableTracerSettings settings, string serviceName)
         {
@@ -246,13 +276,18 @@ namespace Datadog.Trace
         /// the hosted app name (.NET Framework on IIS only), assembly name, and process name.
         /// </summary>
         /// <returns>The default service name.</returns>
-        private static string GetApplicationName()
+        private static string GetApplicationName(ImmutableTracerSettings settings)
         {
             try
             {
-                if (AzureAppServices.Metadata.IsRelevant)
+                if (settings.IsRunningInAzureAppService)
                 {
-                    return AzureAppServices.Metadata.SiteName;
+                    return settings.AzureAppServiceMetadata.SiteName;
+                }
+
+                if (Serverless.Metadata is { IsRunningInLambda: true, ServiceName: var serviceName })
+                {
+                    return serviceName;
                 }
 
                 try
