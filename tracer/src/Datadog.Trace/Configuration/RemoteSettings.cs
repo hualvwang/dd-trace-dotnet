@@ -41,7 +41,7 @@ namespace Datadog.Trace.Configuration
 #if NETCOREAPP
             _apiRequestFactory = new HttpClientRequestFactory(new Uri(consulUrl), Array.Empty<KeyValuePair<string, string>>());
 #else
-            _apiRequestFactory = new ApiWebRequestFactory(new Uri(_consulUrl), Array.Empty<KeyValuePair<string, string>>());
+            _apiRequestFactory = new ApiWebRequestFactory(new Uri(consulUrl), Array.Empty<KeyValuePair<string, string>>());
 #endif
             Task.Run(
                 async () =>
